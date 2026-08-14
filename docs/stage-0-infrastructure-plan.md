@@ -1269,3 +1269,64 @@ repository is already pushed to GitHub.
 ```
 git clone https://github.com/cjackmort/mortensenweb.git C:\dev\mortensenweb
 ```
+
+Completed 2026-08-14. The canonical working copy is now `C:\dev\mortensenweb`. The copy under
+`OneDrive\Desktop\...\WebsiteBusiness\mortensenweb` is stale and should be deleted to avoid
+editing the wrong one.
+
+---
+
+## 25. Amendment — repository made public, 2026-08-14
+
+**Operator decision, taken with the trade-offs stated.** `cjackmort/mortensenweb` is now
+**public**. The operator was advised beforehand that publication is not reversible in effect —
+content and full commit history can be cloned, cached, and indexed within minutes, and reverting
+to private does not retract what has already been copied — and elected to proceed.
+
+**This supersedes §24's finding that branch protection is unavailable.** Public repositories on
+GitHub Free receive these features at no cost, and all were enabled and verified:
+
+| Control | Status | Setting |
+| --- | --- | --- |
+| Pull request required before merge | ✅ Enabled | 0 required approvals — a solo operator cannot approve their own PR, so requiring 1 would deadlock every merge |
+| Dismiss stale reviews on new commits | ✅ Enabled | |
+| Conversation resolution required | ✅ Enabled | |
+| Force pushes to `main` | ✅ Blocked | |
+| Deletion of `main` | ✅ Blocked | |
+| Admin enforcement | Deliberately **off** | Leaves an emergency bypass for the sole operator |
+| Secret scanning | ✅ Enabled | |
+| **Push protection** | ✅ Enabled | Blocks a credential at push time, before it reaches history |
+| Dependabot security updates | ✅ Enabled | |
+| Vulnerability alerts | ✅ Enabled | |
+
+Required status checks are **not** configured yet, and deliberately so: no CI workflows exist
+until Stage 2, and requiring a check that never reports would deadlock every merge. They are added
+in Stage 2 once `lint`, `typecheck`, `test`, and `build` actually run.
+
+### Consequences accepted
+
+- **This document is now public**, including the business strategy, database schema, security
+  control design, decision log, and risk register.
+- **`R6` is resolved.** Public repositories receive unlimited GitHub Actions minutes, so Claude
+  automation runs no longer consume a private-repo minute allowance. Note this applies to *this*
+  repository; client site repositories will be **private**, and their runs still consume minutes.
+- **Outstanding action:** this document publicly states that `mortensenweb.com` is unregistered.
+  Registering it (~$12) closes that exposure. Recommended promptly rather than at Stage 5.
+- The `LICENSE` remains proprietary. Public visibility is not a grant of rights — the repository
+  is readable, not reusable.
+
+### Cost position
+
+The operator's stated intent is to build and test before committing to recurring spend. That is
+fully compatible with this plan:
+
+| Stage | Cost | Note |
+| --- | --- | --- |
+| 1 — repository | **$0** | Complete |
+| 2 — app, database, auth | **$0** | Local `next dev`; Neon free tier |
+| 3 — client UIs | **$0** | Demo data only |
+| 4 — theme library | **$0** | Local |
+| 5+ — first deploy | $5/mo | Cloudflare Workers Paid, and only from the deploy onward |
+
+GitHub Pro is no longer needed — public visibility supplied the same controls at no cost. The
+platform can be built and exercised end to end locally for **$0** through Stage 4.
