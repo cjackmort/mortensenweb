@@ -1,4 +1,35 @@
-# Stage 0 — Infrastructure Plan (Plan Only, No External Changes)
+# Stage 0 — Infrastructure Plan
+
+> ## ⚠️ AMENDMENT — 2026-08-14: monorepo under a personal account
+>
+> **Operator decision supersedes the GitHub organization plan.** Sections §3, §16.1, and §16.2
+> below describe a dedicated `mortensenweb` **organization** holding three separate repositories.
+> That is **no longer the structure.** The platform now lives in a single private monorepo:
+>
+> **`cjackmort/mortensenweb`** — created and pushed 2026-08-14, commit `389824e`.
+>
+> ```
+> mortensenweb/
+> ├── apps/platform            admin + client portal      (was agency-platform)
+> ├── apps/portfolio           public agency site         (was agency-portfolio)
+> ├── packages/theme-library   design system + themes     (was agency-theme-library)
+> └── docs/                    architecture + this plan   (agency-documentation folded in)
+> ```
+>
+> **What is unchanged:** client and prospect websites still get their own private repositories
+> (`client-<company>-website`, `prospect-<business>-<job-id>`), because the Claude automation must
+> operate per repository with a narrow allowlist. Those will live under `cjackmort/` rather than
+> under an organization.
+>
+> **What this costs — see §24 for the full assessment.** The headline item is that branch
+> protection and rulesets are unavailable, but that is a **plan-tier limit, not a consequence of
+> this decision**: GitHub Free for organizations is restricted identically on private repos.
+>
+> **What this gains:** one checkout, atomic changes across the theme library and the portal, a
+> single CI configuration, and no organization to administer. For a solo operator this is a
+> reasonable and arguably better trade.
+
+# Original Stage 0 Plan (Plan Only, No External Changes)
 
 **Status:** Awaiting approval. Nothing external has been created, modified, or read.
 **Date:** 2026-08-14
@@ -1014,7 +1045,7 @@ apparent sector and country; noted for the record.
 | Item | Value |
 | --- | --- |
 | Brand / trading name | **Mortensen Web Co.** |
-| GitHub organization | `mortensenweb` |
+| GitHub repository | **`cjackmort/mortensenweb`** (monorepo — see §24) |
 | GitHub owner account | `cjackmort` |
 | Domain | `mortensenweb.com` |
 | Portal | `portal.mortensenweb.com` |
@@ -1156,3 +1187,85 @@ other repository** → scan for secrets without printing values → produce audi
 **stop for launch approval**.
 
 No bulk import. No crawling of your account. One client at a time.
+
+---
+
+## 24. Stage 1 record — completed 2026-08-14
+
+### What was created
+
+| Item | Result |
+| --- | --- |
+| Repository | `cjackmort/mortensenweb` |
+| Visibility | **private** (verified via API, not assumed) |
+| Default branch | `main` |
+| Initial commit | `389824e` — 13 files, 1,799 insertions |
+| Remote verification | `full_name`, `private`, `visibility`, `default_branch`, and head commit all confirmed via `gh api` |
+| Secret scan before commit | Ran against all staged content for `sk-ant-`, `ghp_`, `gho_`, `github_pat_`, `AKIA`, PEM private-key headers, credentialed Postgres URLs, `re_`, and Slack token shapes. **No matches.** |
+
+Files committed: `.env.example` (names only), `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`,
+`LICENSE`, `README.md`, `SECURITY.md`, `package.json`, `apps/platform/README.md`,
+`apps/portfolio/README.md`, `packages/theme-library/README.md`, `docs/architecture.md`,
+`docs/stage-0-infrastructure-plan.md`.
+
+### ⚠️ Branch protection is unavailable — tested, not assumed
+
+Both approaches were attempted against the live repository and both were refused:
+
+```
+PUT /repos/cjackmort/mortensenweb/branches/main/protection
+GET /repos/cjackmort/mortensenweb/rulesets
+→ HTTP 403: "Upgrade to GitHub Pro or make this repository public to enable this feature."
+```
+
+`security_and_analysis` returned empty — secret scanning and push protection are likewise
+unavailable on a Free private repository.
+
+**This is not caused by choosing a personal account.** GitHub Free for *organizations* carries the
+same restriction on private repositories. The only ways to obtain branch protection here are
+GitHub Pro (~$4/month, personal) or GitHub Team (~$4/user/month, organization), or making the
+repository public — which is not acceptable for client-adjacent code.
+
+**Consequences, honestly stated:**
+
+| Control we planned | Status | Compensating control |
+| --- | --- | --- |
+| Required pull request before merge | ❌ Unavailable | Convention only (`CONTRIBUTING.md`) |
+| Required status checks | ❌ Unavailable | **The portal checks CI status itself before merging** — this was always the primary guard |
+| Block force pushes | ❌ Unavailable | Convention only |
+| Block `main` deletion | ❌ Unavailable | Convention only |
+| Secret scanning / push protection | ❌ Unavailable | Pre-commit secret scan, run manually each commit |
+
+The important point: the **merge guards in §12.3 live in our own code**, not in branch protection.
+The portal refuses to merge a draft, an unexpected base, an unallowlisted repository, failing
+checks, or a changed head SHA — and that logic is unaffected by the plan tier. Branch protection
+was defence in depth. We lose the second layer, not the first.
+
+For a solo operator the practical residual risk is low, since the main thing branch protection
+prevents is a *human* pushing directly to `main` by mistake. **Recommendation: GitHub Pro at
+~$4/month before the first real client site is live**, deferrable until then.
+
+### Outstanding before Stage 2
+
+| Item | Action |
+| --- | --- |
+| `workflow` token scope | `gh auth refresh -h github.com -s workflow` — required to push `.github/workflows/`; `admin:org` is no longer needed |
+| OneDrive location | The working copy sits under `OneDrive\Desktop\`. Move it before `npm install` — see below |
+| Domain | `mortensenweb.com` still unregistered; not needed until Stage 5 |
+| Workers Paid | Not needed until first portal deploy |
+
+### ⚠️ Working copy is inside OneDrive
+
+The repository currently lives at
+`C:\Users\cjack\OneDrive\Desktop\Organization\Claude Projects\WebsiteBusiness\mortensenweb`.
+
+OneDrive synchronises `.git/` internals and, from Stage 2, would synchronise `node_modules/` —
+hundreds of megabytes of small files. This causes slow installs and builds, consumes the storage
+quota, and can corrupt the Git index when OneDrive locks a file mid-operation.
+
+**Recommendation: move the working copy outside OneDrive before Stage 2.** Nothing is lost — the
+repository is already pushed to GitHub.
+
+```
+git clone https://github.com/cjackmort/mortensenweb.git C:\dev\mortensenweb
+```
