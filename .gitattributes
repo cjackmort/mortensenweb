@@ -1,0 +1,28 @@
+# Normalise line endings. Development happens on Windows; CI and Cloudflare
+# builds run on Linux. Committing CRLF would break shell scripts on the runner.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary assets — never normalise, never diff as text.
+*.png   -text
+*.jpg   -text
+*.jpeg  -text
+*.gif   -text
+*.ico   -text
+*.webp  -text
+*.avif  -text
+*.svg   text
+*.woff  -text
+*.woff2 -text
+*.ttf   -text
+*.otf   -text
+*.pdf   -text
+*.zip   -text
+
+# Generated lockfiles: keep them, but keep them out of diffs.
+package-lock.json  -diff
+pnpm-lock.yaml     -diff

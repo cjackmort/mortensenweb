@@ -1,0 +1,72 @@
+# ---- Dependencies ----
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+
+# ---- Build output ----
+.next/
+out/
+dist/
+build/
+.open-next/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Cloudflare / Wrangler ----
+.wrangler/
+.dev.vars
+.dev.vars.*
+worker-configuration.d.ts
+
+# ---- Environment: NEVER commit real values ----
+# .env.example is the only env file that belongs in Git, and it holds names only.
+.env
+.env.*
+!.env.example
+
+# ---- Database ----
+*.sqlite
+*.sqlite3
+*.db
+
+# ---- Testing / coverage ----
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Editor / OS ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ---- Credentials: belt and braces ----
+# Nothing in this repo should ever need these. If one appears, something is wrong.
+*.pem
+*.key
+*.p12
+*.pfx
+*.gpg
+id_rsa*
+id_ed25519*
+secrets.json
+gha-creds-*.json
