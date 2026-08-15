@@ -32,6 +32,8 @@ worker-configuration.d.ts
 *.sqlite
 *.sqlite3
 *.db
+# Local embedded Postgres (PGlite) data directory — development only.
+.pglite/
 
 # ---- Testing / coverage ----
 coverage/

@@ -1,0 +1,40 @@
+{
+  "name": "@mortensenweb/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/reset.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2",
+    "next": "16.3.1",
+    "next-auth": "5.0.0-beta.32",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.5",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "16.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.10"
+  }
+}
