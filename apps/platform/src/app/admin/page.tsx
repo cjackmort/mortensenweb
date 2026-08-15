@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminOverview() {
   const user = await currentUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
 
   const ctx = adminContextFrom(user);

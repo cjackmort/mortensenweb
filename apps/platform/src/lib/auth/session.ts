@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { loginAttempts, organizationMemberships, users } from "@/db/schema";
 import type { SessionLike } from "@/db/repositories/context";
@@ -75,23 +75,32 @@ export async function resolveSession(
 
 export type LoginResult =
   | { ok: true; user: AuthenticatedUser }
-  | { ok: false; reason: "invalid" | "locked" | "rate_limited" };
+  | { ok: false; reason: "invalid" | "locked" | "rate_limited" | "expired" };
 
 /**
- * Authenticate an email and password.
+ * Authenticate a sign-in identifier and password.
+ *
+ * The identifier is either the issued handle (`northwind-comfort`) or the
+ * email address. Accepting both means the operator can read a short handle
+ * down the phone at activation, while the client can still get in months later
+ * with the email they actually remember.
  *
  * Failure reasons are deliberately coarse. The caller must render the same
  * message for `invalid` regardless of whether the account exists, so login
- * cannot be used to enumerate customers.
+ * cannot be used to enumerate customers. `expired` is the one exception: it
+ * only ever applies to an already-authenticated temporary credential, so
+ * revealing it leaks nothing about which accounts exist.
  */
 export async function authenticate(
   db: Database,
-  emailRaw: string,
+  identifierRaw: string,
   password: string,
   context: { ipAddress?: string } = {},
 ): Promise<LoginResult> {
-  const email = emailRaw.trim().toLowerCase();
-  const emailHash = await sha256Hex(email);
+  const identifier = identifierRaw.trim().toLowerCase();
+  // Rate limiting keys off the submitted identifier, so guessing a handle and
+  // guessing an email are throttled as the same account.
+  const emailHash = await sha256Hex(identifier);
   const ipHash = context.ipAddress ? await sha256Hex(context.ipAddress) : null;
 
   const windowStart = new Date(Date.now() - ATTEMPT_WINDOW_MINUTES * 60_000);
@@ -130,7 +139,7 @@ export async function authenticate(
   const rows = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(or(eq(users.email, identifier), eq(users.username, identifier)))
     .limit(1);
   const user = rows[0];
 
@@ -174,6 +183,17 @@ export async function authenticate(
     return { ok: false, reason: "invalid" };
   }
 
+  // Temporary credential lifetime. Checked only after the password verified,
+  // so this branch cannot be used to probe which accounts exist.
+  if (
+    user.mustChangePassword &&
+    user.tempPasswordExpiresAt &&
+    user.tempPasswordExpiresAt <= new Date()
+  ) {
+    await recordAttempt(false);
+    return { ok: false, reason: "expired" };
+  }
+
   // Transparent upgrade: the plaintext is in hand exactly once, here.
   if (needsRehash(user.passwordHash)) {
     const upgraded = await hashPassword(password);
@@ -208,6 +228,88 @@ export async function authenticate(
       organizationId: membership[0]?.organizationId ?? null,
     },
   };
+}
+
+/**
+ * Password policy.
+ *
+ * Deliberately a length floor and nothing else. Composition rules ("one
+ * capital, one symbol") measurably push people toward `Password1!` and are no
+ * longer recommended; length is what actually helps. The floor is 10 rather
+ * than 16 because the audience is a contractor typing on a phone, and a rule
+ * they cannot satisfy becomes a password written on a whiteboard.
+ */
+export const MIN_PASSWORD_LENGTH = 10;
+export const MAX_PASSWORD_LENGTH = 200;
+
+export type PasswordRejection =
+  | "too_short"
+  | "too_long"
+  | "not_varied"
+  | "same_as_temporary";
+
+export function validateNewPassword(
+  candidate: string,
+  previous?: string | null,
+): PasswordRejection | null {
+  if (candidate.length < MIN_PASSWORD_LENGTH) return "too_short";
+  if (candidate.length > MAX_PASSWORD_LENGTH) return "too_long";
+  if (new Set(candidate).size < 4) return "not_varied";
+  if (previous && candidate === previous) return "same_as_temporary";
+  return null;
+}
+
+export type SetPasswordResult =
+  | { ok: true }
+  | { ok: false; reason: "invalid_current" | PasswordRejection };
+
+/**
+ * Exchange a temporary password for one the client chooses.
+ *
+ * Advancing `sessionEpoch` here invalidates every outstanding token, including
+ * the caller's own. That is intended — the temporary credential was emailed and
+ * should stop working everywhere the moment it is replaced. The caller is
+ * expected to sign in again immediately with the new password, which it holds
+ * at that moment, so the client experiences no interruption.
+ */
+export async function setOwnPassword(
+  db: Database,
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<SetPasswordResult> {
+  const rows = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const user = rows[0];
+  if (!user) return { ok: false, reason: "invalid_current" };
+
+  const valid = await verifyPassword(currentPassword, user.passwordHash);
+  if (!valid) return { ok: false, reason: "invalid_current" };
+
+  const rejection = validateNewPassword(newPassword, currentPassword);
+  if (rejection) return { ok: false, reason: rejection };
+
+  const now = new Date();
+  await db
+    .update(users)
+    .set({
+      passwordHash: await hashPassword(newPassword),
+      passwordAlgo: "pbkdf2-sha256",
+      passwordUpdatedAt: now,
+      mustChangePassword: false,
+      tempPasswordExpiresAt: null,
+      activatedAt: user.activatedAt ?? now,
+      failedLoginCount: 0,
+      lockedUntil: null,
+      sessionEpoch: sql`${users.sessionEpoch} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(users.id, userId));
+
+  return { ok: true };
 }
 
 /**

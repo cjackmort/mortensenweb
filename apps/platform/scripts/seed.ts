@@ -9,6 +9,7 @@
  */
 
 import { getDb } from "../src/db/client";
+import { temporaryPasswordExpiry } from "../src/lib/auth/credentials";
 import {
   changeRequests,
   clients,
@@ -115,7 +116,11 @@ async function main() {
         passwordAlgo: "pbkdf2-sha256",
         passwordUpdatedAt: new Date(),
         // Forces the temporary password to be replaced on first sign-in.
+        // The expiry is mandatory: a check constraint refuses a temporary
+        // credential that would live forever.
         mustChangePassword: true,
+        tempPasswordExpiresAt: temporaryPasswordExpiry(),
+        invitedAt: new Date(),
       })
       .returning()
   )[0]!;
@@ -147,6 +152,9 @@ async function main() {
       .values({
         publicId: newPublicId(),
         email: "owner@northwind-demo.example",
+        // Demo of the issued sign-in handle: this account can sign in with
+        // either `northwind-comfort` or the email address.
+        username: "northwind-comfort",
         name: "Dana Reyes (DEMO)",
         role: "client",
         status: "active",

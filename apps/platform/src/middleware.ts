@@ -21,7 +21,7 @@ const SESSION_COOKIES = [
   "__Secure-authjs.session-token",
 ];
 
-const PUBLIC_PATHS = ["/login", "/api/auth"];
+const PUBLIC_PATHS = ["/login", "/get-started", "/api/auth"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

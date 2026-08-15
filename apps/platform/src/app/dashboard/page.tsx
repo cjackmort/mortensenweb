@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function ClientDashboard() {
   const user = await currentUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
 
   if (!user.organizationId) {
     return (

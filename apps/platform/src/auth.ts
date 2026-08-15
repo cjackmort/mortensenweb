@@ -30,16 +30,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email: { label: "Email", type: "email" },
+        // Accepts the issued handle (`northwind-comfort`) or the email address.
+        identifier: { label: "Username or email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(raw) {
-        const email = typeof raw?.email === "string" ? raw.email : "";
+        const identifier =
+          typeof raw?.identifier === "string" ? raw.identifier : "";
         const password = typeof raw?.password === "string" ? raw.password : "";
-        if (!email || !password) return null;
+        if (!identifier || !password) return null;
 
         const db = await getDb();
-        const result = await authenticate(db, email, password);
+        const result = await authenticate(db, identifier, password);
 
         // Every failure returns null. The caller renders one message for all
         // of them, so login cannot be used to enumerate accounts.

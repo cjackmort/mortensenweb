@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { currentUser, signIn } from "@/auth";
@@ -5,11 +6,14 @@ import { currentUser, signIn } from "@/auth";
 export const dynamic = "force-dynamic";
 
 /**
- * Sign-in.
+ * Sign-in for returning users.
  *
  * One error message covers every failure mode — wrong password, unknown
  * account, disabled account, rate limited. Distinguishing them would turn this
  * form into an account enumeration oracle.
+ *
+ * First-time clients are sent to /get-started instead, which is the same
+ * authentication with onboarding framing.
  */
 export default async function LoginPage({
   searchParams,
@@ -17,18 +21,21 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const user = await currentUser();
-  if (user) redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  if (user) {
+    if (user.mustChangePassword) redirect("/change-password");
+    redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  }
 
   const params = await searchParams;
   const failed = Boolean(params.error);
 
   async function attempt(formData: FormData) {
     "use server";
-    const email = String(formData.get("email") ?? "");
+    const identifier = String(formData.get("identifier") ?? "");
     const password = String(formData.get("password") ?? "");
 
     try {
-      await signIn("credentials", { email, password, redirectTo: "/" });
+      await signIn("credentials", { identifier, password, redirectTo: "/" });
     } catch (error) {
       // next-auth signals a successful redirect by throwing; let it through.
       if (error instanceof AuthError) redirect("/login?error=1");
@@ -48,17 +55,19 @@ export default async function LoginPage({
 
         {failed && (
           <p className="error">
-            We could not sign you in. Check your email and password and try
-            again.
+            We could not sign you in. Check your details and try again.
           </p>
         )}
 
-        <label htmlFor="email">Email</label>
+        <label htmlFor="identifier">Username or email</label>
         <input
-          id="email"
-          name="email"
-          type="email"
+          id="identifier"
+          name="identifier"
+          type="text"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
         />
 
@@ -72,6 +81,14 @@ export default async function LoginPage({
         />
 
         <button type="submit">Sign in</button>
+
+        <p
+          className="muted"
+          style={{ marginTop: "1.5rem", marginBottom: 0, fontSize: "0.85rem" }}
+        >
+          First time here?{" "}
+          <Link href="/get-started">Get started with your welcome email</Link>
+        </p>
       </form>
     </main>
   );

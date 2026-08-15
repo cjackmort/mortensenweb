@@ -60,6 +60,14 @@ export const users = pgTable(
     publicId: text("public_id").notNull(),
     /** Always stored lowercased; the check constraint enforces it. */
     email: text("email").notNull(),
+    /**
+     * Human-friendly sign-in handle issued at activation, e.g.
+     * `northwind-comfort`. Sign-in accepts this OR the email address: the
+     * handle is what the operator reads out over the phone, the email is what
+     * the client remembers months later. Nullable because admin accounts and
+     * pre-activation invitees do not have one.
+     */
+    username: text("username"),
     name: text("name"),
 
     /** PHC-style string, e.g. `$pbkdf2-sha256$i=600000$<salt>$<hash>`. */
@@ -84,6 +92,20 @@ export const users = pgTable(
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
 
+    /** Onboarding lifecycle: invited -> first sign-in -> own password set. */
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    /**
+     * A temporary password is a bearer credential sent over email, so it
+     * expires on its own rather than living forever in an inbox.
+     */
+    tempPasswordExpiresAt: timestamp("temp_password_expires_at", {
+      withTimezone: true,
+    }),
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      withTimezone: true,
+    }),
+
     isDemo: boolean("is_demo").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -96,8 +118,19 @@ export const users = pgTable(
   (t) => [
     uniqueIndex("users_public_id_key").on(t.publicId),
     uniqueIndex("users_email_key").on(t.email),
+    uniqueIndex("users_username_key").on(t.username),
     index("users_role_status_idx").on(t.role, t.status),
     check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
+    check(
+      "users_username_lowercase",
+      sql`${t.username} IS NULL OR ${t.username} = lower(${t.username})`,
+    ),
+    // A temporary password must always carry an expiry, so one cannot be
+    // issued that lives indefinitely in an inbox.
+    check(
+      "users_temp_password_requires_expiry",
+      sql`${t.mustChangePassword} = false OR ${t.tempPasswordExpiresAt} IS NOT NULL`,
+    ),
     check(
       "users_failed_login_non_negative",
       sql`${t.failedLoginCount} >= 0`,
