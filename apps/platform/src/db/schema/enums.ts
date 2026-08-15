@@ -87,6 +87,30 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 export const paymentStatusEnum = pgEnum("payment_status", ["recorded", "void"]);
 
 /**
+ * Whether the agency is actively working on a client's site.
+ *
+ * Non-payment pauses *management*, never hosting. Taking a small business's
+ * website offline over a late invoice does them disproportionate harm and
+ * reflects badly on the agency; withdrawing labour is the proportionate
+ * response. `unmanaged` therefore means the site stays up and reachable while
+ * change requests and automation stop.
+ */
+export const managementStateEnum = pgEnum("management_state", [
+  "managed",
+  "at_risk",
+  "unmanaged",
+]);
+
+/** Rungs of the reminder ladder. Recorded so a rung cannot be sent twice. */
+export const dunningStageEnum = pgEnum("dunning_stage", [
+  "none",
+  "first_reminder",
+  "second_reminder",
+  "final_notice",
+  "management_paused",
+]);
+
+/**
  * Lifecycle of a request for payment.
  *
  * `awaiting_confirmation` is the state that off-platform rails make necessary:

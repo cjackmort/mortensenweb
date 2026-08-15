@@ -16,6 +16,8 @@ import { organizations, users } from "./identity";
 import { sites } from "./sites";
 import {
   adjustmentKindEnum,
+  dunningStageEnum,
+  managementStateEnum,
   migrationScopeEnum,
   migrationStatusEnum,
   paymentMethodEnum,
@@ -45,6 +47,22 @@ export const clients = pgTable(
     phone: text("phone"),
     industry: text("industry"),
     onboardingStatus: text("onboarding_status").notNull().default("new"),
+
+    /**
+     * Whether we are actively working on this client's site. Non-payment
+     * moves this to `unmanaged`; it never takes the site down.
+     */
+    managementState: managementStateEnum("management_state")
+      .notNull()
+      .default("managed"),
+    managementPausedAt: timestamp("management_paused_at", {
+      withTimezone: true,
+    }),
+    managementPausedReason: text("management_paused_reason"),
+    /** Set when an operator deliberately exempts a client from the ladder. */
+    dunningExemptUntil: timestamp("dunning_exempt_until", {
+      withTimezone: true,
+    }),
     isDemo: boolean("is_demo").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -216,6 +234,10 @@ export const paymentRequests = pgTable(
     paymentId: uuid("payment_id").references(() => payments.id, {
       onDelete: "set null",
     }),
+
+    /** Highest rung of the reminder ladder reached. Never moves backwards. */
+    dunningStage: dunningStageEnum("dunning_stage").notNull().default("none"),
+    lastReminderAt: timestamp("last_reminder_at", { withTimezone: true }),
 
     note: text("note"),
     isDemo: boolean("is_demo").notNull().default(false),
