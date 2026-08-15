@@ -1,0 +1,55 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+/**
+ * Middleware is a redirect convenience, NOT an authorization boundary.
+ *
+ * It only checks whether a session cookie is present, so an unauthenticated
+ * visitor lands on /login instead of a flash of empty dashboard. It
+ * deliberately does not import the auth config or the database: middleware
+ * runs before the Node.js server context is available, and pulling the
+ * database driver in here would break the build and tempt us into treating
+ * this file as the security check.
+ *
+ * The real checks live in each page and route handler, where `currentUser()`
+ * re-reads the user row and compares `sessionEpoch`, and where the repository
+ * layer enforces tenant scope. A forged or stale cookie gets past middleware
+ * and is then rejected by those. That ordering is intentional.
+ */
+
+const SESSION_COOKIES = [
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+];
+
+const PUBLIC_PATHS = ["/login", "/api/auth"];
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  const hasSessionCookie = SESSION_COOKIES.some((name) =>
+    request.cookies.has(name),
+  );
+
+  if (!hasSessionCookie) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Everything except Next internals and static assets. Authenticated
+     * surfaces additionally carry no-store headers from next.config.ts.
+     */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt).*)",
+  ],
+};
