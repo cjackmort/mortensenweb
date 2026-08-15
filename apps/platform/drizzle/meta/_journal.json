@@ -15,6 +15,13 @@
       "when": 1786810792167,
       "tag": "0001_numerous_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786811237712,
+      "tag": "0002_violet_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

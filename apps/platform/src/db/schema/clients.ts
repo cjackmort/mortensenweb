@@ -19,6 +19,7 @@ import {
   migrationScopeEnum,
   migrationStatusEnum,
   paymentMethodEnum,
+  paymentRequestStatusEnum,
   paymentStatusEnum,
   subscriptionStatusEnum,
   visibilityEnum,
@@ -162,6 +163,82 @@ export const payments = pgTable(
     check("payments_amount_non_negative", sql`${t.amountCents} >= 0`),
     check(
       "payments_period_order",
+      sql`${t.coversPeriodEnd} IS NULL OR ${t.coversPeriodStart} IS NULL OR ${t.coversPeriodEnd} >= ${t.coversPeriodStart}`,
+    ),
+  ],
+);
+
+/**
+ * A request for payment — an invoice.
+ *
+ * Separate from `payments` because the two answer different questions: this is
+ * "we asked for $X", `payments` is "$X arrived". Off-platform rails such as
+ * Venmo give no confirmation callback, so the gap between them is real and the
+ * schema models it rather than pretending otherwise.
+ *
+ * `reference` is the reconciliation key. It goes in the Venmo note, and it is
+ * how the operator matches an arriving payment to the request that caused it.
+ */
+export const paymentRequests = pgTable(
+  "payment_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicId: text("public_id").notNull(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    subscriptionId: uuid("subscription_id").references(() => subscriptions.id, {
+      onDelete: "set null",
+    }),
+    /** Short human-quotable code, e.g. `MW-7F3K`. Appears in the Venmo note. */
+    reference: text("reference").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    coversPeriodStart: date("covers_period_start"),
+    coversPeriodEnd: date("covers_period_end"),
+    dueOn: date("due_on"),
+
+    status: paymentRequestStatusEnum("status").notNull().default("open"),
+    method: paymentMethodEnum("method"),
+
+    /**
+     * Set when the client presses "Pay with Venmo". It records intent only —
+     * the client opened the payment app — and never that money moved. Only an
+     * operator confirming receipt does that.
+     */
+    initiatedAt: timestamp("initiated_at", { withTimezone: true }),
+    /** The operator confirming funds actually arrived. */
+    confirmedByUserId: uuid("confirmed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    /** Links to the ledger row created when the operator confirms. */
+    paymentId: uuid("payment_id").references(() => payments.id, {
+      onDelete: "set null",
+    }),
+
+    note: text("note"),
+    isDemo: boolean("is_demo").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("payment_requests_public_id_key").on(t.publicId),
+    uniqueIndex("payment_requests_reference_key").on(t.reference),
+    index("payment_requests_client_status_idx").on(t.clientId, t.status),
+    index("payment_requests_due_idx").on(t.dueOn),
+    check("payment_requests_amount_positive", sql`${t.amountCents} > 0`),
+    // "Paid" is only reachable with a named human attached to the claim.
+    check(
+      "payment_requests_paid_requires_confirmation",
+      sql`${t.status} <> 'paid' OR (${t.confirmedAt} IS NOT NULL AND ${t.confirmedByUserId} IS NOT NULL)`,
+    ),
+    check(
+      "payment_requests_period_order",
       sql`${t.coversPeriodEnd} IS NULL OR ${t.coversPeriodStart} IS NULL OR ${t.coversPeriodEnd} >= ${t.coversPeriodStart}`,
     ),
   ],

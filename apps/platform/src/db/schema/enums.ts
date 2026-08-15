@@ -87,6 +87,24 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 export const paymentStatusEnum = pgEnum("payment_status", ["recorded", "void"]);
 
 /**
+ * Lifecycle of a request for payment.
+ *
+ * `awaiting_confirmation` is the state that off-platform rails make necessary:
+ * the client says they have paid, and nobody has yet verified that money
+ * arrived. It is deliberately distinct from `paid` — the portal must never tell
+ * a client they are paid up on their say-so alone.
+ */
+export const paymentRequestStatusEnum = pgEnum("payment_request_status", [
+  "draft",
+  "open",
+  "awaiting_confirmation",
+  "paid",
+  "overdue",
+  "cancelled",
+  "written_off",
+]);
+
+/**
  * Payments are never deleted. Corrections are appended as adjustments so the
  * ledger stays auditable.
  */
