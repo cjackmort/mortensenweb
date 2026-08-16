@@ -25,6 +25,23 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Send the netlify.app hostname to the real one.
+#
+# Netlify redirects custom-domain *aliases* to the primary domain automatically,
+# but not its own `.netlify.app` subdomain — that stays directly reachable. Two
+# hostnames serving one portal is a problem here specifically because AUTH_URL
+# names only one of them: a client who bookmarks the wrong address gets sign-in
+# redirects to the other, loses the session cookie, and is asked to log in
+# twice. Exactly the bug we hit ourselves.
+#
+# `force = true` is required — without it the redirect loses to the existing
+# route and never fires.
+[[redirects]]
+  from = "https://mortensenweb.netlify.app/*"
+  to = "https://portal.mortensenweb.com/:splat"
+  status = 301
+  force = true
+
 # Security headers are set in next.config.ts so they apply identically in
 # development, in `next start`, and here. They are deliberately NOT duplicated
 # in this file: two sources for the same header is how they drift.
