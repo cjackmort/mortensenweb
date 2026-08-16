@@ -19,6 +19,9 @@ import { NavLinks, type NavItem } from "./nav-links";
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/clients", label: "Clients" },
+  { href: "/admin/requests", label: "Requests" },
+  { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/prospects", label: "Prospects" },
 ];
 
 const CLIENT_NAV: NavItem[] = [
