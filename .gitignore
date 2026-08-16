@@ -72,3 +72,10 @@ id_rsa*
 id_ed25519*
 secrets.json
 gha-creds-*.json
+
+# ---- Local attachment storage (development driver only) ----
+.attachments/
+
+# ---- Self-hosted Umami host (infra/umami) ----
+# Real values live only on the VPS. This repo is public.
+infra/umami/.env

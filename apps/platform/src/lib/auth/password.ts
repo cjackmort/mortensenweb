@@ -25,8 +25,26 @@ export const PBKDF2_ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 
-/** Minimum length. Length beats composition rules; no character-class theatre. */
-export const MIN_PASSWORD_LENGTH = 12;
+/**
+ * Minimum length. Length beats composition rules; no character-class theatre.
+ *
+ * This is the single source of truth for the floor. `hashPassword` enforces it
+ * as a hard backstop and throws below it, so any policy check elsewhere must
+ * use this same constant — `@/lib/auth/session` re-exports it rather than
+ * declaring its own. A second, lower constant would let a password pass
+ * validation and then throw at the hashing step, which is a 500, not a
+ * validation error.
+ *
+ * Set to 5 by explicit product decision, against the usual advice. Be clear
+ * about what that trades away: online guessing is still covered — five failures
+ * lock the account for fifteen minutes and the login endpoint is throttled per
+ * account and per IP — but a five-character password does not survive an
+ * *offline* attack. If the user table is ever disclosed, 600,000 PBKDF2
+ * iterations buy minutes, not years, against a five-character keyspace. The
+ * mitigation that matters at this floor is therefore keeping the database from
+ * leaking, not the KDF.
+ */
+export const MIN_PASSWORD_LENGTH = 5;
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";

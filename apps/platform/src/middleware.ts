@@ -21,12 +21,27 @@ const SESSION_COOKIES = [
   "__Secure-authjs.session-token",
 ];
 
-const PUBLIC_PATHS = ["/login", "/get-started", "/api/auth"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/get-started",
+  // Both halves of the reset flow are reached by someone who cannot sign in,
+  // so both must be public or the flow redirects to the screen it exists to
+  // rescue them from.
+  "/forgot-password",
+  "/reset-password",
+  "/api/auth",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Exact match or a path segment beneath it. A bare `startsWith` would also
+  // match `/login-something`, quietly widening the public surface every time
+  // someone adds a route with a shared prefix.
+  const isPublic = PUBLIC_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+  if (isPublic) {
     return NextResponse.next();
   }
 

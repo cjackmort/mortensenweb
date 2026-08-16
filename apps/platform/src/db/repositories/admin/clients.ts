@@ -1,13 +1,17 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  auditLog,
   changeRequests,
   clients,
+  organizationMemberships,
   organizations,
   prospects,
   sites,
   subscriptions,
+  users,
 } from "@/db/schema";
+import { newPublicId } from "@/lib/ids";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -39,6 +43,106 @@ export async function listClients(_ctx: AdminContext, db: Database) {
     .innerJoin(organizations, eq(clients.organizationId, organizations.id))
     .where(isNull(clients.archivedAt))
     .orderBy(organizations.name);
+}
+
+/**
+ * Turn a business name into a URL slug: "Scott Mortensen Fine Arts" becomes
+ * `scott-mortensen-fine-arts`. The schema enforces lowercase via a check
+ * constraint, so this must not return mixed case.
+ */
+export function slugForOrganization(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "client"
+  );
+}
+
+export interface NewClientInput {
+  businessName: string;
+  primaryContactName?: string;
+  primaryContactEmail?: string;
+  phone?: string;
+  industry?: string;
+}
+
+/**
+ * Create the organization and client rows for a new client.
+ *
+ * Deliberately separate from `activateClient`. Creating the record is
+ * bookkeeping and is safe to get wrong — it can be edited. Activation issues a
+ * real credential and grants access, and the plan requires that to be a
+ * distinct, deliberate act rather than a side effect of typing a name into a
+ * form. A client created here cannot sign in until someone activates them.
+ *
+ * Slug collisions are resolved with a numeric suffix rather than failing, so
+ * two clients with similar names do not produce an error the operator has to
+ * work around by inventing a different business name.
+ */
+export async function createClient(
+  ctx: AdminContext,
+  db: Database,
+  input: NewClientInput,
+) {
+  const name = input.businessName.trim();
+  if (name.length < 2) {
+    throw new Error("A business name is required.");
+  }
+
+  const base = slugForOrganization(name);
+  let slug = base;
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const taken = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.slug, slug))
+      .limit(1);
+    if (taken.length === 0) break;
+    slug = `${base}-${suffix}`;
+  }
+
+  const orgRows = await db
+    .insert(organizations)
+    .values({
+      publicId: newPublicId(),
+      name,
+      slug,
+      kind: "client",
+      timezone: process.env.BUSINESS_TIMEZONE ?? "America/Denver",
+    })
+    .returning({ id: organizations.id, publicId: organizations.publicId });
+
+  const organization = orgRows[0]!;
+
+  const clientRows = await db
+    .insert(clients)
+    .values({
+      publicId: newPublicId(),
+      organizationId: organization.id,
+      primaryContactName: input.primaryContactName?.trim() || null,
+      primaryContactEmail:
+        input.primaryContactEmail?.trim().toLowerCase() || null,
+      phone: input.phone?.trim() || null,
+      industry: input.industry?.trim() || null,
+      // Not activated: no credential exists yet, and that is the point.
+      onboardingStatus: "new",
+    })
+    .returning({ publicId: clients.publicId });
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: organization.id,
+    action: "client.created",
+    entityType: "client",
+    entityId: clientRows[0]!.publicId,
+    metadata: { name, slug },
+  });
+
+  return { clientPublicId: clientRows[0]!.publicId, slug };
 }
 
 export async function getClientDetail(
@@ -94,6 +198,74 @@ export async function getClientDetail(
     subscription: subscription[0] ?? null,
     requests: openRequests,
   };
+}
+
+/**
+ * The portal accounts belonging to one organization.
+ *
+ * This is what tells the activation UI whether to offer "activate" or
+ * "reissue": `activateClient` refuses an email that already has an account, so
+ * offering the wrong action produces an error the operator cannot act on.
+ *
+ * Deliberately returns no password material of any kind. `passwordHash` is not
+ * selected — not because rendering it would be likely, but because a column
+ * that never enters the query cannot leak into a server-component payload by
+ * accident later.
+ */
+export async function listOrganizationUsers(
+  _ctx: AdminContext,
+  db: Database,
+  organizationId: string,
+) {
+  return db
+    .select({
+      publicId: users.publicId,
+      email: users.email,
+      username: users.username,
+      name: users.name,
+      status: users.status,
+      mustChangePassword: users.mustChangePassword,
+      tempPasswordExpiresAt: users.tempPasswordExpiresAt,
+      lastLoginAt: users.lastLoginAt,
+      activatedAt: users.activatedAt,
+      invitedAt: users.invitedAt,
+    })
+    .from(users)
+    .innerJoin(
+      organizationMemberships,
+      eq(organizationMemberships.userId, users.id),
+    )
+    .where(eq(organizationMemberships.organizationId, organizationId))
+    .orderBy(users.createdAt);
+}
+
+/** Resolve an internal user id from its public id, scoped to one organization. */
+export async function findOrganizationUserId(
+  _ctx: AdminContext,
+  db: Database,
+  organizationId: string,
+  userPublicId: string,
+): Promise<string> {
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .innerJoin(
+      organizationMemberships,
+      eq(organizationMemberships.userId, users.id),
+    )
+    .where(
+      and(
+        eq(organizationMemberships.organizationId, organizationId),
+        eq(users.publicId, userPublicId),
+      ),
+    )
+    .limit(1);
+
+  // Scoping the lookup by organization means a public id from another client
+  // reads as "does not exist" rather than reissuing someone else's credential.
+  const row = rows[0];
+  if (!row) throw new NotFoundError();
+  return row.id;
 }
 
 /**

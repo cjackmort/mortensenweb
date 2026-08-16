@@ -1,0 +1,72 @@
+# Self-hosted Umami — analytics host.
+#
+# Runs on its own small VPS, NOT on the portal's infrastructure and NOT against
+# Neon. That is a deliberate decision recorded in the plan (§10): a self-hosted
+# Umami holds a persistent connection pool, which prevents Neon's scale-to-zero
+# and burns roughly 182 CU-hours a month against a 100 CU-hour free allowance —
+# exhausting it in about two and a half weeks. Postgres therefore runs here, in
+# a container beside Umami, on the same box.
+#
+# Caddy terminates TLS and obtains certificates automatically. That matters more
+# than convenience: client sites are served over HTTPS, so a tracking script
+# loaded from a plain-HTTP or untrusted-cert origin is blocked by the browser
+# and collects nothing.
+#
+# NOTHING SECRET BELONGS IN THIS FILE. Values come from .env beside it, which is
+# gitignored. This repository is public.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - umami-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published to the host: Postgres is reachable only on the internal
+    # compose network, so it is never exposed to the internet.
+    expose:
+      - "5432"
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://umami:${POSTGRES_PASSWORD}@db:5432/umami
+      DATABASE_TYPE: postgresql
+      # Signs sessions. Generate once and never change it, or every session and
+      # API token is invalidated.
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ANALYTICS_HOSTNAME: ${ANALYTICS_HOSTNAME:?set ANALYTICS_HOSTNAME in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - umami
+
+volumes:
+  umami-db:
+  caddy-data:
+  caddy-config:

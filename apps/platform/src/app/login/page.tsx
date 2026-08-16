@@ -83,6 +83,17 @@ export default async function LoginPage({
         <button type="submit">Sign in</button>
 
         <p
+          style={{
+            marginTop: "1rem",
+            marginBottom: 0,
+            fontSize: "0.9rem",
+            textAlign: "center",
+          }}
+        >
+          <Link href="/forgot-password">Forgot your password?</Link>
+        </p>
+
+        <p
           className="muted"
           style={{ marginTop: "1.5rem", marginBottom: 0, fontSize: "0.85rem" }}
         >

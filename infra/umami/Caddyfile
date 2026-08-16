@@ -1,0 +1,29 @@
+# Caddy obtains and renews a Let's Encrypt certificate automatically for
+# {$ANALYTICS_HOSTNAME}. HTTPS is not optional here: client sites are served
+# over HTTPS, and a browser will refuse to load a tracking script from an
+# insecure or untrusted origin, so a cert failure means silent data loss rather
+# than a visible error.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$ANALYTICS_HOSTNAME} {
+	encode gzip
+
+	# The tracking script is fetched by every visitor to every client site.
+	# Caching it takes that load off Umami entirely.
+	@script path /script.js
+	header @script Cache-Control "public, max-age=86400"
+
+	# Umami sets its own CORS behaviour for the collect endpoint; this only
+	# stops the analytics host itself from being framed.
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy umami:3000
+}

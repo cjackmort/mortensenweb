@@ -1,0 +1,43 @@
+# Netlify build configuration.
+#
+# This is a monorepo, so `base` points at the app rather than the repository
+# root. Netlify installs workspace dependencies from the root lockfile
+# regardless, which is what keeps the pinned `next-auth` beta exact.
+#
+# Deploy target decision: Netlify over Cloudflare Workers. Workers' free tier
+# caps CPU at 10 ms per invocation, and PBKDF2 at 600,000 iterations costs
+# hundreds of milliseconds — the plan's only Blocking-severity infrastructure
+# risk. Netlify's Node runtime has no per-invocation CPU cap, so that risk is
+# removed rather than paid around, and it also drops the dependency on the
+# pre-1.0 `@opennextjs/cloudflare` adapter.
+
+[build]
+  base = "apps/platform"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Match the engines constraint in the root package.json.
+  NODE_VERSION = "20"
+  # The portal is small; the default is generous but be explicit.
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Security headers are set in next.config.ts so they apply identically in
+# development, in `next start`, and here. They are deliberately NOT duplicated
+# in this file: two sources for the same header is how they drift.
+
+[context.production]
+  command = "npm run build"
+
+# Deploy previews get a non-indexed, throwaway environment. They must never
+# point at the production database — set DATABASE_URL per-context in the
+# Netlify UI, using a Neon branch for previews.
+[context.deploy-preview]
+  command = "npm run build"
+
+[context.deploy-preview.environment]
+  # Belt and braces: the portal already sets robots noindex in metadata.
+  NEXT_PUBLIC_ENVIRONMENT = "preview"
