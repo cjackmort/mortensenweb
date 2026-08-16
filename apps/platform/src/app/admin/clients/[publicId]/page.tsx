@@ -9,10 +9,22 @@ import {
   listOrganizationUsers,
 } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
+import { listClientPaymentRequests } from "@/db/repositories/admin/billing";
 import { isUmamiConfigured } from "@/lib/analytics/umami";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { ActivateForm, ReissueForm } from "./credential-forms";
 import { AddSiteForm, ConnectAnalyticsForm } from "./site-forms";
+import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
+
+const INVOICE_PILL: Record<string, string> = {
+  draft: "pill-neutral",
+  open: "pill-info",
+  awaiting_confirmation: "pill-warning",
+  paid: "pill-success",
+  overdue: "pill-danger",
+  cancelled: "pill-neutral",
+  written_off: "pill-neutral",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +62,10 @@ export default async function ClientDetailPage({
     throw error;
   }
 
-  const [portalUsers, siteRows] = await Promise.all([
+  const [portalUsers, siteRows, invoices] = await Promise.all([
     listOrganizationUsers(ctx, db, detail.organization.id),
     listSitesWithAnalytics(ctx, db, detail.organization.id),
+    listClientPaymentRequests(ctx, db, detail.organization.id),
   ]);
 
   const { client, organization, subscription, requests } = detail;
@@ -227,6 +240,92 @@ export default async function ClientDetailPage({
             set in the environment.
           </p>
         )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Billing</h2>
+          {subscription && (
+            <span className="muted">
+              {formatCurrency(subscription.monthlyPriceCents)}/month
+            </span>
+          )}
+        </div>
+
+        {invoices.length === 0 ? (
+          <p className="muted" style={{ marginTop: 0 }}>
+            No payment requests yet.
+          </p>
+        ) : (
+          <div className="table-wrap" style={{ marginBottom: "1.25rem" }}>
+            <table className="stack">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Amount</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.publicId}>
+                    <td data-label="Ref">
+                      <code>{inv.reference}</code>
+                    </td>
+                    <td data-label="Amount">
+                      {formatCurrency(inv.amountCents, inv.currency)}
+                    </td>
+                    <td data-label="Due">{inv.dueOn ?? "—"}</td>
+                    <td data-label="Status">
+                      <span
+                        className={`pill ${INVOICE_PILL[inv.status] ?? "pill-neutral"}`}
+                      >
+                        {inv.status.replace(/_/g, " ")}
+                      </span>
+                      {inv.status === "awaiting_confirmation" && (
+                        <div
+                          className="muted"
+                          style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}
+                        >
+                          Client says they paid — not being chased
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Confirmation sits with the specific invoice it settles, so an
+            operator cannot confirm the wrong one from a shared form. */}
+        {invoices
+          .filter((inv) =>
+            ["open", "overdue", "awaiting_confirmation"].includes(inv.status),
+          )
+          .map((inv) => (
+            <div key={inv.publicId} className="action-block">
+              <ConfirmReceivedForm
+                clientPublicId={client.publicId}
+                requestPublicId={inv.publicId}
+                reference={inv.reference}
+                amount={formatCurrency(inv.amountCents, inv.currency)}
+              />
+            </div>
+          ))}
+
+        <div className="action-block">
+          <RaiseRequestForm
+            clientPublicId={client.publicId}
+            suggestedAmount={
+              subscription
+                ? (subscription.monthlyPriceCents / 100).toFixed(2)
+                : ""
+            }
+          />
+        </div>
       </section>
 
       <section className="card">

@@ -27,6 +27,7 @@ const CLIENT_NAV: NavItem[] = [
   // places to look for one answer.
   { href: "/dashboard", label: "Your site" },
   { href: "/dashboard/requests", label: "Requests" },
+  { href: "/dashboard/billing", label: "Billing" },
 ];
 
 export function AppShell({
