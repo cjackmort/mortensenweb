@@ -1,5 +1,53 @@
 import type { NextConfig } from "next";
 
+/**
+ * Content Security Policy.
+ *
+ * `script-src` carries 'unsafe-inline' because Next.js injects inline bootstrap
+ * and hydration scripts. Removing it means generating a per-request nonce in
+ * middleware and threading it through — a real upgrade, and a real risk of
+ * shipping a blank page, so it is deliberately not bundled into a security fix.
+ * A browser that supports nonces ignores 'unsafe-inline' when a nonce is
+ * present, so that migration is additive when it happens.
+ *
+ * The directives carrying the most weight here are the ones that cost nothing:
+ * `form-action 'self'` stops injected script from retargeting the sign-in form
+ * at another origin, `base-uri 'self'` stops an injected <base> from rewriting
+ * every relative URL on the page, and `object-src 'none'` removes plugin
+ * embedding outright.
+ */
+const CSP = [
+  "default-src 'self'",
+  // 'unsafe-eval' is needed by the dev-mode React refresh runtime, not in prod.
+  process.env.NODE_ENV === "production"
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+
+/**
+ * Every route that renders per-tenant data or handles a credential.
+ *
+ * This list is the cache boundary, so a new authenticated route that is not
+ * added here is a route a proxy may cache and serve to the wrong client. Note
+ * `dashboard` rather than `client`: the client surface lives at /dashboard, and
+ * naming a route group that does not exist protects nothing.
+ */
+const SENSITIVE_ROUTES =
+  "admin|dashboard|change-password|reset-password|forgot-password|get-started|login|api";
+
+const NO_STORE = [
+  { key: "Cache-Control", value: "no-store, must-revalidate" },
+  { key: "Pragma", value: "no-cache" },
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -15,6 +63,7 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Content-Security-Policy", value: CSP },
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
@@ -27,17 +76,28 @@ const nextConfig: NextConfig = {
       },
       {
         // Authenticated surfaces: never cached anywhere.
-        source: "/(admin|client|api)/:path*",
-        headers: [
-          { key: "Cache-Control", value: "no-store, must-revalidate" },
-          { key: "Pragma", value: "no-cache" },
-        ],
+        source: `/(${SENSITIVE_ROUTES})/:path*`,
+        headers: NO_STORE,
+      },
+      {
+        // `:path*` matches zero segments in most cases, but the bare route is
+        // the one that actually renders the dashboard — spell it out rather
+        // than depend on that.
+        source: `/:route(${SENSITIVE_ROUTES})`,
+        headers: NO_STORE,
+      },
+      {
+        // The router entry point. It redirects, but a cached redirect to
+        // /admin served to a client is still the wrong answer.
+        source: "/",
+        headers: NO_STORE,
       },
     ];
   },
 
-  // `@opennextjs/cloudflare` does not support the edge runtime. Fail the build
-  // loudly rather than discovering it at deploy time.
+  // PGlite is a development-only WASM database. Marking it external keeps its
+  // bundle out of the server build; it is additionally behind a runtime dynamic
+  // import, so a deployed function never loads it.
   serverExternalPackages: ["@electric-sql/pglite"],
 };
 

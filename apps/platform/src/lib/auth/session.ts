@@ -1,8 +1,19 @@
-import { and, eq, gt, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { loginAttempts, organizationMemberships, users } from "@/db/schema";
+import {
+  loginAttempts,
+  organizationMemberships,
+  passwordResetTokens,
+  users,
+} from "@/db/schema";
 import type { SessionLike } from "@/db/repositories/context";
-import { needsRehash, hashPassword, sha256Hex, verifyPassword } from "./password";
+import {
+  MIN_PASSWORD_LENGTH,
+  needsRehash,
+  hashPassword,
+  sha256Hex,
+  verifyPassword,
+} from "./password";
 
 /**
  * Session verification and login.
@@ -235,11 +246,14 @@ export async function authenticate(
  *
  * Deliberately a length floor and nothing else. Composition rules ("one
  * capital, one symbol") measurably push people toward `Password1!` and are no
- * longer recommended; length is what actually helps. The floor is 10 rather
- * than 16 because the audience is a contractor typing on a phone, and a rule
- * they cannot satisfy becomes a password written on a whiteboard.
+ * longer recommended; length is what actually helps. The floor itself is set in
+ * `./password`, where the trade-off it represents is documented.
+ *
+ * Re-exported from `./password`, never redeclared. That module's `hashPassword`
+ * throws below the floor, so a policy check using a *lower* number would accept
+ * a password and then crash hashing it.
  */
-export const MIN_PASSWORD_LENGTH = 10;
+export { MIN_PASSWORD_LENGTH };
 export const MAX_PASSWORD_LENGTH = 200;
 
 export type PasswordRejection =
@@ -308,6 +322,19 @@ export async function setOwnPassword(
       updatedAt: now,
     })
     .where(eq(users.id, userId));
+
+  // Any reset link already sitting in an inbox is void now. Without this, a
+  // client who changes their password still has a live takeover link in their
+  // email for up to an hour.
+  await db
+    .update(passwordResetTokens)
+    .set({ usedAt: now })
+    .where(
+      and(
+        eq(passwordResetTokens.userId, userId),
+        isNull(passwordResetTokens.usedAt),
+      ),
+    );
 
   return { ok: true };
 }

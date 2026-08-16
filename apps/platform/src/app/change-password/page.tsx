@@ -10,9 +10,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const MESSAGES: Record<PasswordRejection | "invalid_current", string> = {
+const MESSAGES: Record<
+  PasswordRejection | "invalid_current" | "mismatch",
+  string
+> = {
   invalid_current:
     "That temporary password wasn't right. Check your welcome email and try again.",
+  mismatch: "Those two passwords don't match. Please retype them.",
   too_short: `Please use at least ${MIN_PASSWORD_LENGTH} characters. Length matters far more than symbols — a short phrase you'll remember works well.`,
   too_long: "That password is too long. Please use fewer than 200 characters.",
   not_varied:
@@ -58,7 +62,7 @@ export default async function ChangePasswordPage({
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
     if (newPassword !== confirmPassword) {
-      redirect("/change-password?error=not_varied");
+      redirect("/change-password?error=mismatch");
     }
 
     const db = await getDb();

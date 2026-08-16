@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
+import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import {
@@ -33,12 +35,10 @@ export default async function AdminOverview() {
   ]);
 
   return (
-    <main className="shell">
+    <AppShell user={user}>
+      <main className="shell">
       <div className="masthead">
-        <h1>Mortensen Web Co. — Admin</h1>
-        <span className="muted">
-          {user.email} · admin
-        </span>
+        <h1>Overview</h1>
       </div>
 
       <p className="notice">
@@ -62,7 +62,11 @@ export default async function AdminOverview() {
           <tbody>
             {clients.map((c) => (
               <tr key={c.clientPublicId}>
-                <td>{c.name}</td>
+                <td>
+                  <Link href={`/admin/clients/${c.clientPublicId}`}>
+                    {c.name}
+                  </Link>
+                </td>
                 <td>{c.primaryContactName ?? "—"}</td>
                 <td>{c.industry ?? "—"}</td>
                 <td>{c.isDemo && <span className="badge">demo</span>}</td>
@@ -149,6 +153,7 @@ export default async function AdminOverview() {
           repository.
         </p>
       </section>
-    </main>
+      </main>
+    </AppShell>
   );
 }

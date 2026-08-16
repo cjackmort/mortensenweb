@@ -1,119 +1,204 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
+import { AppShell } from "@/components/app-shell";
+import { DemoBanner, StatRow } from "@/components/analytics-summary";
+import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
+import { RequestProgress } from "@/components/request-progress";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import {
-  listChangeRequests,
-  listSites,
-} from "@/db/repositories/client/change-requests";
+import { listChangeRequests } from "@/db/repositories/client/change-requests";
+import { resolveClientAnalytics } from "@/lib/analytics/resolve";
+import { RANGES, isValidRange, type RangeDays } from "@/lib/analytics/umami";
+import { openCount, stageIndex } from "@/lib/requests/status";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Client dashboard.
  *
+ * Visitor figures lead, because that is what a client opens this for — "is
+ * anyone looking at my site" is the question, and making them find a tab to
+ * answer it is the wrong default. The full breakdowns stay on the Visitors
+ * page; this is the headline and the shape of the last 30 days.
+ *
  * Every query goes through a `TenantContext` built from the session's own
  * organization. There is no code path here that could read another client's
  * data, and nothing on this page can reach the Potential Clients area.
  */
-export default async function ClientDashboard() {
+export default async function ClientDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
+  if (user.role === "admin") redirect("/admin");
+
+  const params = await searchParams;
+  const parsed = Number(params.range);
+  const days: RangeDays = isValidRange(parsed) ? parsed : 30;
 
   if (!user.organizationId) {
     return (
-      <main className="shell">
-        <div className="masthead">
-          <h1>Mortensen Web Co.</h1>
-          <span className="muted">{user.email}</span>
-        </div>
-        <p className="notice">
-          Your account is not yet linked to an organization. Please contact us
-          and we will finish setting it up.
-        </p>
-      </main>
+      <AppShell user={user}>
+        <main className="shell">
+          <div className="masthead">
+            <h1>Your website</h1>
+          </div>
+          <p className="notice">
+            Your account is not yet linked to an organization. Please contact us
+            and we will finish setting it up.
+          </p>
+        </main>
+      </AppShell>
     );
   }
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
 
-  const [sites, requests] = await Promise.all([
-    listSites(db, ctx),
-    listChangeRequests(db, ctx, { limit: 20 }),
+  // Analytics is fetched alongside the rest rather than after it: the Umami
+  // call is cached for five minutes, so this costs nothing on a warm cache and
+  // one round trip on a cold one.
+  const [analytics, requests] = await Promise.all([
+    resolveClientAnalytics(db, ctx, days),
+    listChangeRequests(db, ctx, { limit: 5 }),
   ]);
 
+  const { site, state, data, showingDemo, isDemoSite } = analytics;
+  const openRequests = openCount(requests);
+
   return (
-    <main className="shell">
-      <div className="masthead">
-        <h1>Your website</h1>
-        <span className="muted">{user.email}</span>
-      </div>
+    <AppShell user={user}>
+      <main className="shell">
+        <div className="masthead">
+          <h1>Your website</h1>
+          {site && (
+            <span className="muted">
+              {site.primaryDomain ? (
+                <a
+                  href={`https://${site.primaryDomain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {site.primaryDomain}
+                </a>
+              ) : (
+                site.name
+              )}
+            </span>
+          )}
+        </div>
 
-      <section className="card">
-        <h2>Sites</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Domain</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sites.map((s) => (
-              <tr key={s.publicId}>
-                <td>{s.name}</td>
-                <td className="muted">{s.primaryDomain ?? "—"}</td>
-                <td>{s.status}</td>
-              </tr>
-            ))}
-            {sites.length === 0 && (
-              <tr>
-                <td colSpan={3} className="muted">
-                  No sites yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+        {showingDemo && <DemoBanner state={state} />}
+        {isDemoSite && !showingDemo && (
+          <p className="notice">
+            <span className="badge">Demo</span> This is a seeded demo site.
+          </p>
+        )}
 
-      <section className="card">
-        <h2>Your requests</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Submitted</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((r) => (
-              <tr key={r.publicId}>
-                <td>{r.title}</td>
-                <td>{r.status}</td>
-                <td>{r.priority}</td>
-                <td className="muted">
-                  {new Date(r.createdAt).toLocaleDateString("en-US", {
-                    timeZone: "America/Denver",
-                  })}
-                </td>
-              </tr>
-            ))}
-            {requests.length === 0 && (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No requests yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-    </main>
+        <nav className="rangebar" aria-label="Time range">
+          {(Object.keys(RANGES) as unknown as RangeDays[]).map((value) => (
+            <Link
+              key={value}
+              href={`/dashboard?range=${value}`}
+              aria-current={Number(value) === days ? "true" : undefined}
+            >
+              {RANGES[value]}
+            </Link>
+          ))}
+        </nav>
+
+        <StatRow data={data} />
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Visitors over time</h2>
+            <span className="muted">{RANGES[days]}</span>
+          </div>
+          <TimeSeriesChart series={data.series} />
+          <SeriesTable series={data.series} />
+        </section>
+
+        <div className="grid grid-2">
+          <section className="card">
+            <h2>Most viewed pages</h2>
+            <BarList rows={data.topPages} unit="views" />
+          </section>
+
+          <section className="card">
+            <h2>How they found you</h2>
+            <BarList rows={data.referrers} unit="visitors" />
+            <p className="muted" style={{ fontSize: "0.8rem", margin: "0.75rem 0 0" }}>
+              &ldquo;Direct&rdquo; means they typed the address or used a
+              bookmark — often someone you gave a card to.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>What they used</h2>
+            <BarList rows={data.devices} unit="visitors" />
+          </section>
+
+          <section className="card">
+            <h2>Where they were</h2>
+            <BarList rows={data.countries} unit="visitors" />
+          </section>
+        </div>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Recent requests</h2>
+            <Link href="/dashboard/requests">
+              {requests.length === 0 ? "Request a change" : "All requests"}
+            </Link>
+          </div>
+
+          {requests.length === 0 ? (
+            <div className="empty">
+              <p className="empty-title">No requests yet.</p>
+              <p>
+                Anything you&rsquo;d like changed on your site — send it over
+                and we&rsquo;ll pick it up.
+              </p>
+              <p style={{ marginTop: "1rem" }}>
+                <Link className="button" href="/dashboard/requests">
+                  Request a change
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <>
+              {requests.map((r) => (
+                <div key={r.publicId} className="request-item">
+                  <div className="request-head">
+                    <p className="request-title">{r.title}</p>
+                    <span className="muted" style={{ fontSize: "0.8rem" }}>
+                      sent{" "}
+                      {new Date(r.createdAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        timeZone: "America/Denver",
+                      })}
+                    </span>
+                  </div>
+                  <RequestProgress
+                    status={r.status}
+                    stage={stageIndex(r.status)}
+                  />
+                </div>
+              ))}
+              {openRequests > 0 && (
+                <p className="muted" style={{ margin: "1rem 0 0", fontSize: "0.85rem" }}>
+                  {openRequests} still in progress.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      </main>
+    </AppShell>
   );
 }

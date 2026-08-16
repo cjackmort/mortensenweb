@@ -1,33 +1,103 @@
-/* Deliberately minimal. The design system arrives in Stage 4 as the theme
-   library; this is only enough to make the portal legible while the data and
-   authorization layers are the thing under construction. */
+/*
+ * Portal design system.
+ *
+ * Two constraints shape everything here.
+ *
+ * 1. **The client is on a phone.** The welcome email tells them to add the
+ *    portal to their home screen, so the client surface is a mobile app that
+ *    happens to also work on a desktop — not a desktop app that reflows. Every
+ *    layout below starts at the narrow width and adds structure upward, and
+ *    tables collapse into stacked rows rather than scrolling sideways.
+ *
+ * 2. **The operator is on a desktop, scanning.** The admin surface optimises
+ *    for density and comparison instead.
+ *
+ * Colour is defined once as tokens on `:root` and re-stated for dark mode.
+ * Nothing below hardcodes a colour outside the token blocks.
+ */
+
+/* ---------------------------------------------------------------- tokens */
 
 :root {
+  /* Warm neutrals — the agency's register is craft, not SaaS. */
   --bg: #fbfaf8;
   --surface: #ffffff;
+  --surface-sunk: #f5f2ed;
   --border: #e3ded6;
+  --border-strong: #cfc7bb;
+
   --text: #1c1917;
+  --text-soft: #4a443d;
   --muted: #6b6660;
+
   --accent: #8a4b2a;
+  --accent-hover: #6f3b20;
+  --accent-wash: #f7ede7;
+  --on-accent: #ffffff;
+
   --danger: #9b2c2c;
+  --danger-wash: #fbeaea;
+  --success: #2f6b46;
+  --success-wash: #e9f3ed;
+  --warning: #8a6d1f;
+  --warning-wash: #f9f1da;
+  --info: #2c5a8a;
+  --info-wash: #e8f0f8;
+
   --demo: #8a6d1f;
-  --radius: 8px;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgb(28 25 23 / 6%);
+  --shadow: 0 2px 8px rgb(28 25 23 / 8%);
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Generous on touch: 44px is the smallest reliably tappable target. */
+  --tap: 44px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #17150f;
     --surface: #201d16;
+    --surface-sunk: #1a1812;
     --border: #35302a;
+    --border-strong: #4a443b;
+
     --text: #f2ede4;
+    --text-soft: #ddd5c8;
     --muted: #a39b90;
+
     --accent: #d69063;
+    --accent-hover: #e5a67e;
+    --accent-wash: #2c2119;
+    --on-accent: #1c1917;
+
     --danger: #e07a7a;
+    --danger-wash: #2e1c1c;
+    --success: #7fbf9a;
+    --success-wash: #17251d;
+    --warning: #d4b45c;
+    --warning-wash: #2a2415;
+    --info: #8ab4dd;
+    --info-wash: #172230;
+
     --demo: #d4b45c;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow: 0 2px 8px rgb(0 0 0 / 35%);
   }
 }
 
-* {
+/* ------------------------------------------------------------- baseline */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -37,68 +107,299 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font);
   line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  /* iOS Safari zooms the page when a sub-16px input is focused. */
+  text-size-adjust: 100%;
 }
 
 a {
   color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Visible focus everywhere. Keyboard users are not an afterthought. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--surface-sunk);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ----------------------------------------------------------- app shell */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  /* Clears the iOS status bar when installed to the home screen. */
+  padding-top: env(safe-area-inset-top);
+}
+
+.topbar-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.topbar-meta .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+/* Horizontal scrolling nav — more tabs than fit is normal on a phone. */
+.nav {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.nav a {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 0.85rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.nav a[aria-current="page"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
 
 .shell {
-  max-width: 68rem;
+  width: 100%;
+  max-width: 72rem;
   margin: 0 auto;
-  padding: 2rem 1.25rem 4rem;
+  padding: 1.25rem 1rem calc(3rem + env(safe-area-inset-bottom));
+  flex: 1;
 }
+
+@media (min-width: 48rem) {
+  .shell {
+    padding: 2rem 1.5rem 4rem;
+  }
+}
+
+/* --------------------------------------------------------- page header */
 
 .masthead {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
   padding-bottom: 1rem;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
 }
 
 .masthead h1 {
-  font-size: 1.05rem;
-  letter-spacing: 0.02em;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
-.muted {
+.page-intro {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  margin: -0.75rem 0 1.5rem;
+  max-width: 46rem;
 }
+
+/* --------------------------------------------------------------- cards */
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: 1.1rem;
   margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
 }
 
-.card h2 {
-  margin: 0 0 0.75rem;
-  font-size: 0.8rem;
+@media (min-width: 48rem) {
+  .card {
+    padding: 1.35rem;
+  }
+}
+
+.card > h2 {
+  margin: 0 0 0.9rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
+  font-weight: 650;
 }
 
-.badge {
-  display: inline-block;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.card-head > h2 {
+  margin: 0;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  border: 1px solid var(--demo);
-  color: var(--demo);
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+/* Responsive card grid for stat tiles and summaries. */
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 34rem) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 60rem) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------- stat tiles */
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 650;
+  margin: 0 0 0.3rem;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0.3rem 0 0;
+}
+
+/* -------------------------------------------------------------- tables */
+
+/*
+ * Tables stack into labelled rows below the breakpoint. A data table that
+ * scrolls sideways on a phone is a table nobody reads, and the client surface
+ * is phone-first. `data-label` on each cell supplies the stacked heading.
+ */
+.table-wrap {
+  overflow-x: auto;
 }
 
 table {
@@ -109,66 +410,783 @@ table {
 
 th {
   text-align: left;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.4rem 0.6rem 0.4rem 0;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
 }
 
 td {
-  padding: 0.55rem 0.6rem 0.55rem 0;
+  padding: 0.7rem 0.75rem 0.7rem 0;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 40rem) {
+  table.stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  table.stack tr {
+    display: block;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.stack tr:last-child {
+    border-bottom: none;
+  }
+
+  table.stack td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.2rem 0;
+    border: none;
+    text-align: right;
+  }
+
+  table.stack td::before {
+    content: attr(data-label);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 650;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  table.stack td:empty {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------- pills */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pill-neutral {
+  background: var(--surface-sunk);
+  color: var(--muted);
+  border-color: var(--border);
+}
+.pill-success {
+  background: var(--success-wash);
+  color: var(--success);
+  border-color: var(--success);
+}
+.pill-warning {
+  background: var(--warning-wash);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+.pill-danger {
+  background: var(--danger-wash);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.pill-info {
+  background: var(--info-wash);
+  color: var(--info);
+  border-color: var(--info);
+}
+.pill-accent {
+  background: var(--accent-wash);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--demo);
+  color: var(--demo);
+}
+
+/* ------------------------------------------------------------- notices */
+
+.notice {
+  border-left: 3px solid var(--demo);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.7rem 0.95rem;
+  background: var(--warning-wash);
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  margin-bottom: 1.5rem;
+}
+
+.notice-info {
+  border-left-color: var(--info);
+  background: var(--info-wash);
+}
+
+.notice-danger {
+  border-left-color: var(--danger);
+  background: var(--danger-wash);
+}
+
+.notice-success {
+  border-left-color: var(--success);
+  background: var(--success-wash);
+}
+
+.error {
+  color: var(--danger);
+  background: var(--danger-wash);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+/* --------------------------------------------------------- empty state */
+
+.empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+}
+
+.empty p {
+  margin: 0 0 0.35rem;
+}
+
+.empty .empty-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- forms */
+
 .form {
-  max-width: 22rem;
-  margin: 4rem auto;
+  max-width: 24rem;
+  margin: 3rem auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow);
 }
 
 label {
   display: block;
   font-size: 0.85rem;
-  color: var(--muted);
-  margin-bottom: 0.3rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 0.35rem;
 }
 
-input {
+input,
+textarea,
+select {
   width: 100%;
-  padding: 0.6rem 0.7rem;
+  padding: 0.65rem 0.75rem;
   margin-bottom: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  /* Never below 16px: iOS zooms the viewport on focus otherwise. */
+  font-size: max(1rem, 16px);
+  min-height: var(--tap);
 }
 
-button {
+textarea {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: -0.75rem 0 1rem;
+}
+
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   width: 100%;
-  padding: 0.65rem 1rem;
-  border: none;
-  border-radius: var(--radius);
+  min-height: var(--tap);
+  padding: 0.65rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
-  font-weight: 600;
+  font-weight: 650;
+  text-decoration: none;
   cursor: pointer;
+  transition: background 120ms ease;
 }
 
-.error {
-  color: var(--danger);
-  font-size: 0.9rem;
+button:hover,
+.button:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+button.secondary,
+.button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border-strong);
+}
+
+button.secondary:hover,
+.button.secondary:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* Buttons that sit inline rather than filling a form column. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.actions button,
+.actions .button {
+  width: auto;
+}
+
+label.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
   margin-bottom: 1rem;
+  font-weight: 400;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-height: auto;
 }
 
-.notice {
-  border-left: 3px solid var(--demo);
-  padding: 0.6rem 0.9rem;
-  background: var(--surface);
+label.checkbox input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  margin: 0.2rem 0 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* ------------------------------------------------- definition lists */
+
+.detail-grid,
+.credential-grid {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) 1fr;
+  gap: 0.45rem 1rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.detail-grid dt,
+.credential-grid dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 650;
+  align-self: center;
+}
+
+.detail-grid dd,
+.credential-grid dd {
+  margin: 0;
+}
+
+/*
+ * Issued-credential panel. Loud on purpose: this is the only moment the
+ * temporary password exists anywhere, and an operator who scrolls past it has
+ * to reissue.
+ */
+.credential {
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--accent-wash);
+}
+
+.credential-grid dd {
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-weight: 650;
+  /* Read aloud over the phone and copied by hand. */
+  user-select: all;
+  word-break: break-all;
+}
+
+.action-block {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.action-block:first-of-type {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* -------------------------------------------------------------- charts */
+
+/*
+ * Chart series colours.
+ *
+ * These are NOT the UI accent. They were validated with the dataviz palette
+ * checker against each mode's own surface — lightness band, chroma floor,
+ * colour-vision separation, and contrast — and the dark steps are separately
+ * chosen rather than a lightened flip of the light ones, because a flip fails
+ * the lightness band. Changing either pair means re-running that check.
+ *
+ *   light  #b04a12 / #1160a8   worst-case CVD ΔE 21.7, normal ΔE 27.9
+ *   dark   #cf7f3a / #559ad6   worst-case CVD ΔE 21.3, normal ΔE 24.2
+ */
+:root {
+  --series-1: #b04a12;
+  --series-2: #1160a8;
+  --chart-grid: #e3ded6;
+  --chart-ink: #6b6660;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #cf7f3a;
+    --series-2: #559ad6;
+    --chart-grid: #35302a;
+    --chart-ink: #a39b90;
+  }
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--chart-ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: var(--series-1);
+  opacity: 0.1;
+  stroke: none;
+}
+
+.chart-dot {
+  /* 2px surface ring so an overlapping mark stays legible. */
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.chart-series-1 {
+  stroke: var(--series-1);
+}
+.chart-series-1.chart-dot,
+circle.chart-series-1 {
+  fill: var(--series-1);
+}
+
+.chart-series-2 {
+  stroke: var(--series-2);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.swatch.chart-series-1 {
+  background: var(--series-1);
+}
+.swatch.chart-series-2 {
+  background: var(--series-2);
+}
+
+.chart-table {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.chart-table summary {
+  cursor: pointer;
+  color: var(--accent);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+
+/* Ranked breakdown: one hue, because length already encodes rank. */
+.barlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.barlist li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label value" "track track";
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+}
+
+@media (min-width: 34rem) {
+  .barlist li {
+    grid-template-columns: minmax(6rem, 11rem) 1fr auto;
+    grid-template-areas: "label track value";
+  }
+}
+
+.barlist-label {
+  grid-area: label;
   font-size: 0.88rem;
-  margin-bottom: 1.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barlist-track {
+  grid-area: track;
+  background: var(--surface-sunk);
+  border-radius: 4px;
+  height: 0.55rem;
+  overflow: hidden;
+}
+
+.barlist-fill {
+  display: block;
+  height: 100%;
+  background: var(--series-1);
+  /* 4px rounded data-end, anchored flat against the baseline. */
+  border-radius: 0 4px 4px 0;
+}
+
+.barlist-value {
+  grid-area: value;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Time-range filter: one row above the charts. */
+.rangebar {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.rangebar a {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  text-decoration: none;
+  color: var(--text-soft);
+  background: var(--surface);
+}
+
+.rangebar a[aria-current="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+
+/* ------------------------------------------------------ request progress */
+
+/*
+ * Four-step track. The connecting line is drawn behind the dots with a
+ * pseudo-element rather than as borders on each item, so the line does not
+ * break at each step boundary.
+ */
+.progress {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0;
+}
+
+.progress li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+  min-width: 0;
+}
+
+/* The connector, drawn to the previous step. */
+.progress li:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 0.34rem;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border-strong);
+}
+
+.progress li.is-done::before,
+.progress li.is-current::before {
+  background: var(--accent);
+}
+
+.progress-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.progress li.is-done .progress-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.progress li.is-current .progress-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* Ring makes the current step distinguishable from completed ones without
+     relying on colour alone. */
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.progress-label {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.progress li.is-current .progress-label {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.progress li.is-done .progress-label {
+  color: var(--text-soft);
+}
+
+.progress-summary {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+}
+
+.progress-offtrack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+}
+
+/* Request cards, used instead of a table row so the track has somewhere to go. */
+.request-item {
+  border-top: 1px solid var(--border);
+  padding: 1rem 0;
+}
+
+.request-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.request-item:last-of-type {
+  padding-bottom: 0;
+}
+
+.request-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.request-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------- attachment previews */
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.preview {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-sunk);
+}
+
+.preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.preview figcaption {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  word-break: break-all;
+}
+
+.preview figcaption span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* File inputs get the tap target but not the boxed-field treatment. */
+input[type="file"] {
+  padding: 0.55rem;
+  background: var(--surface-sunk);
+  cursor: pointer;
 }

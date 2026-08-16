@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { getDb } from "@/db/client";
+import { ipFromHeaders } from "@/lib/auth/client-ip";
 import { authenticate, resolveSession } from "@/lib/auth/session";
 
 /**
@@ -34,14 +35,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         identifier: { label: "Username or email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(raw) {
+      async authorize(raw, request) {
         const identifier =
           typeof raw?.identifier === "string" ? raw.identifier : "";
         const password = typeof raw?.password === "string" ? raw.password : "";
         if (!identifier || !password) return null;
 
         const db = await getDb();
-        const result = await authenticate(db, identifier, password);
+        // Without this the per-IP limit in `authenticate` is dead code: it
+        // guards on `context.ipAddress`, so omitting it silently leaves only
+        // the per-account limit, and one attacker spreading guesses across many
+        // accounts is never throttled at all.
+        const ipAddress = request?.headers
+          ? ipFromHeaders(request.headers as Headers)
+          : undefined;
+        const result = await authenticate(db, identifier, password, {
+          ipAddress,
+        });
 
         // Every failure returns null. The caller renders one message for all
         // of them, so login cannot be used to enumerate accounts.
