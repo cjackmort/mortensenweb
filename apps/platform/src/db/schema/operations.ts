@@ -329,9 +329,15 @@ export const siteBriefs = pgTable(
     index("site_briefs_org_idx").on(t.organizationId, t.createdAt),
     index("site_briefs_status_idx").on(t.status),
     // A brief with nothing in any field would dispatch an empty instruction.
+    // Trims tabs and newlines as well as spaces. Single-argument `btrim`
+    // removes spaces only, so a brief whose every field held a newline
+    // satisfied it — passing a constraint whose whole purpose is to stop an
+    // empty instruction reaching the agent. The application layer trims too,
+    // but a backstop that is weaker than it looks is worse than none.
     check(
       "site_briefs_not_empty",
-      sql`length(btrim(coalesce(${t.colourDirection}, '') || coalesce(${t.features}, '') || coalesce(${t.contentNotes}, '') || coalesce(${t.body}, ''))) > 0`,
+      sql`length(btrim(coalesce(${t.colourDirection}, '') || coalesce(${t.features}, '') || coalesce(${t.contentNotes}, '') || coalesce(${t.body}, ''), E' 	
+')) > 0`,
     ),
     check(
       "site_briefs_submitted_complete",
