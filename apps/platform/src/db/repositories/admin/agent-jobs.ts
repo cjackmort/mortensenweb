@@ -660,7 +660,7 @@ export async function closeChangeRequest(
     requestId: request.id,
     actorType: "admin",
     actorUserId: ctx.userId,
-    kind: "closed",
+    kind: "request_closed",
     body: reason || "Closed without action.",
     visibility: "client_visible",
   });
