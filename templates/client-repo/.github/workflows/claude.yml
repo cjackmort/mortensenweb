@@ -86,15 +86,17 @@ jobs:
 
             ## Images
 
-            The only images available are the files already in
-            `src/images/`. Read that directory before assuming a photo does
-            or does not exist.
+            The only images available are the ones already committed to this
+            repository. Where they live differs by site — `src/images/` in a
+            repository built from our template, something else in one that
+            predates it. **If the repository has a CLAUDE.md, it is
+            authoritative about the layout; read it before assuming a path.**
 
             Never link to an image anywhere else — not the client's old
             website, not a stock library, not any external URL. Those links
             break and may not be licensed for this use.
 
-            If the request asks for a photo that is not in `src/images/`, say
+            If the request asks for a photo that is not in the repository, say
             so in your pull request instead of substituting something. Someone
             will add it. Every image needs an `alt` describing what it shows.
 
