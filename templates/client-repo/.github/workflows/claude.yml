@@ -1,7 +1,7 @@
 # =============================================================================
 # TEMPLATE — copied into every client repository at scaffold time.
 #
-# Before this works in a repository, `APP_ACTOR_LOGIN` below must be replaced
+# Before this works in a repository, `mortensen-web-portal[bot]` below must be replaced
 # with the real actor login of the Mortensen Web Co. GitHub App. See the README
 # beside this file for how to find it.
 #
@@ -59,7 +59,7 @@ jobs:
           # named here. This applies to workflow_dispatch too, so it cannot be
           # sidestepped by changing the trigger. Without this line every run
           # fails. Stage-0 plan §1.3, Gotcha A.
-          allowed_bots: "APP_ACTOR_LOGIN"
+          allowed_bots: "mortensen-web-portal[bot]"
 
           claude_args: >-
             --max-turns 40
