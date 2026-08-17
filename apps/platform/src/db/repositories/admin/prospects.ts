@@ -214,7 +214,12 @@ export async function buildConcept(
   ctx: AdminContext,
   db: Database,
   prospectPublicId: string,
-  instructions: { colourDirection?: string; features?: string; contentNotes?: string },
+  instructions: {
+    colourDirection?: string;
+    features?: string;
+    contentNotes?: string;
+    body?: string;
+  },
 ): Promise<ConceptOutcome> {
   const rows = await db
     .select({
@@ -344,7 +349,15 @@ export async function buildConcept(
         .filter(Boolean)
         .join("\n") ||
       null,
-    body: null,
+    // Always non-empty, and not merely to satisfy the check constraint that
+    // `site_briefs` carries. A brief assembled entirely from optional fields
+    // is empty whenever an operator adds a prospect with just a name and
+    // clicks straight through — which is exactly what a first trial run looks
+    // like. Dispatching nothing would ask the agent to build a site from no
+    // instruction at all.
+    body:
+      instructions.body?.trim() ||
+      `Build a first version of a website for ${prospect.businessName}. Use the structure and visual language already present in this repository, replacing its content. Leave any detail you have not been given as a clear placeholder rather than inventing it.`,
     authoredByUserId: ctx.userId,
     submittedAt: now,
   });

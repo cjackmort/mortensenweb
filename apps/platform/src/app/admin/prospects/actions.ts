@@ -75,11 +75,26 @@ export async function buildConceptAction(
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const outcome = await buildConcept(ctx, db, prospectPublicId, {
-    colourDirection: String(formData.get("colourDirection") ?? ""),
-    features: String(formData.get("features") ?? ""),
-    contentNotes: String(formData.get("contentNotes") ?? ""),
-  });
+  // Everything below runs against two external services and a database, and
+  // any of them can fail in a way that throws. Unguarded, that renders Next's
+  // error page — which loses the operator's typed input and says only "a
+  // server error occurred", with the real cause in a log they cannot read.
+  let outcome;
+  try {
+    outcome = await buildConcept(ctx, db, prospectPublicId, {
+      colourDirection: String(formData.get("colourDirection") ?? ""),
+      features: String(formData.get("features") ?? ""),
+      contentNotes: String(formData.get("contentNotes") ?? ""),
+    });
+  } catch (error) {
+    console.error("[prospects] concept build threw", error);
+    return {
+      ok: false,
+      message: `The build failed: ${
+        error instanceof Error ? error.message : "unknown error"
+      }. Anything already created is recorded — check the prospect before retrying.`,
+    };
+  }
 
   revalidatePath("/admin/prospects");
 

@@ -50,6 +50,13 @@
       "when": 1786960258589,
       "tag": "0006_narrow_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786961671853,
+      "tag": "0007_previous_ulik",
+      "breakpoints": true
     }
   ]
 }
