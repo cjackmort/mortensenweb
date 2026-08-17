@@ -145,6 +145,117 @@ async function umamiFetch<T>(
   return (await response.json()) as T;
 }
 
+// ---------------------------------------------------------------------------
+// Provisioning
+// ---------------------------------------------------------------------------
+
+export type ProvisionResult =
+  | { ok: true; websiteId: string; created: boolean }
+  | { ok: false; reason: "not_configured" | "failed"; message: string };
+
+/**
+ * Create a website in Umami and return its id.
+ *
+ * Called at launch, so the client's dashboard has figures from the first
+ * visitor rather than from whenever somebody remembered to set it up.
+ *
+ * The existing-website check comes first and matters more than it looks:
+ * re-running a launch is a normal thing to do — a DNS change that did not take,
+ * a domain corrected after a typo — and creating a second Umami website for the
+ * same domain splits that site's history across two ids, with no way to merge
+ * them afterwards.
+ */
+export async function provisionWebsite(input: {
+  name: string;
+  domain: string;
+}): Promise<ProvisionResult> {
+  if (!isUmamiConfigured()) {
+    return {
+      ok: false,
+      reason: "not_configured",
+      message: "Umami credentials are not set in this environment.",
+    };
+  }
+
+  const base = process.env.UMAMI_API_BASE_URL!.replace(/\/$/, "");
+  const key = process.env.UMAMI_API_KEY!;
+  const domain = input.domain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+
+  const headers = {
+    Authorization: `Bearer ${key}`,
+    "x-umami-api-key": key,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const existing = await fetch(`${base}/websites`, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (existing.ok) {
+      // Both shapes seen in the wild: a bare array, and `{ data: [...] }`.
+      const body = (await existing.json()) as
+        | { data?: { id: string; domain: string }[] }
+        | { id: string; domain: string }[];
+      const list = Array.isArray(body) ? body : (body.data ?? []);
+      const match = list.find((site) => site.domain === domain);
+      if (match) return { ok: true, websiteId: match.id, created: false };
+    }
+
+    const response = await fetch(`${base}/websites`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: input.name, domain }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        reason: "failed",
+        message: `Umami responded ${response.status} when creating the website.`,
+      };
+    }
+
+    const created = (await response.json()) as { id?: string };
+    if (!created.id) {
+      return {
+        ok: false,
+        reason: "failed",
+        message: "Umami created the website but returned no id.",
+      };
+    }
+
+    return { ok: true, websiteId: created.id, created: true };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * The tracking snippet for a site.
+ *
+ * Returned as a string for the *agent* to place in the client repository, which
+ * is why the script URL is derived from the configured API base rather than
+ * hardcoded: self-hosted and Cloud serve the script from different origins, and
+ * a snippet pointing at the wrong one fails silently — the page loads, nothing
+ * is recorded, and the dashboard shows a zero that looks like "no visitors".
+ */
+export function trackingSnippet(websiteId: string): string {
+  const base = process.env.UMAMI_API_BASE_URL ?? "";
+  const scriptOrigin = base
+    .replace(/\/api\/?$/, "")
+    .replace(/^https:\/\/api\.umami\.is\/v1$/, "https://cloud.umami.is")
+    .replace(/\/$/, "");
+
+  return `<script defer src="${scriptOrigin}/script.js" data-website-id="${websiteId}"></script>`;
+}
+
 function toBreakdown(rows: UmamiMetric[], limit = 6): Breakdown[] {
   return rows
     .filter((r) => typeof r.y === "number")
