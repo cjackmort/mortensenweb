@@ -6,6 +6,7 @@ import {
   changeRequests,
   dispatchQuotas,
   repositoryConnections,
+  requestAttachments,
   requestEvents,
   sites,
 } from "@/db/schema";
@@ -20,16 +21,26 @@ import {
   scanForInjection,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
+import { attachmentUrl } from "@/lib/storage/signed-links";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
 /**
  * Dispatching a change request to the automation pipeline.
  *
- * Only an admin can reach this. The client's role ends at submitting the
- * request — nothing a client can do causes a repository to be written to, which
- * is why this lives in the admin repository directory rather than behind a role
- * check inside a shared one.
+ * Two entry points, one code path. An operator dispatches through
+ * `dispatchChangeRequest`; where `AGENT_AUTO_DISPATCH` is enabled, a submission
+ * dispatches itself through `autoDispatchIfEnabled`. The admin session was only
+ * ever read to attribute the audit row, never to decide anything, so the
+ * unattended entry point takes no context rather than a weakened one.
+ *
+ * That flag does change the security story and it is worth stating plainly:
+ * with it on, a client submitting a request causes a repository to be written
+ * to with nobody in between. What stands between them and that repository is
+ * unchanged — the per-repository allowlist, the daily cap, and the injection
+ * containment in the issue renderer — and the flag itself is off unless its
+ * value is exactly "true", so a half-written deploy configuration leaves the
+ * operator in the loop rather than out of it.
  */
 
 const DEFAULT_CAP = 10;
@@ -186,10 +197,54 @@ export interface DispatchInput {
   attachmentUrls?: string[];
 }
 
-export async function dispatchChangeRequest(
-  ctx: AdminContext,
+/**
+ * Who a dispatch is attributed to.
+ *
+ * Attribution, not authorisation: nothing below branches on the actor except
+ * the audit row it writes. Keeping the two entry points on one implementation
+ * is the point — a second copy of this function for the unattended case is
+ * exactly how a repository ends up allowlisted on one path and not the other.
+ */
+/**
+ * Signed, expiring links for every image on a request.
+ *
+ * Ordered by upload time so the numbering in the issue body matches the order
+ * the client attached them — they will refer to "the second photo", and the
+ * agent should be looking at the same one.
+ *
+ * Attachments a scanner has flagged are excluded here as well as at the serving
+ * route. Minting a link that is guaranteed to 404 wastes the agent's time and
+ * makes a deliberate refusal look like a broken system.
+ */
+async function attachmentLinksFor(
+  db: Database,
+  requestId: string,
+): Promise<string[] | undefined> {
+  const rows = await db
+    .select({
+      publicId: requestAttachments.publicId,
+      scanStatus: requestAttachments.scanStatus,
+    })
+    .from(requestAttachments)
+    .where(eq(requestAttachments.requestId, requestId))
+    .orderBy(requestAttachments.createdAt);
+
+  const links: string[] = [];
+  for (const row of rows) {
+    if (row.scanStatus === "flagged") continue;
+    const url = await attachmentUrl(row.publicId);
+    if (url) links.push(url);
+  }
+
+  return links.length > 0 ? links : undefined;
+}
+
+type DispatchActor = { automatic: false; userId: string } | { automatic: true };
+
+async function runDispatch(
   db: Database,
   input: DispatchInput,
+  actor: DispatchActor,
 ): Promise<DispatchOutcome> {
   if (!isGithubConfigured()) {
     return {
@@ -290,6 +345,19 @@ export async function dispatchChangeRequest(
     name: repo.name,
   };
 
+  // The client's photos, as links the agent can actually fetch.
+  //
+  // Resolved here rather than accepted from the caller, so both entry points —
+  // the operator's button and automatic dispatch — carry them without either
+  // having to remember. `input.attachmentUrls` still wins when supplied, which
+  // keeps the parameter useful for a caller that has already minted links.
+  //
+  // A signing failure yields no links rather than broken ones: an issue whose
+  // attachment section 404s is worse than one that plainly has no photos,
+  // because the agent will describe what it could not see rather than asking.
+  const attachmentUrls =
+    input.attachmentUrls ?? (await attachmentLinksFor(db, request.id));
+
   let issue: { number: number; html_url: string };
   try {
     issue = await createIssue(target, {
@@ -302,7 +370,7 @@ export async function dispatchChangeRequest(
         category: request.category,
         priority: request.priority,
         desiredTiming: request.desiredTiming,
-        attachmentUrls: input.attachmentUrls,
+        attachmentUrls,
         allowedPaths: input.allowedPaths,
       }),
       labels: ["portal-request", "claude"],
@@ -369,13 +437,20 @@ export async function dispatchChangeRequest(
     },
   ]);
 
+  // A null actor is the system, and the metadata says so rather than leaving
+  // "who started this?" to be inferred from an absence.
   await db.insert(auditLog).values({
-    actorUserId: ctx.userId,
+    actorUserId: actor.automatic ? null : actor.userId,
     organizationId: request.organizationId,
     action: "agent_job.dispatched",
     entityType: "change_request",
     entityId: request.publicId,
-    metadata: { agentJobPublicId, repository: scope, issueNumber: issue.number },
+    metadata: {
+      agentJobPublicId,
+      repository: scope,
+      issueNumber: issue.number,
+      ...(actor.automatic ? { automatic: true } : {}),
+    },
   });
 
   return {
@@ -384,6 +459,58 @@ export async function dispatchChangeRequest(
     issueNumber: issue.number,
     issueUrl: issue.html_url,
   };
+}
+
+/** Dispatch on an operator's instruction. */
+export async function dispatchChangeRequest(
+  ctx: AdminContext,
+  db: Database,
+  input: DispatchInput,
+): Promise<DispatchOutcome> {
+  return runDispatch(db, input, { automatic: false, userId: ctx.userId });
+}
+
+// ---------------------------------------------------------------------------
+// Automatic dispatch
+// ---------------------------------------------------------------------------
+
+export type AutoDispatchOutcome =
+  | DispatchOutcome
+  | { ok: false; reason: "disabled"; message: string };
+
+/**
+ * Whether a submission dispatches itself.
+ *
+ * Exactly `"true"`, so unset, empty, `"1"`, and `"TRUE"` are all off. A looser
+ * test would turn a typo in a deploy configuration into unattended writes to
+ * client repositories, and the failure would be silent in the direction that
+ * matters — nobody notices automation they did not ask for until it has run.
+ */
+export function isAutoDispatchEnabled(): boolean {
+  return process.env.AGENT_AUTO_DISPATCH === "true";
+}
+
+/**
+ * Dispatch a freshly submitted request, where the operator has opted in.
+ *
+ * No `AdminContext`, because there is no session behind this: the request was
+ * submitted by a client and nobody approved the dispatch. `disabled` is
+ * separated from the refusals so a caller can stay quiet about a flag that is
+ * simply off, which is most environments most of the time.
+ */
+export async function autoDispatchIfEnabled(
+  db: Database,
+  requestPublicId: string,
+): Promise<AutoDispatchOutcome> {
+  if (!isAutoDispatchEnabled()) {
+    return {
+      ok: false,
+      reason: "disabled",
+      message: "Automatic dispatch is not enabled in this environment.",
+    };
+  }
+
+  return runDispatch(db, { requestPublicId }, { automatic: true });
 }
 
 // ---------------------------------------------------------------------------

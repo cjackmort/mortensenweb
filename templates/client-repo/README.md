@@ -35,20 +35,32 @@ gh api /repos/OWNER/REPO/issues/1 --jq .user.login
 This applies to `workflow_dispatch` too, so it cannot be sidestepped by
 changing the trigger.
 
-### 3. Account-level secrets exist
+### 3. The portal holds the credentials the workflows need
 
-Set once, on the account, and inherited by every scaffolded repository:
-
-| Secret | Used by | Notes |
+| Value | Used by | Where it lives |
 | --- | --- | --- |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml` | Billed against the operator's Claude subscription. The portal never reads it and has no code path that could. |
-| `NETLIFY_AUTH_TOKEN` | `deploy.yml` | Personal access token from Netlify. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml` | Portal environment → sealed into each repo at scaffold time |
+| `NETLIFY_AUTH_TOKEN` | `deploy.yml` | Portal environment → sealed into each repo at scaffold time |
+| `NETLIFY_SITE_ID` | `deploy.yml` | Written by the portal as a plaintext repo *variable* |
 
-`NETLIFY_SITE_ID` is **not** in this table. It is a per-repository Actions
-*variable*, written by the portal at scaffold time. A site id is not
-confidential — it appears in deploy URLs and build logs — and keeping it out of
-the secrets API is what lets the portal provision repositories without carrying
-libsodium to seal secret values.
+Set the first two once, in the portal's own environment (Netlify env vars, or
+`.env.local` locally). `scaffoldSite` writes them into every new repository as
+encrypted Actions secrets, so a scaffolded repo arrives able to run.
+
+Generate the Claude token with `claude setup-token` — that is the Pro/Max
+subscription path, and it bills against the subscription rather than API
+credits. Do not also set `anthropic_api_key` in the workflow; it takes
+precedence and would quietly start consuming credits.
+
+**Account-level secrets are not an option here, despite being the obvious
+answer.** Repositories under a *personal* account have no shared secrets at
+all, and even a free organisation would not help: on GitHub Free, organisation
+secrets cannot be read by **private** repositories, which client repos are by
+design. That is why the portal seals them per repository instead.
+
+`NETLIFY_SITE_ID` stays a *variable* rather than a secret. A site id appears in
+deploy URLs and build logs, so it is not confidential — and variables need no
+encryption, which keeps one more credential out of the sealing path.
 
 ## The two workflows
 

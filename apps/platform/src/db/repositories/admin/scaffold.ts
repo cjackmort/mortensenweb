@@ -13,6 +13,10 @@ import {
   type Repo,
 } from "@/lib/github/rest";
 import {
+  describeProvisioning,
+  provisionRepoSecrets,
+} from "@/lib/github/secrets";
+import {
   createSite as createNetlifySite,
   isNetlifyConfigured,
   toSiteName,
@@ -178,7 +182,15 @@ export async function scaffoldSite(
   const target: Repo = { installationId, owner, name: repo.name };
 
   let netlify: { siteId: string; siteName: string; url: string } | null = null;
-  let warning: string | undefined;
+  const warnings: string[] = [];
+
+  // Seal the credentials the repository's own workflows need. Done before
+  // Netlify, because a repository that can deploy but cannot run the agent is
+  // less useful than one that can run the agent but not yet deploy — and if
+  // only one of the two is going to succeed, this is the one worth having.
+  const secrets = await provisionRepoSecrets(target);
+  const secretsNote = describeProvisioning(secrets);
+  if (secretsNote) warnings.push(secretsNote);
 
   if (isNetlifyConfigured()) {
     try {
@@ -204,15 +216,21 @@ export async function scaffoldSite(
       // a Netlify site id appears in deploy URLs and build logs.
       await setRepoVariable(target, "NETLIFY_SITE_ID", created.id);
     } catch (error) {
-      warning =
+      warnings.push(
         error instanceof Error
-          ? `The repository was created, but Netlify setup failed: ${error.message}`
-          : "The repository was created, but Netlify setup failed.";
+          ? `Netlify setup failed: ${error.message}`
+          : "Netlify setup failed.",
+      );
     }
   } else {
-    warning =
-      "The repository was created. Netlify is not configured, so no hosting was set up.";
+    warnings.push(
+      "Netlify is not configured, so no hosting was set up.",
+    );
   }
+
+  // Collapsed once, here, so callers deal with a single optional message
+  // rather than reasoning about which of three things went wrong.
+  const warning = warnings.length > 0 ? warnings.join(" ") : undefined;
 
   await db.insert(auditLog).values({
     actorUserId,
@@ -224,6 +242,8 @@ export async function scaffoldSite(
       repository: `${owner}/${repo.name}`,
       private: input.isPrivate,
       netlifySiteId: netlify?.siteId ?? null,
+      secretsWritten: secrets.written,
+      secretsMissing: secrets.missing,
       ...(warning ? { warning } : {}),
     },
   });
