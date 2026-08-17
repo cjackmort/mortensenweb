@@ -1,0 +1,135 @@
+# Continuous integration, and the production migration.
+#
+# Two jobs with a dependency between them. `verify` runs on every pull request
+# and every push to main; `migrate` runs only after a push to main, and only if
+# `verify` passed — so a change that does not lint, typecheck, test, and build
+# never gets to touch the production database.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege. Neither job writes to the repository, opens a pull request,
+# or publishes a package, so nothing beyond reading the code is granted.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Superseded runs on the same branch are pointless. Safe to cancel: this
+    # job only reads.
+    concurrency:
+      group: verify-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches `engines` in package.json and NODE_VERSION in netlify.toml.
+          # Three places is two too many, but CI silently building on a
+          # different major than production is worse.
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        # `npm ci` from the repository root: this is a workspace, and the
+        # lockfile at the root is what pins `next-auth` to an exact beta.
+        # `npm install` would be free to resolve something else.
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --workspace apps/platform
+
+      - name: Typecheck
+        run: npm run typecheck --workspace apps/platform
+
+      - name: Test
+        # Tests run against PGlite in-process — real Postgres compiled to WASM.
+        # No service container, no secrets, nothing to configure.
+        run: npm test --workspace apps/platform
+
+      - name: Build
+        run: npm run build --workspace apps/platform
+
+  migrate:
+    name: Apply migrations to Neon
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # NOT cancel-in-progress. Two merges landing close together must queue
+    # rather than race, and a migration killed partway through is a worse
+    # outcome than one that waits.
+    concurrency:
+      group: migrate-production
+      cancel-in-progress: false
+
+    # Gate for `DATABASE_URL`. Adding required reviewers to this environment in
+    # the repository settings turns every production migration into an approval,
+    # without changing a line of this file.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Migrate
+        env:
+          # Repository (or environment) secret. Never echoed: the migrate
+          # script prints only which driver it used, and GitHub masks the value
+          # in logs even if something did try to print it.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set. Add it as a repository secret," \
+                 "or the migration would silently apply to a throwaway local database."
+            exit 1
+          fi
+          npm run db:migrate --workspace apps/platform
+
+      # ---------------------------------------------------------------------
+      # Optional: deterministic ordering between migration and deploy.
+      #
+      # By default Netlify builds on push to main, which starts at the same
+      # moment as this job. The two race. Migrations here are additive by
+      # policy, so the worst case is a brief window where new code queries a
+      # table that is seconds away from existing — a 500 on one page load, not
+      # data loss — and in practice the migration finishes first.
+      #
+      # To remove the race rather than tolerate it:
+      #   1. Netlify → Site configuration → Build & deploy → Continuous
+      #      deployment → *Stop builds*. Netlify no longer reacts to pushes.
+      #   2. Create a build hook there and store its URL as the repository
+      #      secret NETLIFY_BUILD_HOOK.
+      #
+      # Deployment then happens only after a migration succeeds. The step is
+      # skipped when the secret is absent, so doing nothing keeps today's
+      # behaviour — but do not add the secret *without* step 1, or every merge
+      # will deploy twice.
+      # ---------------------------------------------------------------------
+      - name: Trigger deploy
+        if: ${{ secrets.NETLIFY_BUILD_HOOK != '' }}
+        env:
+          BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        run: |
+          echo "Migration succeeded; triggering the Netlify build."
+          # --fail so an HTTP error fails the job rather than reporting success
+          # for a deploy that was never queued.
+          curl --fail --silent --show-error -X POST -d '{}' "$BUILD_HOOK"
