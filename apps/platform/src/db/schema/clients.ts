@@ -82,6 +82,30 @@ export const clients = pgTable(
     }),
     managementPausedReason: text("management_paused_reason"),
     /** Set when an operator deliberately exempts a client from the ladder. */
+    /**
+     * Treat this client as being on this plan, regardless of what they pay.
+     *
+     * For the cases a payments table cannot express: family, a friend of the
+     * business, someone owed an apology, a client who paid cash before the
+     * portal existed, or a beta tester. Without it the only route to an
+     * unlocked account is a confirmed payment, which makes those clients
+     * unserviceable rather than free.
+     *
+     * Deliberately a plan reference and not a boolean. "Free" is not one
+     * thing — it matters whether someone gets three changes a month or
+     * unlimited — and reusing the plan table means a comp cannot describe a
+     * package that does not exist.
+     *
+     * Null means no override: entitlements follow payment, which is the
+     * ordinary case and the safe default.
+     */
+    compPlanId: uuid("comp_plan_id").references(() => servicePlans.id, {
+      onDelete: "set null",
+    }),
+
+    /** Why. Required in the UI, because "why is this free?" is asked later. */
+    compNote: text("comp_note"),
+
     dunningExemptUntil: timestamp("dunning_exempt_until", {
       withTimezone: true,
     }),

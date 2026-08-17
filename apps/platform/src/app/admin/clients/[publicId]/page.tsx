@@ -19,6 +19,9 @@ import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { BriefForm, DispatchBriefForm } from "./brief-forms";
 import { LaunchPanel } from "./launch-forms";
 import { RepositoryPanel } from "./repo-forms";
+import { CompPanel } from "./comp-forms";
+import { listActivePlans } from "@/db/repositories/admin/prospects";
+import { getClientComp } from "@/db/repositories/admin/clients";
 
 const BRIEF_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -74,11 +77,13 @@ export default async function ClientDetailPage({
     throw error;
   }
 
-  const [portalUsers, siteRows, invoices, briefs] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, compPlans, comp] = await Promise.all([
     listOrganizationUsers(ctx, db, detail.organization.id),
     listSitesWithAnalytics(ctx, db, detail.organization.id),
     listClientPaymentRequests(ctx, db, detail.organization.id),
     listBriefs(ctx, db, detail.organization.id),
+    listActivePlans(db),
+    getClientComp(ctx, db, publicId),
   ]);
 
   const { client, organization, subscription, requests } = detail;
@@ -284,6 +289,18 @@ export default async function ClientDetailPage({
             </div>
           ))
         )}
+
+        <CompPanel
+          clientPublicId={client.publicId}
+          plans={compPlans.map((p) => ({
+            key: p.key,
+            name: p.name,
+            includedChangesPerMonth: p.includedChangesPerMonth,
+          }))}
+          currentCompPlanId={comp?.compPlanKey ?? null}
+          currentNote={comp?.compNote ?? null}
+          paidPlanName={comp?.paidPlanName ?? null}
+        />
 
         {!umamiReady && (
           <p className="notice" style={{ marginTop: "1.25rem", marginBottom: 0 }}>
