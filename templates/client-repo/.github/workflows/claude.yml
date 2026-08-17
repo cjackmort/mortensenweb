@@ -30,6 +30,12 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  # Required by claude-code-action, which exchanges a GitHub OIDC token for
+  # its own credentials. Without it every run fails on the first step with
+  # "Could not fetch an OIDC token" — after the issue has been opened and the
+  # portal already believes work has started, so the request sits on "being
+  # worked on" until the watchdog fails it half an hour later.
+  id-token: write
 
 jobs:
   implement:
@@ -61,8 +67,18 @@ jobs:
           # fails. Stage-0 plan §1.3, Gotcha A.
           allowed_bots: "mortensen-web-portal[bot]"
 
-          claude_args: >-
+          # Bash is what actually opens the pull request — the agent branches,
+          # commits, pushes and calls `gh`. Without an explicit allowlist a run
+          # reads the issue, works out what to do, finds it has no way to do it,
+          # and exits *successfully* having produced nothing. That is worse than
+          # failing: the portal is told the job succeeded and waits for a pull
+          # request that will never arrive.
+          #
+          # These lines are arguments, not YAML — a comment inside the block
+          # below would be passed to the CLI as literal text.
+          claude_args: |
             --max-turns 40
+            --allowedTools Read,Glob,Grep,Edit,Write,Bash
 
           prompt: |
             A change request was submitted through the client portal and appears

@@ -607,3 +607,72 @@ export async function repoConnectionByNodeId(db: Database, nodeId: string) {
 
   return rows[0] ?? null;
 }
+
+/**
+ * Close a request without doing it.
+ *
+ * Tests, duplicates, things a client changed their mind about, anything raised
+ * by mistake. Until now a request could only leave the open list by being
+ * carried out, so the operator's own trial runs sat at the top of the queue
+ * indefinitely.
+ *
+ * Closed, not deleted. A change request is the client's record of something
+ * they asked for, and its events and any agent job hang off it — removing the
+ * row would take that history with it, and "I asked for this and it vanished"
+ * is a much worse conversation than "that one was closed". It leaves the open
+ * list either way, which is the actual complaint.
+ *
+ * Refuses anything already dispatched. Work is in flight at that point, and
+ * closing the request here would not stop it — it would only mean nobody is
+ * watching when the pull request opens.
+ */
+export async function closeChangeRequest(
+  ctx: AdminContext,
+  db: Database,
+  requestPublicId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; reason: "not_found" | "in_flight" }> {
+  const rows = await db
+    .select({
+      id: changeRequests.id,
+      organizationId: changeRequests.organizationId,
+      status: changeRequests.status,
+    })
+    .from(changeRequests)
+    .where(eq(changeRequests.publicId, requestPublicId))
+    .limit(1);
+
+  const request = rows[0];
+  if (!request) return { ok: false, reason: "not_found" };
+
+  if (["dispatched", "in_progress", "pr_open"].includes(request.status)) {
+    return { ok: false, reason: "in_flight" };
+  }
+
+  await db
+    .update(changeRequests)
+    .set({ status: "closed", updatedAt: new Date() })
+    .where(eq(changeRequests.id, request.id));
+
+  // Client-visible: they raised it, so they are entitled to see it closed and
+  // why, rather than finding it silently gone from their list.
+  await db.insert(requestEvents).values({
+    requestId: request.id,
+    actorType: "admin",
+    actorUserId: ctx.userId,
+    kind: "request_closed",
+    body: reason || "Closed without action.",
+    visibility: "client_visible",
+  });
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: request.organizationId,
+    action: "request.closed",
+    entityType: "change_request",
+    entityId: requestPublicId,
+    metadata: { previousStatus: request.status, reason: reason || null },
+  });
+
+  return { ok: true };
+}
