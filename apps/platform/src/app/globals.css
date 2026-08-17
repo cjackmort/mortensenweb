@@ -653,7 +653,12 @@ button,
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  width: 100%;
+  /* Sized to its label. This used to be 100%, overridden only inside
+     `.actions` — so every button outside that one container stretched the
+     full width of whatever held it and sat on top of neighbouring text.
+     Full width is right for a lone submit on a phone, which is handled at the
+     bottom of this file, and wrong everywhere else. */
+  width: auto;
   min-height: var(--tap);
   padding: 0.65rem 1.1rem;
   border: 1px solid transparent;
@@ -704,9 +709,21 @@ button:disabled {
   gap: 0.6rem;
 }
 
-.actions button,
-.actions .button {
-  width: auto;
+/* Small enough to sit inside a table cell without dominating the row. */
+button.small,
+.button.small {
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* On a narrow screen a form's own submit should still fill the width — it is
+   the primary action and thumbs are imprecise. Scoped to a direct child of a
+   form so it cannot catch buttons sitting beside content. */
+@media (max-width: 40rem) {
+  form > button:only-of-type {
+    width: 100%;
+  }
 }
 
 label.checkbox {

@@ -267,6 +267,7 @@ export default async function ClientDetailPage({
                           defaultBranch: site.repoDefaultBranch ?? "main",
                           allowlisted: site.automationEnabled ?? false,
                           previewUrlStyle: site.previewUrlStyle ?? "pr_alias",
+                          netlifySiteName: site.netlifySiteName ?? null,
                         }
                       : null
                   }

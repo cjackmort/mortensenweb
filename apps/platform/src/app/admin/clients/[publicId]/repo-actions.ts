@@ -35,6 +35,7 @@ export async function connectRepoAction(
   const sitePublicId = String(formData.get("sitePublicId") ?? "").trim();
   const raw = String(formData.get("repo") ?? "").trim();
   const style = String(formData.get("previewUrlStyle") ?? "pr_alias");
+  const netlifySiteName = String(formData.get("netlifySiteName") ?? "").trim();
 
   if (!sitePublicId || !raw) {
     return { ok: false, message: "Pick a site and enter a repository." };
@@ -63,6 +64,7 @@ export async function connectRepoAction(
       owner: parts[0],
       name: parts[1],
       previewUrlStyle: style === "deploy_preview" ? "deploy_preview" : "pr_alias",
+      netlifySiteName: netlifySiteName || undefined,
     });
   } catch (error) {
     console.error("[repo] connect threw", error);

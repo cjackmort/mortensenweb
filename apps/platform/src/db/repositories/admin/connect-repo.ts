@@ -54,6 +54,15 @@ export interface ConnectInput {
    * template workflow uses `pr_alias`.
    */
   previewUrlStyle?: "pr_alias" | "deploy_preview";
+  /**
+   * The Netlify site's name, e.g. `scott-mortensen-fine-arts`.
+   *
+   * Only scaffolding used to record this, so a repository connected in place
+   * had none — and without it there is no way to build a preview URL at all.
+   * The agent would work, the pull request would open, Netlify would build a
+   * preview, and the client would be shown nothing.
+   */
+  netlifySiteName?: string;
 }
 
 export async function connectExistingRepo(
@@ -152,10 +161,18 @@ export async function connectExistingRepo(
     });
   }
 
-  if (input.previewUrlStyle) {
+  if (input.previewUrlStyle || input.netlifySiteName) {
     await db
       .update(sites)
-      .set({ previewUrlStyle: input.previewUrlStyle, updatedAt: new Date() })
+      .set({
+        ...(input.previewUrlStyle
+          ? { previewUrlStyle: input.previewUrlStyle }
+          : {}),
+        ...(input.netlifySiteName
+          ? { netlifySiteName: input.netlifySiteName.trim() }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(sites.id, site.id));
   }
 
