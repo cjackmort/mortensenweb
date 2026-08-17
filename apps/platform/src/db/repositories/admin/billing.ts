@@ -10,6 +10,7 @@ import {
 import { newPublicId } from "@/lib/ids";
 import { generatePaymentReference } from "@/lib/payments/venmo";
 import { daysOverdue } from "@/lib/billing/dunning";
+import { unlockClientFeatures } from "./entitlements";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -42,6 +43,7 @@ export type PaymentMethod =
   | "card"
   | "bank_transfer"
   | "stripe"
+  | "square"
   | "other";
 
 export interface NewPaymentRequestInput {
@@ -260,6 +262,15 @@ export async function confirmPaymentReceived(
         sql`${clients.managementState} <> 'managed'`,
       ),
     );
+
+  // Money arriving is what turns the features on. Idempotent and first-write-
+  // wins, so confirming a second month does not reset the unlock date — and
+  // safe to call on every confirmation rather than only the first, which
+  // removes the need for this code to know which one it is looking at.
+  await unlockClientFeatures(db, request.clientId, {
+    actorUserId: ctx.userId,
+    reason: "payment_confirmed",
+  });
 
   await db.insert(auditLog).values({
     actorUserId: ctx.userId,

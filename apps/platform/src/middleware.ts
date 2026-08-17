@@ -30,6 +30,15 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/api/auth",
+  // Shared concept links. A prospect has no account by definition, so
+  // redirecting them to a sign-in page would make the link useless. The route
+  // authenticates the token itself and 404s on anything it does not recognise.
+  "/preview",
+  // Webhook receivers. GitHub and Square cannot hold a session; the HMAC
+  // signature over the raw body is the authentication, verified in the handler.
+  // A redirect here would silently swallow every delivery and eventually get
+  // the integration disabled by the sender.
+  "/api/webhooks",
 ];
 
 export function middleware(request: NextRequest) {

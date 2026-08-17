@@ -1,6 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { analyticsConnections, auditLog, sites } from "@/db/schema";
+import {
+  analyticsConnections,
+  auditLog,
+  repositoryConnections,
+  sites,
+} from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
@@ -147,7 +152,14 @@ export async function setAnalyticsConnection(
   return { ok: true, cleared: websiteId === "" };
 }
 
-/** Sites for one organization, with their analytics connection state. */
+/**
+ * Sites for one organization, with everything the operator needs to see at a
+ * glance: analytics, hosting, launch state, and whether automation is on.
+ *
+ * One query rather than three because these are always read together — the
+ * client detail page shows them in a single panel, and separate round trips
+ * would let them disagree with each other on screen.
+ */
 export async function listSitesWithAnalytics(
   _ctx: AdminContext,
   db: Database,
@@ -161,9 +173,17 @@ export async function listSitesWithAnalytics(
       status: sites.status,
       umamiWebsiteId: analyticsConnections.umamiWebsiteId,
       connectionStatus: analyticsConnections.status,
+      netlifySiteName: sites.netlifySiteName,
+      productionUrl: sites.productionUrl,
+      dnsInstructionsSentAt: sites.dnsInstructionsSentAt,
+      liveVerifiedAt: sites.liveVerifiedAt,
+      repoOwner: repositoryConnections.owner,
+      repoName: repositoryConnections.name,
+      automationEnabled: repositoryConnections.allowlisted,
     })
     .from(sites)
     .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))
+    .leftJoin(repositoryConnections, eq(repositoryConnections.siteId, sites.id))
     .where(
       and(eq(sites.organizationId, organizationId)),
     )
