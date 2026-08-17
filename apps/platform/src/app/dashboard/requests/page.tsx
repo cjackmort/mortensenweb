@@ -139,6 +139,37 @@ export default async function ClientRequestsPage() {
                   status={request.status}
                   stage={stageIndex(request.status)}
                 />
+
+                {/* The preview, where someone actually looks for it.
+                    The panel above is the call to action for something
+                    awaiting a decision; this is the record of a request they
+                    scrolled down to check on. A link only — approving stays
+                    in one place, because two Apply buttons for the same
+                    change is a way to click the wrong one. */}
+                {request.previewUrl && (
+                  <p style={{ margin: "0.6rem 0 0", fontSize: "0.9rem" }}>
+                    <a
+                      href={request.previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      See this change
+                    </a>
+                    {request.previewDecision === "approved" ? (
+                      <span className="muted"> &mdash; you approved this</span>
+                    ) : request.previewDecision === "changes_requested" ? (
+                      <span className="muted">
+                        {" "}
+                        &mdash; you asked for more changes
+                      </span>
+                    ) : (
+                      <span className="muted">
+                        {" "}
+                        &mdash; waiting for your decision above
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
             ))
           )}
