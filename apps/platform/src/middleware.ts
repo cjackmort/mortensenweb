@@ -45,6 +45,17 @@ const PUBLIC_PATHS = [
   // anything it did not mint. Without this entry the runner would follow a
   // redirect to /login and quietly receive an HTML page instead of an image.
   "/api/attachments",
+  // The scheduler. It calls this from a Netlify scheduled function, which
+  // carries no session and cannot be given one — the endpoint authenticates
+  // itself with CRON_SECRET, compared in constant time, and refuses outright
+  // when that is unset.
+  //
+  // Without this entry the call is redirected to /login and answered with a
+  // 307. Nothing errors: the scheduler records a response, the endpoint is
+  // never reached, and every job it exists to run silently does not. Preview
+  // verification is one of them, so a client is never shown a preview that was
+  // built, deployed and serving correctly the whole time.
+  "/api/cron",
 ];
 
 export function middleware(request: NextRequest) {
