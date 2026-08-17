@@ -299,3 +299,54 @@ export async function verifyUrlServes(
     clearTimeout(timer);
   }
 }
+
+/**
+ * Find the Netlify site that builds a given GitHub repository.
+ *
+ * The point of this is to stop asking an operator for things the platform can
+ * see for itself. Connecting a repository previously meant typing its Netlify
+ * site name and choosing how previews are addressed — two fields whose only
+ * failure mode is silent, and which Netlify already knows the answers to.
+ *
+ * `repo_path` on a site's build settings is `owner/name` exactly as GitHub
+ * spells it, so the match is a comparison rather than a guess. Its presence is
+ * also what tells us previews will be Netlify's own `deploy-preview-<n>--`
+ * rather than an alias the repository publishes for itself: a site with no
+ * repository attached cannot be building pull requests.
+ */
+export interface LinkedSite {
+  id: string;
+  name: string;
+  url: string;
+  repoPath: string;
+  branch: string | null;
+}
+
+export async function findSiteByRepo(
+  repoPath: string,
+): Promise<LinkedSite | null> {
+  const { data: sites } = await netlifyRequest<
+    Array<{
+      id: string;
+      name: string;
+      ssl_url?: string;
+      url?: string;
+      build_settings?: { repo_path?: string; repo_branch?: string };
+    }>
+  >("/sites?per_page=100");
+
+  const wanted = repoPath.toLowerCase();
+  const match = sites.find(
+    (site) => site.build_settings?.repo_path?.toLowerCase() === wanted,
+  );
+
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name,
+    url: match.ssl_url || match.url || `https://${match.name}.netlify.app`,
+    repoPath: match.build_settings!.repo_path!,
+    branch: match.build_settings?.repo_branch ?? null,
+  };
+}

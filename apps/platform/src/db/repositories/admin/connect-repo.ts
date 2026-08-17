@@ -4,6 +4,7 @@ import { auditLog, repositoryConnections, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { isGithubConfigured } from "@/lib/github/app";
 import { getRepo } from "@/lib/github/rest";
+import { findSiteByRepo, isNetlifyConfigured } from "@/lib/netlify/api";
 import type { AdminContext } from "../context";
 
 /**
@@ -33,7 +34,14 @@ import type { AdminContext } from "../context";
  */
 
 export type ConnectOutcome =
-  | { ok: true; repoNodeId: string; defaultBranch: string; alreadyConnected: boolean }
+  | {
+      ok: true;
+      repoNodeId: string;
+      defaultBranch: string;
+      alreadyConnected: boolean;
+      /** Set when the Netlify site was found rather than typed. */
+      detectedSiteName: string | null;
+    }
   | {
       ok: false;
       reason:
@@ -161,16 +169,42 @@ export async function connectExistingRepo(
     });
   }
 
-  if (input.previewUrlStyle || input.netlifySiteName) {
+  // Ask Netlify rather than the operator.
+  //
+  // Both of these fields fail silently when wrong — no preview URL is built,
+  // or one is built that 404s — and Netlify already knows both answers. A site
+  // whose build settings name this repository is, by definition, building its
+  // pull requests, which is what makes previews `deploy-preview-<n>--` rather
+  // than an alias the repository publishes for itself.
+  //
+  // A value the operator supplied still wins: detection is a convenience, and
+  // overriding it must remain possible for the case it gets something wrong.
+  let detectedSiteName: string | undefined;
+  let detectedStyle: "pr_alias" | "deploy_preview" | undefined;
+
+  if (!input.netlifySiteName && isNetlifyConfigured()) {
+    try {
+      const linked = await findSiteByRepo(`${input.owner}/${repo.name}`);
+      if (linked) {
+        detectedSiteName = linked.name;
+        detectedStyle = "deploy_preview";
+      }
+    } catch (error) {
+      // Detection failing is not a reason to refuse the connection — it just
+      // means the operator fills the field in by hand.
+      console.error("[connect] could not look up the Netlify site", error);
+    }
+  }
+
+  const siteName = input.netlifySiteName ?? detectedSiteName;
+  const style = input.previewUrlStyle ?? detectedStyle;
+
+  if (style || siteName) {
     await db
       .update(sites)
       .set({
-        ...(input.previewUrlStyle
-          ? { previewUrlStyle: input.previewUrlStyle }
-          : {}),
-        ...(input.netlifySiteName
-          ? { netlifySiteName: input.netlifySiteName.trim() }
-          : {}),
+        ...(style ? { previewUrlStyle: style } : {}),
+        ...(siteName ? { netlifySiteName: siteName.trim() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(sites.id, site.id));
@@ -185,7 +219,9 @@ export async function connectExistingRepo(
     metadata: {
       repository: `${input.owner}/${repo.name}`,
       repoNodeId: repo.node_id,
-      previewUrlStyle: input.previewUrlStyle ?? "pr_alias",
+      previewUrlStyle: style ?? "pr_alias",
+      netlifySiteName: siteName ?? null,
+      netlifySiteDetected: Boolean(detectedSiteName),
       mode: "connected_existing",
     },
   });
@@ -195,5 +231,6 @@ export async function connectExistingRepo(
     repoNodeId: repo.node_id,
     defaultBranch: repo.default_branch,
     alreadyConnected: Boolean(prior),
+    detectedSiteName: detectedSiteName ?? null,
   };
 }

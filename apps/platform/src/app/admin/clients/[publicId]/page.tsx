@@ -14,7 +14,7 @@ import { isUmamiConfigured } from "@/lib/analytics/umami";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { listBriefs } from "@/db/repositories/admin/briefs";
 import { ActivateForm, ReissueForm } from "./credential-forms";
-import { AddSiteForm, ConnectAnalyticsForm } from "./site-forms";
+import { AddSiteForm } from "./site-forms";
 import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { BriefForm, DispatchBriefForm } from "./brief-forms";
 import { LaunchPanel } from "./launch-forms";
@@ -249,16 +249,12 @@ export default async function ClientDetailPage({
                 <dd>{site.netlifySiteName ?? "not set up"}</dd>
               </dl>
 
-              <ConnectAnalyticsForm
-                clientPublicId={client.publicId}
-                sitePublicId={site.publicId}
-                currentWebsiteId={site.umamiWebsiteId}
-              />
-
               <div style={{ marginTop: "1.5rem" }}>
                 <RepositoryPanel
                   sitePublicId={site.publicId}
+                  clientPublicId={client.publicId}
                   siteName={site.name}
+                  umamiWebsiteId={site.umamiWebsiteId}
                   connected={
                     site.repoOwner && site.repoName
                       ? {
