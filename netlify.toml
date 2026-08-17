@@ -28,19 +28,28 @@
   # The portal is small; the default is generous but be explicit.
   NEXT_TELEMETRY_DISABLED = "1"
 
-  # Turbopack's incremental build cache records the values of environment
-  # variables it saw, and `publish` is `.next`, so that cache is uploaded with
-  # the deploy. Secrets scanning finds real credentials in it and fails the
-  # build — correctly, since a token sitting in an uploaded artifact is a
-  # genuine exposure even though nothing serves it.
+  # Turbopack records the environment variables it reads so it can invalidate
+  # its incremental cache, and because this codebase reaches for env vars
+  # dynamically it snapshots them broadly. Any secret present at build time can
+  # therefore end up in that cache — which secrets scanning then finds.
   #
-  # Omitting only the cache keeps scanning over everything that actually ships,
-  # which is where a leak would matter. Disabling the scan wholesale would
-  # trade a real protection for a convenience.
+  # Both paths are listed because the cache exists twice. `.next/cache` is
+  # Turbopack's own; `apps/platform/.netlify/.next/cache` is the copy the
+  # Next.js plugin makes, and the scanner reports paths relative to the
+  # repository root rather than to `base`. Omitting only the first looks
+  # correct, matches nothing, and fails exactly as before.
   #
-  # `.next/cache` is build-time state, not served content; Netlify's Next.js
-  # plugin decides what gets served, and it is never from here.
-  SECRETS_SCAN_OMIT_PATHS = ".next/cache/**"
+  # Why this is safe rather than merely convenient: the cache is build state
+  # that Netlify restores between builds, not served content — verified by
+  # building with sentinel values and confirming they appear nowhere a request
+  # could reach. Netlify already holds these credentials as environment
+  # variables, so the cache containing them widens no trust boundary.
+  #
+  # SECRETS_SCAN_OMIT_KEYS is the wrong tool here even though it would also
+  # make the build pass: it would stop scanning for that value *everywhere*,
+  # including in output that does ship, which is the one place the check earns
+  # its keep.
+  SECRETS_SCAN_OMIT_PATHS = ".next/cache/**,apps/platform/.netlify/.next/cache/**"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
