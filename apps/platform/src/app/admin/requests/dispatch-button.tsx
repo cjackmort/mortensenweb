@@ -1,7 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import { startAutomatedWork, type DispatchResult } from "./actions";
+import {
+  closeRequestAction,
+  startAutomatedWork,
+  type CloseResult,
+  type DispatchResult,
+} from "./actions";
 
 /**
  * Sending a request to the agent.
@@ -26,34 +31,84 @@ export function DispatchButton({
     DispatchResult | null,
     FormData
   >(startAutomatedWork, null);
+  const [closeState, closeAction, closing] = useActionState<
+    CloseResult | null,
+    FormData
+  >(closeRequestAction, null);
 
   // Mirrors DISPATCHABLE in the repository layer. Kept narrow on purpose: the
   // real gate is server-side, and this only decides whether to offer a button
   // that would be refused.
   const dispatchable = ["submitted", "triaged", "approved"].includes(status);
 
+  // Closing is refused once work is in flight, because it would not stop the
+  // run — only stop anyone watching for its pull request.
+  const closable = !["dispatched", "in_progress", "pr_open", "closed"].includes(
+    status,
+  );
+
   if (state?.ok) {
-    return (
-      <span className="pill pill-success">Sent to the agent</span>
-    );
+    return <span className="pill pill-success">Sent to the agent</span>;
+  }
+  if (closeState?.ok) {
+    return <span className="muted">Closed</span>;
   }
 
-  if (!dispatchable) {
+  if (!dispatchable && !closable) {
     return <span className="muted">&mdash;</span>;
   }
 
   return (
     <>
-      <form action={action}>
-        <input type="hidden" name="requestPublicId" value={requestPublicId} />
-        <button type="submit" className="small" disabled={pending}>
-          {pending ? "Sending…" : "Start work"}
-        </button>
-      </form>
-      {state && !state.ok && (
-        <p className="error" style={{ margin: "0.4rem 0 0", fontSize: "0.85rem" }}>
-          {state.message}
-        </p>
+      <div className="actions">
+        {dispatchable && (
+          <form action={action}>
+            <input
+              type="hidden"
+              name="requestPublicId"
+              value={requestPublicId}
+            />
+            <button type="submit" className="small" disabled={pending}>
+              {pending ? "Sending…" : "Start work"}
+            </button>
+          </form>
+        )}
+
+        {closable && (
+          <form action={closeAction}>
+            <input
+              type="hidden"
+              name="requestPublicId"
+              value={requestPublicId}
+            />
+            <input
+              type="hidden"
+              name="reason"
+              value="Closed by the agency without action."
+            />
+            <button
+              type="submit"
+              className="small secondary"
+              disabled={closing || pending}
+            >
+              {closing ? "Closing…" : "Close"}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {[state, closeState].map(
+        (r, i) =>
+          r &&
+          !r.ok && (
+            <p
+              key={i}
+              className="error"
+              style={{ margin: "0.4rem 0 0", fontSize: "0.85rem" }}
+            >
+              {r.message}
+            </p>
+          ),
       )}
     </>
   );
