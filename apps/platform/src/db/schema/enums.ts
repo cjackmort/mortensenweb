@@ -51,6 +51,24 @@ export const connectionModeEnum = pgEnum("connection_mode", [
   "transferred",
 ]);
 
+/**
+ * How this site's pull-request previews are addressed.
+ *
+ *  - `pr_alias`: the repository deploys itself with `--alias pr-<n>`, giving
+ *    `pr-<n>--<site>.netlify.app`. What the template's workflow does.
+ *  - `deploy_preview`: Netlify's own Git integration builds the pull request
+ *    and names it `deploy-preview-<n>--<site>.netlify.app`.
+ *
+ * Recorded per site because guessing wrong is a silent failure, not a loud one:
+ * the portal builds a URL, fetches it, gets a 404, and never shows the client
+ * anything. The request sits on "being worked on" until the watchdog fails it,
+ * and nothing in that sequence points at the naming convention.
+ */
+export const previewUrlStyleEnum = pgEnum("preview_url_style", [
+  "pr_alias",
+  "deploy_preview",
+]);
+
 export const deploymentStatusEnum = pgEnum("deployment_status", [
   "queued",
   "building",

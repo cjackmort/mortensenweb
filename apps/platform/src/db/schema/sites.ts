@@ -15,6 +15,7 @@ import {
   connectionModeEnum,
   deploymentStatusEnum,
   environmentKindEnum,
+  previewUrlStyleEnum,
   readinessStatusEnum,
   siteStatusEnum,
 } from "./enums";
@@ -44,6 +45,15 @@ export const sites = pgTable(
      * round trip to construct a URL we already know the shape of.
      */
     netlifySiteId: text("netlify_site_id"),
+
+    /**
+     * Defaults to the convention our own template uses, so a scaffolded site
+     * needs no thought. Only a repository connected in place — one Netlify
+     * already builds from Git — differs.
+     */
+    previewUrlStyle: previewUrlStyleEnum("preview_url_style")
+      .notNull()
+      .default("pr_alias"),
     netlifySiteName: text("netlify_site_name"),
     /** Where the site actually serves once live. Set at launch, not at setup. */
     productionUrl: text("production_url"),

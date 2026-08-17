@@ -18,6 +18,7 @@ import { AddSiteForm, ConnectAnalyticsForm } from "./site-forms";
 import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { BriefForm, DispatchBriefForm } from "./brief-forms";
 import { LaunchPanel } from "./launch-forms";
+import { RepositoryPanel } from "./repo-forms";
 
 const BRIEF_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -248,6 +249,24 @@ export default async function ClientDetailPage({
                 sitePublicId={site.publicId}
                 currentWebsiteId={site.umamiWebsiteId}
               />
+
+              <div style={{ marginTop: "1.5rem" }}>
+                <RepositoryPanel
+                  sitePublicId={site.publicId}
+                  siteName={site.name}
+                  connected={
+                    site.repoOwner && site.repoName
+                      ? {
+                          owner: site.repoOwner,
+                          name: site.repoName,
+                          defaultBranch: site.repoDefaultBranch ?? "main",
+                          allowlisted: site.automationEnabled ?? false,
+                          previewUrlStyle: site.previewUrlStyle ?? "pr_alias",
+                        }
+                      : null
+                  }
+                />
+              </div>
 
               <div style={{ marginTop: "1.5rem" }}>
                 <h3 style={{ fontSize: "0.95rem" }}>Launch</h3>

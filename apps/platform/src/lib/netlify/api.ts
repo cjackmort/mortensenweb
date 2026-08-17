@@ -137,8 +137,21 @@ export function toSiteName(businessName: string, suffix: string): string {
  *
  * Nothing may show this to a client until `verifyUrlServes` has agreed.
  */
-export function previewUrlFor(siteName: string, prNumber: number): string {
-  return `https://pr-${prNumber}--${siteName}.netlify.app`;
+export type PreviewUrlStyle = "pr_alias" | "deploy_preview";
+
+export function previewUrlFor(
+  siteName: string,
+  prNumber: number,
+  style: PreviewUrlStyle = "pr_alias",
+): string {
+  // Netlify names a Git-integration preview differently from a CLI alias, and
+  // the two are not interchangeable. Defaulting to the template's convention
+  // keeps every scaffolded site working without a caller thinking about it.
+  const host =
+    style === "deploy_preview"
+      ? `deploy-preview-${prNumber}--${siteName}`
+      : `pr-${prNumber}--${siteName}`;
+  return `https://${host}.netlify.app`;
 }
 
 // ---------------------------------------------------------------------------

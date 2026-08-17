@@ -1,0 +1,2 @@
+CREATE TYPE "public"."preview_url_style" AS ENUM('pr_alias', 'deploy_preview');--> statement-breakpoint
+ALTER TABLE "sites" ADD COLUMN "preview_url_style" "preview_url_style" DEFAULT 'pr_alias' NOT NULL;
