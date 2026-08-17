@@ -125,10 +125,17 @@ jobs:
       # will deploy twice.
       # ---------------------------------------------------------------------
       - name: Trigger deploy
-        if: ${{ secrets.NETLIFY_BUILD_HOOK != '' }}
         env:
           BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        # The presence check is in the shell, not in an `if:`. The `secrets`
+        # context is not available to `if` expressions — using it there is not
+        # a falsy no-op but a workflow parse error, which fails the whole run
+        # in zero seconds with no job ever starting.
         run: |
+          if [ -z "$BUILD_HOOK" ]; then
+            echo "No NETLIFY_BUILD_HOOK secret set; leaving deployment to Netlify's own trigger."
+            exit 0
+          fi
           echo "Migration succeeded; triggering the Netlify build."
           # --fail so an HTTP error fails the job rather than reporting success
           # for a deploy that was never queued.
