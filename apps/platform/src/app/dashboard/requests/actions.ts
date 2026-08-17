@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { createChangeRequest } from "@/db/repositories/client/change-requests";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
+import { autoDispatchIfEnabled } from "@/db/repositories/admin/agent-jobs";
 import {
   consumeChange,
   getEntitlements,
@@ -160,6 +161,28 @@ export async function submitChangeRequest(
     }
     await attachImageToRequest(db, ctx, created.publicId, check.upload);
     attached += 1;
+  }
+
+  // Automatic dispatch, where the operator has opted in. Last, after the photos
+  // the agent is meant to see, and swallowed whichever way it goes: the request
+  // is saved and the allowance is spent by this point, so a refusal here — no
+  // connected repository, cap reached, GitHub unreachable — is an operational
+  // matter for us and not a failed submission to hand back to someone who did
+  // nothing wrong. The id is the one just created, never anything off the form,
+  // so this unscoped call cannot be pointed at another tenant's request.
+  try {
+    const dispatched = await autoDispatchIfEnabled(db, created.publicId);
+    if (!dispatched.ok && dispatched.reason !== "disabled") {
+      console.warn("[requests] automatic dispatch refused", {
+        requestPublicId: created.publicId,
+        reason: dispatched.reason,
+      });
+    }
+  } catch (error) {
+    console.error("[requests] automatic dispatch failed", {
+      requestPublicId: created.publicId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
   }
 
   revalidatePath("/dashboard/requests");

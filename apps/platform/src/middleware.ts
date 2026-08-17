@@ -39,6 +39,12 @@ const PUBLIC_PATHS = [
   // A redirect here would silently swallow every delivery and eventually get
   // the integration disabled by the sender.
   "/api/webhooks",
+  // Signed attachment links. The reader is a GitHub Actions runner fetching a
+  // client's uploaded photo; it has no session and cannot be given one. The
+  // signed token in the path is the authorisation, and the handler 404s on
+  // anything it did not mint. Without this entry the runner would follow a
+  // redirect to /login and quietly receive an HTML page instead of an image.
+  "/api/attachments",
 ];
 
 export function middleware(request: NextRequest) {
