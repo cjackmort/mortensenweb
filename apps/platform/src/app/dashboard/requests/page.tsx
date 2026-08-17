@@ -7,9 +7,15 @@ import {
   listChangeRequests,
   listSites,
 } from "@/db/repositories/client/change-requests";
+import {
+  getAllowance,
+  getEntitlements,
+} from "@/db/repositories/client/entitlements";
+import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { RequestProgress } from "@/components/request-progress";
 import { stageIndex } from "@/lib/requests/status";
 import { RequestForm } from "./request-form";
+import { PreviewPanel } from "./preview-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +50,20 @@ export default async function ClientRequestsPage() {
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [sites, requests] = await Promise.all([
-    listSites(db, ctx),
-    listChangeRequests(db, ctx, { limit: 50 }),
-  ]);
+  const [sites, requests, entitlements, allowance, previews] = await Promise.all(
+    [
+      listSites(db, ctx),
+      listChangeRequests(db, ctx, { limit: 50 }),
+      getEntitlements(db, ctx),
+      getAllowance(db, ctx),
+      listPreviewsAwaitingDecision(db, ctx),
+    ],
+  );
+
+  // No client record at all is treated as unlocked rather than locked. That
+  // case is a gap on our side, and the proportionate response to our own gap
+  // is not to block someone out of the thing they are paying for.
+  const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
 
   return (
     <AppShell user={user}>
@@ -60,8 +76,31 @@ export default async function ClientRequestsPage() {
           a picture of the thing you mean is usually faster than describing it.
         </p>
 
+        {/* Above the form on purpose: something waiting on the client's
+            decision is more urgent than raising something new, and burying it
+            under the form is how a preview sits unapproved for a week. */}
+        <PreviewPanel
+          items={previews.map((preview) => ({
+            requestPublicId: preview.requestPublicId,
+            requestTitle: preview.requestTitle,
+            previewUrl: preview.previewUrl,
+          }))}
+        />
+
         <RequestForm
           sites={sites.map((s) => ({ publicId: s.publicId, name: s.name }))}
+          locked={locked}
+          allowance={
+            allowance
+              ? {
+                  included: allowance.included,
+                  used: allowance.used,
+                  remaining: allowance.remaining,
+                  label: allowance.label,
+                  overagePerChangeCents: allowance.overagePerChangeCents,
+                }
+              : null
+          }
         />
 
         <section className="card">

@@ -14,12 +14,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations, users } from "./identity";
 import { sites } from "./sites";
-import { clients } from "./clients";
+import { clients, servicePlans } from "./clients";
 import {
   conceptStatusEnum,
   factSourceEnum,
   factVerificationEnum,
   jobStatusEnum,
+  previewKindEnum,
   prospectStatusEnum,
   repoStrategyEnum,
   viewportEnum,
@@ -41,6 +42,17 @@ export const prospects = pgTable(
     sourceWebsiteUrl: text("source_website_url"),
     industry: text("industry"),
     status: prospectStatusEnum("status").notNull().default("new"),
+    /**
+     * The plan being pitched. Chosen at intake because it decides what the demo
+     * should show: a plan without analytics should not produce a concept whose
+     * pitch is the analytics dashboard.
+     *
+     * `restrict` on delete — a plan that has been pitched to somebody cannot be
+     * erased out from under the record of having pitched it.
+     */
+    planId: uuid("plan_id").references(() => servicePlans.id, {
+      onDelete: "restrict",
+    }),
     location: text("location"),
     serviceArea: text("service_area"),
     tone: text("tone"),
@@ -258,6 +270,15 @@ export const previewDeployments = pgTable(
       onDelete: "cascade",
     }),
     siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }),
+    /**
+     * Set for a pull request preview. Not a foreign key to `agent_jobs`:
+     * `operations.ts` already imports this module's siblings, and pointing back
+     * at it would close a cycle across the schema barrel. The id is written by
+     * one code path and read by one query, so the join is safe by construction.
+     */
+    agentJobId: uuid("agent_job_id"),
+    prNumber: integer("pr_number"),
+    kind: previewKindEnum("kind").notNull().default("concept"),
     url: text("url"),
     /** Set only after the deployed preview is actually checked, not assumed. */
     noindexVerified: boolean("noindex_verified").notNull().default(false),
@@ -272,9 +293,10 @@ export const previewDeployments = pgTable(
     uniqueIndex("preview_deployments_public_id_key").on(t.publicId),
     index("preview_deployments_concept_idx").on(t.conceptJobId),
     index("preview_deployments_site_idx").on(t.siteId),
+    index("preview_deployments_agent_job_idx").on(t.agentJobId),
     check(
       "preview_deployments_subject_required",
-      sql`(${t.conceptJobId} IS NOT NULL) OR (${t.siteId} IS NOT NULL)`,
+      sql`(${t.conceptJobId} IS NOT NULL) OR (${t.siteId} IS NOT NULL) OR (${t.agentJobId} IS NOT NULL)`,
     ),
   ],
 );

@@ -35,6 +35,38 @@ export const sites = pgTable(
     themeKey: text("theme_key"),
     themeVersion: text("theme_version"),
 
+    /**
+     * The Netlify site this deploys to.
+     *
+     * `netlifySiteName` is not decorative: deploy-preview URLs are built from
+     * it (`pr-<n>--<name>.netlify.app`), so it is the input to every preview
+     * link the client is ever shown. Storing the id alone would mean an API
+     * round trip to construct a URL we already know the shape of.
+     */
+    netlifySiteId: text("netlify_site_id"),
+    netlifySiteName: text("netlify_site_name"),
+    /** Where the site actually serves once live. Set at launch, not at setup. */
+    productionUrl: text("production_url"),
+
+    /**
+     * The DNS records the client has to create, exactly as sent to them.
+     *
+     * Stored rather than recomputed so that "what did we tell them to do?" has
+     * one answer months later, when they call because something is broken and
+     * the recommended record for their setup has since changed.
+     */
+    dnsRecords: jsonb("dns_records"),
+    dnsInstructionsSentAt: timestamp("dns_instructions_sent_at", {
+      withTimezone: true,
+    }),
+
+    /**
+     * When the production URL was last confirmed to actually serve the site.
+     * A launch is not complete because a deploy succeeded — DNS propagation and
+     * certificate issue both happen after that and both can fail.
+     */
+    liveVerifiedAt: timestamp("live_verified_at", { withTimezone: true }),
+
     /** Production launch is gated on an explicit approval, never a config flag. */
     launchApprovedAt: timestamp("launch_approved_at", { withTimezone: true }),
     launchApprovedBy: uuid("launch_approved_by").references(() => users.id, {

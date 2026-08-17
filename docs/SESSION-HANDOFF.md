@@ -28,14 +28,24 @@ Treat any repository discovered incidentally as unauthorized.
 architecture, full schema, decision log with rationale, verified free-tier
 limits, and the risk register. Read it before proposing changes.
 
-## What exists (Stages 1–2 complete)
+`docs/stage-3-automation-plan.md` covers the operating loop built on top of it:
+prospect → demo → payment → brief → build → preview → apply → launch, with a
+gap analysis and six design decisions (D1–D6) that explain why the
+non-obvious routes were taken.
+
+## What exists (Stages 1–3 complete)
 
 Monorepo: `apps/platform` (portal), `apps/portfolio` (**stub only**),
 `packages/theme-library` (**stub only**).
 
 Stack: Next.js 16.3.1, React 19, Drizzle ORM, Neon Postgres in production /
 embedded PGlite locally, `next-auth@5.0.0-beta.32` pinned exactly, TypeScript
-strict. 68 tests passing, typecheck clean.
+strict. **184 tests passing; lint, typecheck, and production build all clean.**
+
+`eslint.config.js` is flat config (ESLint 9) and deliberately includes
+`js.configs.recommended`, which neither Next preset turns on — without it,
+`no-control-regex`, `no-irregular-whitespace`, and the rest of ESLint's own
+correctness baseline are silently absent.
 
 Built and verified:
 - ~32-table tenant-aware schema across identity, sites, clients, prospects,
@@ -53,6 +63,31 @@ Built and verified:
 - Dunning ladder: 3 / 10 / 21 / 30 days → reminder emails → management paused
 - Welcome + reminder email templates; mailer refuses to send without
   `RESEND_API_KEY` and logs instead
+
+Stage 3 added the loop itself:
+- **GitHub webhook receiver** — raw-body HMAC, constant-time compare, delivery-id
+  idempotency, node-id allowlist. This was the missing return half of the
+  pipeline: the portal could open issues, and nothing came back
+- **Preview → Apply → merge.** A pull request's Netlify deploy preview is what
+  the client approves. The URL is derived, then **verified with a real fetch**
+  before anyone is shown it. Approval pins a head SHA; new commits withdraw it
+- **Merge guards** — draft, base ref, checks (both check-runs *and* commit
+  statuses), untrusted author, out-of-scope paths, truncated diff, and a
+  never-auto-merge list covering `.github/`, deploy config, and manifests
+- **Entitlements + change allowances.** First confirmed payment unlocks
+  analytics and change requests. Monthly allowance consumed atomically in one
+  statement, so two submissions cannot spend the same last change
+- **Square** — hosted checkout links (verified against their OpenAPI spec) and
+  `x-square-hmacsha256-signature` verification over notification URL + raw body
+- **Netlify** — site creation, deploy lookup, and URL liveness checks
+- **Prospect → demo** — intake with plan selection, private repo scaffolded from
+  a template, hashed expiring share links behind an explicit approval
+- **Briefs** — the post-call intake box, dispatched through the same
+  injection-contained issue renderer as client text
+- **Launch** — DNS instruction email (apex A + www CNAME, never nameservers),
+  Umami website provisioning, verified go-live, client flipped to active
+- **Scheduled jobs** — Netlify scheduled function every 5 minutes driving
+  preview re-verification, the agent watchdog, live-site checks, and share expiry
 
 ## Non-negotiables — do not weaken these
 
@@ -72,7 +107,15 @@ Built and verified:
    **public**. `.env.local` is gitignored and holds `AUTH_SECRET` and
    `VENMO_HANDLE`.
 6. **Untrusted content is data, never instructions** — crawled pages, webhook
-   payloads, uploaded filenames, issue bodies.
+   payloads, uploaded filenames, issue bodies. This includes **operator-typed
+   briefs**: those are a transcription of what a client said on a call, so they
+   go through the same fenced, injection-contained renderer as client text.
+7. **A client is never shown a preview URL that has not been fetched and
+   answered.** The URL is derivable the moment a pull request opens, long
+   before any build exists at it. `previewVerifiedAt` is the gate.
+8. **Nothing is sent to a prospect automatically.** Sharing a concept mints a
+   link and hands it to the operator; there is no outbound path from the
+   prospect module at all.
 
 ## Running it
 
@@ -88,20 +131,41 @@ hangs. To reset: `rm -rf apps/platform/.pglite`, then migrate and seed.
 
 ## Next, in priority order
 
-1. **Decide the deploy target.** Plan says Cloudflare Workers via
-   `@opennextjs/cloudflare`, which needs Workers Paid ($5/mo) because the free
-   tier caps CPU at 10 ms per invocation — too little for PBKDF2 or SSR.
-   Netlify supports Next.js 16 on a free tier without that limit and would let
-   us launch for $0. Operator is leaning Netlify. Schema, auth, and Neon are
-   unaffected either way.
-2. **Wire up four things that exist as tested logic but have no UI:**
-   `activateClient`, `reissueTemporaryPassword`, confirm-payment-received,
-   and the client billing page showing due date and Pay with Venmo.
-3. **Admin overdue queue** and something to run the dunning ladder daily
-   (Cloudflare Cron Triggers or the Netlify equivalent).
-4. **Stage 3** — full Current Clients and Potential Clients interfaces.
-5. **Stage 4** — theme library: HVAC, artists, window cleaning, car detailing.
-6. **Build `apps/portfolio`** — the public marketing site. Does not exist yet.
+Everything below is **external setup or new building**, not unfinished code.
+The pipeline is written and tested; it cannot run until the accounts exist.
+
+1. **Create the external resources.** Nothing in the loop runs without these,
+   and each reports itself as unconfigured rather than failing obscurely:
+   - a **GitHub App** (id, PEM, webhook secret, installation id) with the
+     webhook pointed at `/api/webhooks/github`
+   - a **template repository** from `templates/client-repo/`, marked Template,
+     with `APP_ACTOR_LOGIN` in `claude.yml` replaced by the App's real actor
+     login — without it every agent run fails immediately
+   - account-level Actions secrets: `CLAUDE_CODE_OAUTH_TOKEN`,
+     `NETLIFY_AUTH_TOKEN`
+   - a **Netlify** personal access token
+   - **Square**: access token, location id, webhook signature key, and one
+     catalogue subscription plan per service plan (their *variation* ids go in
+     `service_plans.square_plan_variation_id`)
+   - `CRON_SECRET`, matching between the scheduled function and `/api/cron`
+
+   See `.env.example` — every name is there with a note on where it lives.
+
+2. **Square webhook route.** The driver, signature verification, and event
+   parsing are built and tested; `/api/webhooks/square` is not yet written.
+   It should mirror `/api/webhooks/github`: raw body first, verify, then parse.
+   Confirming a Square payment should call `confirmPaymentReceived`, which
+   already unlocks entitlements.
+
+3. **Theme library** (`packages/theme-library` is still a stub). Until it
+   exists, a scaffolded repo is whatever the template contains. Stage 0 §8 has
+   the full design, including the compatibility matrix and `theme.lock.json`.
+
+4. **`apps/portfolio`** — the public marketing site. Still does not exist.
+
+5. **`middleware` → `proxy` rename.** Next 16 deprecation, works today. The
+   file carries security-relevant comments about *not* being an authorization
+   boundary; preserve them through the rename.
 
 ## Decisions already made (do not relitigate without reason)
 
@@ -109,9 +173,21 @@ hangs. To reset: `rm -rf apps/platform/.pglite`, then migrate and seed.
   because the repo is public.
 - Auth stays custom. **Do not switch to Supabase Auth** — it would discard the
   temporary-password onboarding flow and add nothing missing.
-- Square is planned later: card 3.3% + 30¢, **ACH 1%, or $0 with Square
-  Checking**. Its webhooks would remove manual payment confirmation. Venmo
-  stays as an option meanwhile.
+- Square is the processor: card 3.3% + 30¢, **ACH 1%, or $0 with Square
+  Checking**. Its webhook narrows the gap between "paid" and "confirmed" but
+  does **not** remove `awaiting_confirmation` — a webhook can be late or lost.
+  Venmo stays as an option.
+- **Netlify sites are created by the portal but not linked to GitHub.** Linking
+  needs their GitHub App's per-account `installation_id`, only obtainable
+  through a browser OAuth flow. Client repos deploy themselves from their own
+  workflow instead, using a plaintext `NETLIFY_SITE_ID` Actions *variable* the
+  portal writes at scaffold time. This is also why no libsodium dependency is
+  needed — sealing an Actions *secret* would require it; a variable does not.
+- **A change request's preview is its pull request's deploy preview**, and
+  "Apply" is the merge. One artifact, one promotion path, no drift between what
+  the client approved and what ships.
+- **Allowance `included` is copied at period creation, not joined at read
+  time.** A mid-month downgrade must not retroactively make someone overspent.
 - Venmo's terms prohibit business payments on a **personal** account; a
   Business Profile is the compliant route.
 
@@ -119,7 +195,7 @@ hangs. To reset: `rm -rf apps/platform/.pglite`, then migrate and seed.
 
 - GitHub Dependabot advisory, 1 moderate, unexamined:
   https://github.com/cjackmort/mortensenweb/security/dependabot/1
-- Next.js 16 deprecation: `middleware` convention → `proxy`. Works today.
-  The file carries security-relevant comments about *not* being an
-  authorization boundary; preserve them through the rename.
 - `mortensenweb.com` is unregistered. Not needed until deploy.
+- The half-hour turnaround is achievable for content edits that merge
+  automatically, and **is not** achievable for structural changes that need
+  review. Client-facing copy should promise the former only.

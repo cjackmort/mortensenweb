@@ -115,6 +115,14 @@ export interface NewChangeRequestInput {
   priority?: "low" | "normal" | "high" | "urgent";
   desiredTiming?: string;
   sitePublicId?: string;
+  /**
+   * The allowance period this request was counted against, claimed by the
+   * caller before getting here. Recorded so the month's usage can be
+   * reconciled against the requests that caused it.
+   */
+  allowanceId?: string;
+  /** How this change is paid for, decided at submission. See the enum. */
+  billing?: "included" | "overage" | "courtesy";
 }
 
 export async function createChangeRequest(
@@ -158,6 +166,8 @@ export async function createChangeRequest(
       priority: input.priority ?? "normal",
       desiredTiming: input.desiredTiming ?? null,
       status: "submitted",
+      allowanceId: input.allowanceId ?? null,
+      billing: input.billing ?? "included",
     })
     .returning();
 
