@@ -114,6 +114,83 @@ export function RepositoryPanel({
             sent; anything already in flight finishes and still needs the
             client&rsquo;s approval before it goes live.
           </p>
+
+          {/* Connecting used to be one-way: the form disappeared once a
+              repository was attached, so a mistyped Netlify site name or the
+              wrong preview convention could not be corrected — and both fail
+              silently, which is exactly when someone needs to change them.
+              `connectExistingRepo` has always updated an existing row; only
+              the UI was one-way. */}
+          <details style={{ marginTop: "1.25rem" }}>
+            <summary style={{ cursor: "pointer" }}>Change these settings</summary>
+            <div style={{ marginTop: "1rem" }}>
+              {connectState && (
+                <p className={connectState.ok ? "notice notice-success" : "error"}>
+                  {connectState.message}
+                </p>
+              )}
+            <form action={connectAction}>
+              <input type="hidden" name="sitePublicId" value={sitePublicId} />
+
+              <label htmlFor="repo">Repository</label>
+              <input
+                id="repo"
+                name="repo"
+                placeholder="cjackmort/ScottMortensenWebsite"
+                defaultValue={connected ? `${connected.owner}/${connected.name}` : ""}
+                required
+              />
+              <p className="field-hint">
+                Owner and name, or paste the GitHub URL. The App must be able to
+                see it.
+              </p>
+
+              <label htmlFor="netlifySiteName">Netlify site name</label>
+              <input
+                id="netlifySiteName"
+                name="netlifySiteName"
+                placeholder="scott-mortensen-fine-arts"
+                defaultValue={connected?.netlifySiteName ?? ""}
+              />
+              {/* Without this there is no preview URL to build, and the failure
+                  is silent: the agent works, the pull request opens, Netlify
+                  builds a preview, and the client is shown nothing. */}
+              <p className="field-hint">
+                The name in Netlify, not the full address &mdash; the part before
+                <code>.netlify.app</code>. Previews cannot be shown to the client
+                without it.
+              </p>
+
+              <label htmlFor="previewUrlStyle">How previews are built</label>
+              <select
+                id="previewUrlStyle"
+                name="previewUrlStyle"
+                defaultValue={connected?.previewUrlStyle ?? "deploy_preview"}
+              >
+                <option value="deploy_preview">
+                  Netlify builds them from GitHub (existing site)
+                </option>
+                <option value="pr_alias">
+                  The repository deploys its own (built from our template)
+                </option>
+              </select>
+              {/* This choice decides a URL the portal later fetches. Getting it
+                  wrong is silent: the link 404s, the preview is never shown, and
+                  the request sits on "being worked on" until the watchdog fails
+                  it — with nothing pointing at the naming convention. */}
+              <p className="field-hint">
+                A site already connected to Netlify through GitHub uses the first.
+                Getting this wrong means previews never appear, so check if
+                you&rsquo;re unsure.
+              </p>
+
+              <button type="submit" disabled={connecting}>
+                {connecting ? "Saving…" : connected ? "Update settings" : "Connect repository"}
+              </button>
+            </form>
+            </div>
+          </details>
+
         </>
       ) : (
         <>
