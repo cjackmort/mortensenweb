@@ -107,6 +107,27 @@ async function main() {
         includesAnalytics: true,
         sortOrder: 30,
       },
+      {
+        // Exists to be granted, not sold. The plan override needs something
+        // meaning "unlimited" to point at, and inventing one at the moment an
+        // operator wants to comp somebody is the wrong time to be designing a
+        // package.
+        //
+        // Null included changes is what makes it unlimited — the same
+        // convention every other plan uses, rather than a large number
+        // standing in for infinity, which would eventually be reached.
+        key: "comp-unlimited",
+        name: "Complimentary — Unlimited",
+        description:
+          "Granted by the agency rather than paid for. Unlimited changes.",
+        defaultMonthlyCents: 0,
+        includedChangesPerMonth: null,
+        // No overage. There is no bill for an extra change to be added to.
+        overagePerChangeCents: null,
+        includesAnalytics: true,
+        // Last, so it does not appear among the plans a prospect is pitched.
+        sortOrder: 900,
+      },
     ])
     .onConflictDoNothing()
     .returning();
