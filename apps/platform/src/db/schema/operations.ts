@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   date,
@@ -14,13 +15,18 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations, users } from "./identity";
 import { repositoryConnections, sites } from "./sites";
+import { changeAllowances, paymentRequests } from "./clients";
 import {
   actorTypeEnum,
   agentJobStatusEnum,
   approvalDecisionEnum,
   approvalKindEnum,
+  billingTreatmentEnum,
+  briefKindEnum,
+  briefStatusEnum,
   notificationChannelEnum,
   notificationStatusEnum,
+  previewDecisionEnum,
   requestCategoryEnum,
   requestPriorityEnum,
   requestStatusEnum,
@@ -54,6 +60,26 @@ export const changeRequests = pgTable(
     assignedTo: uuid("assigned_to").references(() => users.id, {
       onDelete: "set null",
     }),
+
+    /**
+     * How this change is paid for, decided at submission and never recomputed.
+     *
+     * Recomputing it later would give a different answer, because the answer
+     * depends on how much of the allowance was left *at that moment*. A request
+     * submitted as the third of three included changes stays `included` even
+     * after the client submits a fourth.
+     */
+    billing: billingTreatmentEnum("billing").notNull().default("included"),
+    /** The period this request was counted against. Null for courtesy work. */
+    allowanceId: uuid("allowance_id").references(() => changeAllowances.id, {
+      onDelete: "set null",
+    }),
+    /** Set when the change was billed as an overage and an invoice was raised. */
+    paymentRequestId: uuid("payment_request_id").references(
+      () => paymentRequests.id,
+      { onDelete: "set null" },
+    ),
+
     isDemo: boolean("is_demo").notNull().default(false),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -183,13 +209,54 @@ export const agentJobs = pgTable(
       () => repositoryConnections.id,
       { onDelete: "set null" },
     ),
+    /**
+     * Set when the job came from an operator brief rather than a client
+     * request. Declared as a forward reference because `site_briefs` is defined
+     * below; Drizzle resolves the callback lazily, after the module evaluates.
+     */
+    briefId: uuid("brief_id").references((): AnyPgColumn => siteBriefs.id, {
+      onDelete: "set null",
+    }),
     issueNumber: integer("issue_number"),
     workflowRunId: text("workflow_run_id"),
     prNumber: integer("pr_number"),
+    prUrl: text("pr_url"),
     headSha: text("head_sha"),
     baseRef: text("base_ref"),
     status: agentJobStatusEnum("status").notNull().default("queued"),
     error: text("error"),
+
+    /**
+     * The deploy preview of this pull request — what the client actually looks
+     * at before approving.
+     *
+     * `previewVerifiedAt` is the gate on showing it. A URL is *derived* from the
+     * pull request number and the site name, so it exists as a string long
+     * before the build that would make it resolve. Presenting an unverified URL
+     * to a client means sending them to a 404 and asking them to approve it,
+     * which is worse than showing nothing. Same discipline as
+     * `preview_deployments.noindex_verified`: constructed, then checked, then
+     * trusted.
+     */
+    previewUrl: text("preview_url"),
+    previewVerifiedAt: timestamp("preview_verified_at", { withTimezone: true }),
+
+    /**
+     * The client's verdict. `pending` is the absence of a decision, and the
+     * merge path refuses anything that is not explicitly `approved`.
+     */
+    clientDecision: previewDecisionEnum("client_decision")
+      .notNull()
+      .default("pending"),
+    clientDecisionAt: timestamp("client_decision_at", { withTimezone: true }),
+    clientDecisionByUserId: uuid("client_decision_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+
+    mergedAt: timestamp("merged_at", { withTimezone: true }),
+    mergeCommitSha: text("merge_commit_sha"),
+
     dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
     timeoutAt: timestamp("timeout_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -202,6 +269,74 @@ export const agentJobs = pgTable(
     index("agent_jobs_request_idx").on(t.requestId),
     index("agent_jobs_status_idx").on(t.status),
     index("agent_jobs_timeout_idx").on(t.timeoutAt),
+    index("agent_jobs_brief_idx").on(t.briefId),
+    // Correlating an incoming webhook needs (repo, pr) -> job.
+    index("agent_jobs_repo_pr_idx").on(t.repositoryConnectionId, t.prNumber),
+    // A decision always has a time attached; "approved by nobody, at no point"
+    // must not be representable, because that row would authorise a merge.
+    check(
+      "agent_jobs_decision_complete",
+      sql`(${t.clientDecision} = 'pending') = (${t.clientDecisionAt} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * An operator brief — what a client said they wanted, written down after a call.
+ *
+ * Kept as its own record rather than a client note because this text becomes an
+ * agent's instructions. That means it needs a status, a dispatch record, and an
+ * audit trail, none of which a free-form note has.
+ *
+ * Note what it is *not*: a trusted channel. The text is dictated by a client
+ * over a call and typed by the operator, so it goes through exactly the same
+ * injection-contained issue renderer as client-submitted text. The operator
+ * typing it does not make a third party's words safe.
+ */
+export const siteBriefs = pgTable(
+  "site_briefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicId: text("public_id").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
+    kind: briefKindEnum("kind").notNull().default("revision"),
+    status: briefStatusEnum("status").notNull().default("draft"),
+
+    /** Structured prompts, kept separate so the agent gets labelled sections. */
+    colourDirection: text("colour_direction"),
+    features: text("features"),
+    contentNotes: text("content_notes"),
+    /** Everything that did not fit the boxes above. */
+    body: text("body"),
+
+    authoredByUserId: uuid("authored_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("site_briefs_public_id_key").on(t.publicId),
+    index("site_briefs_org_idx").on(t.organizationId, t.createdAt),
+    index("site_briefs_status_idx").on(t.status),
+    // A brief with nothing in any field would dispatch an empty instruction.
+    check(
+      "site_briefs_not_empty",
+      sql`length(btrim(coalesce(${t.colourDirection}, '') || coalesce(${t.features}, '') || coalesce(${t.contentNotes}, '') || coalesce(${t.body}, ''))) > 0`,
+    ),
+    check(
+      "site_briefs_submitted_complete",
+      sql`${t.status} = 'draft' OR ${t.submittedAt} IS NOT NULL`,
+    ),
   ],
 );
 

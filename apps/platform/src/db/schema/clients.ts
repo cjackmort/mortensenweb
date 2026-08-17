@@ -55,6 +55,27 @@ export const clients = pgTable(
     managementState: managementStateEnum("management_state")
       .notNull()
       .default("managed"),
+
+    /**
+     * Entitlement gates, set when the first payment is confirmed.
+     *
+     * These are columns rather than a derived `EXISTS (SELECT … FROM payments)`
+     * on purpose. Derived access control cannot be audited, cannot be granted
+     * by hand for a client who paid in cash before the portal existed, and
+     * cannot be withdrawn without deleting ledger rows — which the ledger
+     * forbids. A timestamp with an `audit_log` entry beside it answers "who
+     * unlocked this, and when", which a subquery never can.
+     *
+     * Null means locked. The portal shows a client an explicit "unlock" path
+     * rather than an empty analytics screen, because an empty chart and a
+     * locked feature look identical and mean opposite things.
+     */
+    analyticsUnlockedAt: timestamp("analytics_unlocked_at", {
+      withTimezone: true,
+    }),
+    changeRequestsUnlockedAt: timestamp("change_requests_unlocked_at", {
+      withTimezone: true,
+    }),
     managementPausedAt: timestamp("management_paused_at", {
       withTimezone: true,
     }),
@@ -88,6 +109,31 @@ export const servicePlans = pgTable(
     description: text("description"),
     /** Integer cents. No floating point money anywhere in this schema. */
     defaultMonthlyCents: integer("default_monthly_cents").notNull().default(0),
+
+    /**
+     * Changes included per calendar month. Zero is a legitimate value — a
+     * hosting-only plan includes none — so "unlimited" is `null` rather than a
+     * sentinel like -1, which would silently pass a `>= 0` check and then
+     * compare wrongly against a used count.
+     */
+    includedChangesPerMonth: integer("included_changes_per_month"),
+    /** What a change beyond the allowance costs. Null means "not offered". */
+    overagePerChangeCents: integer("overage_per_change_cents"),
+    /** Whether the analytics dashboard is part of this plan at all. */
+    includesAnalytics: boolean("includes_analytics").notNull().default(true),
+
+    /**
+     * Square catalogue subscription plan *variation* id, when the plan is
+     * billable through Square. Not a secret — it is an opaque catalogue
+     * reference, useless without the access token.
+     *
+     * Deliberately configuration rather than something the portal creates:
+     * generating catalogue objects would add a large API surface to automate a
+     * task done once per plan, in a dashboard, in five minutes.
+     */
+    squarePlanVariationId: text("square_plan_variation_id"),
+
+    sortOrder: integer("sort_order").notNull().default(0),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -98,6 +144,14 @@ export const servicePlans = pgTable(
     check(
       "service_plans_price_non_negative",
       sql`${t.defaultMonthlyCents} >= 0`,
+    ),
+    check(
+      "service_plans_included_changes_non_negative",
+      sql`${t.includedChangesPerMonth} IS NULL OR ${t.includedChangesPerMonth} >= 0`,
+    ),
+    check(
+      "service_plans_overage_non_negative",
+      sql`${t.overagePerChangeCents} IS NULL OR ${t.overagePerChangeCents} >= 0`,
     ),
   ],
 );
@@ -119,6 +173,22 @@ export const subscriptions = pgTable(
     status: subscriptionStatusEnum("status").notNull().default("active"),
     startedOn: date("started_on").notNull(),
     endedOn: date("ended_on"),
+
+    /**
+     * The processor holding the recurring mandate, when there is one.
+     *
+     * `recurringEnabledAt` records that the *client* turned on automatic
+     * payments, which is a separate fact from the subscription existing: a
+     * client can be on a monthly plan and still pay by hand each month. The
+     * dunning ladder needs to know the difference, because chasing someone
+     * whose card is on file means something has failed, not that they forgot.
+     */
+    provider: text("provider"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    recurringEnabledAt: timestamp("recurring_enabled_at", {
+      withTimezone: true,
+    }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -134,6 +204,56 @@ export const subscriptions = pgTable(
     check(
       "subscriptions_period_order",
       sql`${t.endedOn} IS NULL OR ${t.endedOn} >= ${t.startedOn}`,
+    ),
+  ],
+);
+
+/**
+ * One client's change allowance for one calendar month.
+ *
+ * A row is created lazily on the first submission of a period and never
+ * back-filled, so the table records months in which something actually
+ * happened rather than a row per client per month forever.
+ *
+ * `included` is **copied** from the plan at period creation rather than joined
+ * at read time. A mid-month plan change must not retroactively alter how many
+ * changes a client already had — someone who used three of three and then
+ * downgraded to a one-change plan has not suddenly overspent by two.
+ */
+export const changeAllowances = pgTable(
+  "change_allowances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    subscriptionId: uuid("subscription_id").references(() => subscriptions.id, {
+      onDelete: "set null",
+    }),
+    /** First day of the period, in the business timezone. The period key. */
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    /** Null means unlimited, matching `service_plans`. */
+    included: integer("included"),
+    used: integer("used").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // The uniqueness that makes the atomic claim-or-refuse upsert possible.
+    uniqueIndex("change_allowances_client_period_key").on(
+      t.clientId,
+      t.periodStart,
+    ),
+    check("change_allowances_used_non_negative", sql`${t.used} >= 0`),
+    check(
+      "change_allowances_included_non_negative",
+      sql`${t.included} IS NULL OR ${t.included} >= 0`,
+    ),
+    check(
+      "change_allowances_period_order",
+      sql`${t.periodEnd} >= ${t.periodStart}`,
     ),
   ],
 );
@@ -218,6 +338,24 @@ export const paymentRequests = pgTable(
 
     status: paymentRequestStatusEnum("status").notNull().default("open"),
     method: paymentMethodEnum("method"),
+
+    /**
+     * Hosted checkout, when the request is payable through a processor.
+     *
+     * `checkoutUrl` is stored rather than regenerated per page load because
+     * Square's payment links are durable objects with their own ids — minting a
+     * fresh one each time the client opens the billing page would leave a trail
+     * of orphaned links and make reconciliation ambiguous when two of them are
+     * paid.
+     *
+     * `providerReference` is whatever the processor calls this request on their
+     * side (a payment link id). The *payment* that eventually arrives carries
+     * its own reference in `payments.providerReference`; these are different
+     * objects and conflating them is how a refund gets matched to the wrong row.
+     */
+    provider: text("provider"),
+    providerReference: text("provider_reference"),
+    checkoutUrl: text("checkout_url"),
 
     /**
      * Set when the client presses "Pay with Venmo". It records intent only —

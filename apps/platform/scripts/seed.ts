@@ -74,16 +74,38 @@ async function main() {
     .insert(servicePlans)
     .values([
       {
+        key: "care-lite",
+        name: "Care — Lite",
+        description: "Hosting, security updates, and one content change a month.",
+        defaultMonthlyCents: 4900,
+        includedChangesPerMonth: 1,
+        overagePerChangeCents: 4900,
+        // Deliberately no analytics: the plan a client upgrades *from* has to
+        // be missing something they want, or the upgrade prompt is dishonest.
+        includesAnalytics: false,
+        sortOrder: 10,
+      },
+      {
         key: "care-basic",
         name: "Care — Basic",
-        description: "Hosting, security updates, and monthly content edits.",
+        description:
+          "Hosting, security updates, analytics, and three changes a month.",
         defaultMonthlyCents: 9900,
+        includedChangesPerMonth: 3,
+        overagePerChangeCents: 3900,
+        includesAnalytics: true,
+        sortOrder: 20,
       },
       {
         key: "care-plus",
         name: "Care — Plus",
-        description: "Basic plus analytics reporting and priority turnaround.",
+        description:
+          "Basic plus priority turnaround and ten changes a month.",
         defaultMonthlyCents: 19900,
+        includedChangesPerMonth: 10,
+        overagePerChangeCents: 2900,
+        includesAnalytics: true,
+        sortOrder: 30,
       },
     ])
     .onConflictDoNothing()

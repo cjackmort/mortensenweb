@@ -81,6 +81,7 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "card",
   "bank_transfer",
   "stripe",
+  "square",
   "other",
 ]);
 
@@ -316,4 +317,68 @@ export const notificationStatusEnum = pgEnum("notification_status", [
   "sent",
   "failed",
   "suppressed",
+]);
+
+// ---- Commercial entitlements ----------------------------------------------
+
+/**
+ * How a change request is paid for.
+ *
+ * Recorded on the request at submission time rather than computed later,
+ * because the answer depends on the allowance state *at that moment* and a
+ * later recomputation would give a different — and unbillable — answer.
+ *
+ * `courtesy` exists because it will be needed: a change we got wrong, or a
+ * goodwill gesture, must be distinguishable in the ledger from one the client
+ * paid for. Without it the only way to not charge someone is to quietly skip
+ * the accounting, which is how revenue figures stop being true.
+ */
+export const billingTreatmentEnum = pgEnum("billing_treatment", [
+  "included",
+  "overage",
+  "courtesy",
+]);
+
+// ---- Briefs ---------------------------------------------------------------
+
+/**
+ * Where a brief came from. The distinction matters for what the agent is told:
+ * a `discovery` brief describes a site being built for the first time, a
+ * `revision` brief describes changing one that exists.
+ */
+export const briefKindEnum = pgEnum("brief_kind", ["discovery", "revision"]);
+
+export const briefStatusEnum = pgEnum("brief_status", [
+  "draft",
+  "submitted",
+  "dispatched",
+  "applied",
+  "cancelled",
+]);
+
+// ---- Previews -------------------------------------------------------------
+
+/**
+ * What a preview deployment is a preview *of*.
+ *
+ * A prospect concept and a pull request preview have different lifetimes,
+ * different audiences, and different deletion rules, and telling them apart in
+ * a query is worth an explicit column.
+ */
+export const previewKindEnum = pgEnum("preview_kind", [
+  "concept",
+  "pull_request",
+  "production",
+]);
+
+/**
+ * The client's verdict on a preview.
+ *
+ * `pending` is not a decision — it is the absence of one, and the Apply path
+ * refuses to merge anything that is not explicitly `approved`.
+ */
+export const previewDecisionEnum = pgEnum("preview_decision", [
+  "pending",
+  "approved",
+  "changes_requested",
 ]);
