@@ -43,6 +43,13 @@
       "when": 1786956176937,
       "tag": "0005_chilly_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786960258589,
+      "tag": "0006_narrow_serpent_society",
+      "breakpoints": true
     }
   ]
 }

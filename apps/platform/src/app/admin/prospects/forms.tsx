@@ -18,6 +18,12 @@ import {
  * list of prospects below the fold on a laptop.
  */
 
+export interface ReferenceOption {
+  fullName: string;
+  name: string;
+  description: string | null;
+}
+
 interface PlanOption {
   key: string;
   name: string;
@@ -67,7 +73,13 @@ function Result({ state }: { state: ProspectResult | null }) {
   );
 }
 
-export function NewProspectForm({ plans }: { plans: PlanOption[] }) {
+export function NewProspectForm({
+  plans,
+  references,
+}: {
+  plans: PlanOption[];
+  references: ReferenceOption[];
+}) {
   const [state, formAction, pending] = useActionState<
     ProspectResult | null,
     FormData
@@ -108,6 +120,29 @@ export function NewProspectForm({ plans }: { plans: PlanOption[] }) {
         This decides what the demo shows — a plan without analytics
         shouldn&rsquo;t be pitched with an analytics dashboard.
       </p>
+
+      <label htmlFor="referenceRepo">Base it on one of your sites</label>
+      <select id="referenceRepo" name="referenceRepo" defaultValue="">
+        <option value="">Start from the blank template</option>
+        {references.map((repo) => (
+          <option key={repo.fullName} value={repo.fullName}>
+            {repo.name}
+            {repo.description ? ` — ${repo.description}` : ""}
+          </option>
+        ))}
+      </select>
+      {references.length === 0 ? (
+        <p className="field-hint">
+          No reference sites yet. Tick <em>Template repository</em> in any of
+          your site repos&rsquo; settings and it will appear here.
+        </p>
+      ) : (
+        <p className="field-hint">
+          The concept starts as a copy of the site you pick, so the agent is
+          changing content rather than inventing a design. Only repositories
+          marked as templates on GitHub can be used.
+        </p>
+      )}
 
       <label htmlFor="sourceWebsiteUrl">Current website</label>
       <input

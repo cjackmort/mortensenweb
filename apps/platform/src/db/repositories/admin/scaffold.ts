@@ -58,6 +58,13 @@ export interface ScaffoldInput {
   /** Prefix distinguishing a prospect concept from a client site. */
   namePrefix?: string;
   description?: string;
+  /**
+   * Generate from one of our own sites instead of the generic starter, as
+   * `owner/name`. The repository must be marked as a template on GitHub —
+   * `/generate` refuses anything else, with a 404 that reads like the repo
+   * does not exist.
+   */
+  templateRepo?: string;
 }
 
 export type ScaffoldOutcome =
@@ -104,9 +111,18 @@ export async function scaffoldSite(
   }
 
   const owner = process.env.GITHUB_REPO_OWNER;
-  const templateOwner = process.env.GITHUB_TEMPLATE_OWNER ?? owner;
-  const templateName = process.env.GITHUB_TEMPLATE_REPO;
   const installationId = process.env.GITHUB_INSTALLATION_ID;
+
+  // A reference site wins over the configured default. Split rather than
+  // parsed loosely: a value without a slash is a configuration mistake, and
+  // silently treating it as a bare repo name under the default owner would
+  // generate from the wrong source without saying so.
+  const reference = input.templateRepo?.includes("/")
+    ? input.templateRepo.split("/")
+    : null;
+
+  const templateOwner = reference?.[0] ?? process.env.GITHUB_TEMPLATE_OWNER ?? owner;
+  const templateName = reference?.[1] ?? process.env.GITHUB_TEMPLATE_REPO;
 
   if (!owner || !templateName || !installationId) {
     return {

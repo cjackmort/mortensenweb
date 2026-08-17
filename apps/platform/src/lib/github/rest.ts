@@ -323,3 +323,46 @@ export async function getCombinedStatus(
   );
   return { state: data?.state ?? "pending", total: data?.total_count ?? 0 };
 }
+
+/**
+ * Repositories that can be generated from.
+ *
+ * Backs the "base this on…" choice at prospect intake. Only repositories
+ * marked as templates are listed, because `/generate` refuses anything else —
+ * and refuses it with a 404 that reads as though the repository does not
+ * exist, which is a genuinely confusing way to learn you forgot a checkbox.
+ * Offering only valid choices removes the failure rather than explaining it.
+ */
+export interface TemplateRepo {
+  owner: string;
+  name: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+}
+
+export async function listTemplateRepos(
+  installationId: string,
+): Promise<TemplateRepo[]> {
+  const { data } = await githubRequest<{
+    repositories?: Array<{
+      name: string;
+      full_name: string;
+      description: string | null;
+      private: boolean;
+      is_template?: boolean;
+      owner: { login: string };
+    }>;
+  }>(installationId, "/installation/repositories?per_page=100");
+
+  return (data?.repositories ?? [])
+    .filter((repo) => repo.is_template === true)
+    .map((repo) => ({
+      owner: repo.owner.login,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      private: repo.private,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
