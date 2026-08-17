@@ -16,6 +16,12 @@
   command = "npm run build"
   publish = ".next"
 
+# Scheduled functions live alongside the app rather than at the repository root,
+# because `base` above already scopes the build to `apps/platform` and a
+# functions directory outside it would not be picked up.
+[functions]
+  directory = "netlify/functions"
+
 [build.environment]
   # Match the engines constraint in the root package.json.
   NODE_VERSION = "20"
