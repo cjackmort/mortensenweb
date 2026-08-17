@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      SCAFFOLD NOTE — for whoever or whatever edits this next.
+
+      Every [PLACEHOLDER] below is deliberately unfilled. Do not invent a
+      value for one. A wrong phone number, a made-up licence number, or an
+      invented review does real harm to a real business, and is worse than an
+      obvious gap that gets filled in.
+
+      If a detail has not been confirmed, leave the placeholder and say so in
+      the pull request.
+    -->
+
+    <title>[BUSINESS NAME]</title>
+    <meta name="description" content="[ONE SENTENCE ABOUT THE BUSINESS]" />
+
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="/">[BUSINESS NAME]</a>
+        <nav aria-label="Main">
+          <a href="#services">Services</a>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <h1>[HEADLINE — what they do, in plain words]</h1>
+          <p class="lede">[ONE OR TWO SENTENCES. Who they serve, and where.]</p>
+          <p>
+            <a class="button" href="#contact">Get in touch</a>
+          </p>
+        </div>
+      </section>
+
+      <section id="services" class="section">
+        <div class="wrap">
+          <h2>What we do</h2>
+          <div class="cards">
+            <article class="card">
+              <h3>[SERVICE ONE]</h3>
+              <p>[A sentence or two describing it.]</p>
+            </article>
+            <article class="card">
+              <h3>[SERVICE TWO]</h3>
+              <p>[A sentence or two describing it.]</p>
+            </article>
+            <article class="card">
+              <h3>[SERVICE THREE]</h3>
+              <p>[A sentence or two describing it.]</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="about" class="section section-alt">
+        <div class="wrap narrow">
+          <h2>About us</h2>
+          <p>[A short paragraph. How long they have been going, what they care about.]</p>
+        </div>
+      </section>
+
+      <section id="contact" class="section">
+        <div class="wrap narrow">
+          <h2>Get in touch</h2>
+          <dl class="contact">
+            <dt>Phone</dt>
+            <dd><a href="tel:[PHONE]">[PHONE]</a></dd>
+            <dt>Email</dt>
+            <dd><a href="mailto:[EMAIL]">[EMAIL]</a></dd>
+            <dt>Area</dt>
+            <dd>[SERVICE AREA]</dd>
+            <dt>Hours</dt>
+            <dd>[OPENING HOURS]</dd>
+          </dl>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>&copy; <span id="year">2026</span> [BUSINESS NAME]. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script>
+      // Keeps the copyright current without a build step or a dependency.
+      document.getElementById("year").textContent = new Date().getFullYear();
+    </script>
+  </body>
+</html>

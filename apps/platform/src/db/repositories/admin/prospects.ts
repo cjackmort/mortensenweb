@@ -12,6 +12,8 @@ import {
   siteBriefs,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { isGithubConfigured } from "@/lib/github/app";
+import { listTemplateRepos } from "@/lib/github/rest";
 import { scaffoldSite } from "./scaffold";
 import { dispatchBrief } from "./briefs";
 import type { AdminContext } from "../context";
@@ -49,6 +51,8 @@ export interface NewProspectInput {
   notes?: string;
   /** The plan being pitched. Decides what the demo should show. */
   planKey?: string;
+  /** `owner/name` of one of our sites to base the concept on. */
+  referenceRepo?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
@@ -148,6 +152,7 @@ export async function createProspect(
       tone: input.tone?.trim() || null,
       notes: input.notes?.trim() || null,
       planId,
+      referenceRepo: input.referenceRepo?.trim() || null,
       status: "new",
       createdBy: ctx.userId,
     })
@@ -221,6 +226,7 @@ export async function buildConcept(
       location: prospects.location,
       serviceArea: prospects.serviceArea,
       notes: prospects.notes,
+      referenceRepo: prospects.referenceRepo,
       status: prospects.status,
       planName: servicePlans.name,
       planIncludesAnalytics: servicePlans.includesAnalytics,
@@ -262,6 +268,7 @@ export async function buildConcept(
     isPrivate: true,
     namePrefix: "concept",
     description: `Concept site for ${prospect.businessName} (prospect ${prospect.publicId.slice(0, 8)})`,
+    templateRepo: prospect.referenceRepo ?? undefined,
   });
 
   if (!scaffold.ok) {
@@ -396,6 +403,25 @@ export async function listProspectsDetailed(_ctx: AdminContext, db: Database) {
     .leftJoin(servicePlans, eq(servicePlans.id, prospects.planId))
     .where(isNull(prospects.archivedAt))
     .orderBy(desc(prospects.updatedAt));
+}
+
+/**
+ * Our own sites that a concept can be based on.
+ *
+ * Returns an empty list rather than throwing when GitHub is unconfigured or
+ * unreachable: the prospect form must still render, and "no reference sites
+ * available" is a state the operator can act on, whereas a crashed page is not.
+ */
+export async function listReferenceSites() {
+  const installationId = process.env.GITHUB_INSTALLATION_ID;
+  if (!installationId || !isGithubConfigured()) return [];
+
+  try {
+    return await listTemplateRepos(installationId);
+  } catch (error) {
+    console.error("[prospects] could not list template repositories", error);
+    return [];
+  }
 }
 
 /** Plans an operator can pitch, cheapest first. */

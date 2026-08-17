@@ -6,6 +6,7 @@ import { adminContextFrom } from "@/db/repositories/context";
 import {
   listActivePlans,
   listProspectsDetailed,
+  listReferenceSites,
 } from "@/db/repositories/admin/prospects";
 import { isGithubConfigured } from "@/lib/github/app";
 import { isNetlifyConfigured } from "@/lib/netlify/api";
@@ -53,9 +54,10 @@ export default async function AdminProspectsPage() {
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const [prospects, plans] = await Promise.all([
+  const [prospects, plans, references] = await Promise.all([
     listProspectsDetailed(ctx, db),
     listActivePlans(db),
+    listReferenceSites(),
   ]);
 
   const githubReady = isGithubConfigured();
@@ -96,6 +98,11 @@ export default async function AdminProspectsPage() {
             defaultMonthlyCents: plan.defaultMonthlyCents,
             includedChangesPerMonth: plan.includedChangesPerMonth,
             includesAnalytics: plan.includesAnalytics,
+          }))}
+          references={references.map((repo) => ({
+            fullName: repo.fullName,
+            name: repo.name,
+            description: repo.description,
           }))}
         />
 

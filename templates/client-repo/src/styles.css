@@ -1,0 +1,200 @@
+/*
+ * Starting styles.
+ *
+ * Deliberately plain and small. This is a starting point a theme replaces, not
+ * a design — and a few hundred lines an agent can read in full is easier to
+ * change correctly than a framework it has to reason about.
+ *
+ * Everything tunable is a custom property at the top. "Make the buttons the
+ * green from our van" should be one line changed here, not a hunt through
+ * rules.
+ */
+
+:root {
+  --brand: #1f5f4b;
+  --brand-dark: #164636;
+  --ink: #1c1917;
+  --ink-soft: #4a443d;
+  --muted: #6b6660;
+  --bg: #ffffff;
+  --bg-alt: #f6f5f2;
+  --line: #e3ded6;
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wrap: 68rem;
+  --radius: 8px;
+
+  /* iOS will zoom a form field under 16px on focus. */
+  --base-size: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--base-size);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.wrap {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.wrap.narrow {
+  max-width: 42rem;
+}
+
+/* Visible only once focused — keyboard users can jump the nav. */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  z-index: 10;
+}
+
+.skip:focus {
+  left: 0;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  margin-left: 1.25rem;
+}
+
+nav a:hover,
+nav a:focus {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.hero {
+  padding: 4rem 0 3rem;
+  background: var(--bg-alt);
+}
+
+.hero h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  line-height: 1.15;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--ink-soft);
+  max-width: 38rem;
+}
+
+.button {
+  display: inline-block;
+  background: var(--brand);
+  color: #fff;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 650;
+  /* 44px is the smallest reliably tappable target on a phone. */
+  min-height: 44px;
+}
+
+.button:hover,
+.button:focus {
+  background: var(--brand-dark);
+}
+
+.section {
+  padding: 3.5rem 0;
+}
+
+.section-alt {
+  background: var(--bg-alt);
+}
+
+h2 {
+  font-size: 1.75rem;
+  margin-top: 0;
+}
+
+.cards {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  background: var(--bg);
+}
+
+.card h3 {
+  margin-top: 0;
+}
+
+.contact {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+
+.contact dt {
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.contact dd {
+  margin: 0;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 2rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 32rem) {
+  .contact {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .contact dd {
+    margin-bottom: 0.75rem;
+  }
+}

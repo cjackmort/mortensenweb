@@ -53,6 +53,18 @@ export const prospects = pgTable(
     planId: uuid("plan_id").references(() => servicePlans.id, {
       onDelete: "restrict",
     }),
+    /**
+     * One of our own repositories to base this concept on, as `owner/name`.
+     *
+     * The operator points at a site they have already built and are happy
+     * with; the new repository is generated from it, so the concept starts as
+     * a working copy of known-good work rather than a generic starter. The
+     * agent's task then shrinks from "build a website" to "replace the
+     * content", which is a far more reliable thing to ask of it.
+     *
+     * Null falls back to the generic template.
+     */
+    referenceRepo: text("reference_repo"),
     location: text("location"),
     serviceArea: text("service_area"),
     tone: text("tone"),

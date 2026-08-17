@@ -49,6 +49,7 @@ export async function createProspectAction(
     tone: String(formData.get("tone") ?? ""),
     notes: String(formData.get("notes") ?? ""),
     planKey: String(formData.get("planKey") ?? "") || undefined,
+    referenceRepo: String(formData.get("referenceRepo") ?? "") || undefined,
     contactName: String(formData.get("contactName") ?? ""),
     contactEmail: String(formData.get("contactEmail") ?? ""),
     contactPhone: String(formData.get("contactPhone") ?? ""),
