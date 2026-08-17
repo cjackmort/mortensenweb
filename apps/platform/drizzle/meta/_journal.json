@@ -57,6 +57,13 @@
       "when": 1786961671853,
       "tag": "0007_previous_ulik",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786986944144,
+      "tag": "0008_unknown_genesis",
+      "breakpoints": true
     }
   ]
 }

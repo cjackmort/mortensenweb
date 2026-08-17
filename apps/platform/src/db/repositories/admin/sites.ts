@@ -180,6 +180,8 @@ export async function listSitesWithAnalytics(
       repoOwner: repositoryConnections.owner,
       repoName: repositoryConnections.name,
       automationEnabled: repositoryConnections.allowlisted,
+      repoDefaultBranch: repositoryConnections.defaultBranch,
+      previewUrlStyle: sites.previewUrlStyle,
     })
     .from(sites)
     .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))

@@ -123,6 +123,7 @@ async function allowlistedRepo(db: Database, repoNodeId: string) {
       defaultBranch: repositoryConnections.defaultBranch,
       siteId: repositoryConnections.siteId,
       netlifySiteName: sites.netlifySiteName,
+      previewUrlStyle: sites.previewUrlStyle,
       organizationId: sites.organizationId,
     })
     .from(repositoryConnections)
@@ -286,7 +287,7 @@ async function handlePullRequest(
   // does not resolve until the deploy finishes. It is stored now and shown only
   // once verified — see the `previewVerifiedAt` gate below.
   const previewUrl = repo.netlifySiteName
-    ? previewUrlFor(repo.netlifySiteName, pr.number)
+    ? previewUrlFor(repo.netlifySiteName, pr.number, repo.previewUrlStyle ?? "pr_alias")
     : null;
 
   await db
