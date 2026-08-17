@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "@/db/client";
 import {
   changeAllowances,
@@ -42,6 +43,8 @@ export interface Entitlements {
   squarePlanVariationId: string | null;
   /** Whether the client has switched on automatic monthly payment. */
   recurringEnabled: boolean;
+  /** True when an operator has granted this plan rather than it being paid for. */
+  comped: boolean;
 }
 
 /**
@@ -51,6 +54,9 @@ export interface Entitlements {
  * repository function — this is read by the client's own dashboard, so it
  * cannot be a cross-tenant primitive.
  */
+/** Second reference to service_plans, for the comp override. */
+const compPlan = alias(servicePlans, "comp_plan");
+
 export async function getEntitlements(
   db: Database,
   ctx: TenantContext,
@@ -67,6 +73,17 @@ export async function getEntitlements(
       squarePlanVariationId: servicePlans.squarePlanVariationId,
       monthlyPriceCents: subscriptions.monthlyPriceCents,
       recurringEnabledAt: subscriptions.recurringEnabledAt,
+
+      // The override, joined separately so the paid plan is still visible.
+      // Reading only the effective plan would lose what they would be on if
+      // the comp were withdrawn, which is exactly what an operator wants to
+      // see when deciding whether to withdraw it.
+      compPlanId: clients.compPlanId,
+      compKey: compPlan.key,
+      compName: compPlan.name,
+      compIncluded: compPlan.includedChangesPerMonth,
+      compOverage: compPlan.overagePerChangeCents,
+      compIncludesAnalytics: compPlan.includesAnalytics,
     })
     .from(clients)
     .leftJoin(
@@ -77,23 +94,38 @@ export async function getEntitlements(
       ),
     )
     .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .leftJoin(compPlan, eq(compPlan.id, clients.compPlanId))
     .where(eq(clients.organizationId, ctx.organizationId))
     .limit(1);
 
   const row = rows[0];
   if (!row) return null;
 
+  // A comp unlocks outright. Requiring the timestamps as well would mean an
+  // operator granting one and finding it did nothing — the override exists
+  // precisely for clients who have not paid and are not going to.
+  const comped = row.compPlanId !== null;
+
   return {
-    analyticsUnlocked: row.analyticsUnlockedAt !== null,
-    changeRequestsUnlocked: row.changeRequestsUnlockedAt !== null,
-    planKey: row.planKey,
-    planName: row.planName,
+    analyticsUnlocked: comped || row.analyticsUnlockedAt !== null,
+    changeRequestsUnlocked: comped || row.changeRequestsUnlockedAt !== null,
+    planKey: row.compKey ?? row.planKey,
+    planName: row.compName ?? row.planName,
+    // Deliberately still their real price. A comp changes what they receive,
+    // not what the plan costs, and showing £0 would make the ledger and the
+    // dashboard disagree about the same client.
     monthlyPriceCents: row.monthlyPriceCents,
-    includedChangesPerMonth: row.includedChangesPerMonth,
-    overagePerChangeCents: row.overagePerChangeCents,
-    planIncludesAnalytics: row.planIncludesAnalytics ?? true,
+    includedChangesPerMonth: comped
+      ? row.compIncluded
+      : row.includedChangesPerMonth,
+    // No overage on a comp. Charging per change beyond an allowance nobody is
+    // paying for is not a coherent thing to offer.
+    overagePerChangeCents: comped ? null : row.overagePerChangeCents,
+    planIncludesAnalytics:
+      (comped ? row.compIncludesAnalytics : row.planIncludesAnalytics) ?? true,
     squarePlanVariationId: row.squarePlanVariationId,
     recurringEnabled: row.recurringEnabledAt !== null,
+    comped,
   };
 }
 
@@ -131,7 +163,7 @@ export async function getAllowance(
   const rows = await db
     .select({
       clientId: clients.id,
-      included: servicePlans.includedChangesPerMonth,
+      included: sql<number | null>`case when ${clients.compPlanId} is not null then ${compPlan.includedChangesPerMonth} else ${servicePlans.includedChangesPerMonth} end`,
       overagePerChangeCents: servicePlans.overagePerChangeCents,
     })
     .from(clients)
@@ -143,6 +175,7 @@ export async function getAllowance(
       ),
     )
     .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .leftJoin(compPlan, eq(compPlan.id, clients.compPlanId))
     .where(eq(clients.organizationId, ctx.organizationId))
     .limit(1);
 
@@ -219,7 +252,7 @@ export async function consumeChange(
     .select({
       clientId: clients.id,
       subscriptionId: subscriptions.id,
-      included: servicePlans.includedChangesPerMonth,
+      included: sql<number | null>`case when ${clients.compPlanId} is not null then ${compPlan.includedChangesPerMonth} else ${servicePlans.includedChangesPerMonth} end`,
       overagePerChangeCents: servicePlans.overagePerChangeCents,
     })
     .from(clients)
@@ -231,6 +264,7 @@ export async function consumeChange(
       ),
     )
     .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .leftJoin(compPlan, eq(compPlan.id, clients.compPlanId))
     .where(eq(clients.organizationId, ctx.organizationId))
     .limit(1);
 

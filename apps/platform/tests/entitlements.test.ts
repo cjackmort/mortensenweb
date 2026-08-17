@@ -395,3 +395,97 @@ describe("change allowance", () => {
     expect(augustState?.used).toBe(3);
   });
 });
+
+describe("comped plans", () => {
+  /**
+   * An operator granting a plan without payment.
+   *
+   * The case this exists for is a client who has not paid and is not going to
+   * — family, a friend of the business, someone owed an apology. Before it,
+   * the only route to a working account was a confirmed payment, which made
+   * those clients unserviceable rather than free.
+   */
+
+  async function compWith(key: string | null) {
+    const plan = key
+      ? (
+          await db
+            .select({ id: servicePlans.id })
+            .from(servicePlans)
+            .where(eq(servicePlans.key, key))
+            .limit(1)
+        )[0]!
+      : null;
+
+    await db
+      .update(clients)
+      .set({ compPlanId: plan?.id ?? null })
+      .where(eq(clients.id, basic.clientId));
+  }
+
+  it("unlocks without any payment at all", async () => {
+    // The timestamps stay null throughout: nothing was paid, and requiring
+    // them would mean an operator granting a comp and finding it did nothing.
+    await db
+      .update(clients)
+      .set({ analyticsUnlockedAt: null, changeRequestsUnlockedAt: null })
+      .where(eq(clients.id, basic.clientId));
+
+    let ent = await getEntitlements(db, basic.ctx);
+    expect(ent?.changeRequestsUnlocked).toBe(false);
+
+    await compWith("care-basic");
+
+    ent = await getEntitlements(db, basic.ctx);
+    expect(ent?.changeRequestsUnlocked).toBe(true);
+    expect(ent?.analyticsUnlocked).toBe(true);
+    expect(ent?.comped).toBe(true);
+  });
+
+  it("takes its allowance from the comped plan, not the paid one", async () => {
+    await db.insert(servicePlans).values({
+      key: "unlimited-comp",
+      name: "Unlimited",
+      defaultMonthlyCents: 0,
+      includedChangesPerMonth: null,
+      overagePerChangeCents: null,
+      includesAnalytics: true,
+    });
+
+    await compWith("unlimited-comp");
+
+    const ent = await getEntitlements(db, basic.ctx);
+    // Unlimited, from the comp — regardless of what their subscription says.
+    expect(ent?.includedChangesPerMonth).toBeNull();
+
+    const allowance = await getAllowance(db, basic.ctx);
+    expect(allowance?.included).toBeNull();
+  });
+
+  it("offers no overage, because there is no bill to add to", async () => {
+    await compWith("care-basic");
+    const ent = await getEntitlements(db, basic.ctx);
+    expect(ent?.overagePerChangeCents).toBeNull();
+  });
+
+  it("still reports the real price, so the ledger and the dashboard agree", async () => {
+    const before = (await getEntitlements(db, basic.ctx))?.monthlyPriceCents;
+    await compWith("care-basic");
+    expect((await getEntitlements(db, basic.ctx))?.monthlyPriceCents).toBe(before);
+  });
+
+  it("returns to following payment when withdrawn", async () => {
+    await db
+      .update(clients)
+      .set({ analyticsUnlockedAt: null, changeRequestsUnlockedAt: null })
+      .where(eq(clients.id, basic.clientId));
+
+    await compWith("care-basic");
+    expect((await getEntitlements(db, basic.ctx))?.changeRequestsUnlocked).toBe(true);
+
+    await compWith(null);
+    const ent = await getEntitlements(db, basic.ctx);
+    expect(ent?.changeRequestsUnlocked).toBe(false);
+    expect(ent?.comped).toBe(false);
+  });
+});

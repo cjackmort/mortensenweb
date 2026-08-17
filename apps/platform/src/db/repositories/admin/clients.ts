@@ -1,6 +1,8 @@
+import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  servicePlans,
   auditLog,
   changeRequests,
   clients,
@@ -310,4 +312,46 @@ export async function listAllChangeRequests(
     )
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 100);
+}
+
+/**
+ * The comp override as an operator needs to see it.
+ *
+ * Returns the paid plan alongside the granted one, because the question when
+ * withdrawing a comp is "what would they drop to?" — and answering it from the
+ * effective plan alone is impossible.
+ */
+export async function getClientComp(
+  ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+): Promise<{
+  compPlanKey: string | null;
+  compNote: string | null;
+  paidPlanName: string | null;
+} | null> {
+  void ctx;
+
+  const compPlan = alias(servicePlans, "comp_plan_admin");
+
+  const rows = await db
+    .select({
+      compPlanKey: compPlan.key,
+      compNote: clients.compNote,
+      paidPlanName: servicePlans.name,
+    })
+    .from(clients)
+    .leftJoin(compPlan, eq(compPlan.id, clients.compPlanId))
+    .leftJoin(
+      subscriptions,
+      and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
