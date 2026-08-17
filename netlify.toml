@@ -28,6 +28,20 @@
   # The portal is small; the default is generous but be explicit.
   NEXT_TELEMETRY_DISABLED = "1"
 
+  # Turbopack's incremental build cache records the values of environment
+  # variables it saw, and `publish` is `.next`, so that cache is uploaded with
+  # the deploy. Secrets scanning finds real credentials in it and fails the
+  # build — correctly, since a token sitting in an uploaded artifact is a
+  # genuine exposure even though nothing serves it.
+  #
+  # Omitting only the cache keeps scanning over everything that actually ships,
+  # which is where a leak would matter. Disabling the scan wholesale would
+  # trade a real protection for a convenience.
+  #
+  # `.next/cache` is build-time state, not served content; Netlify's Next.js
+  # plugin decides what gets served, and it is never from here.
+  SECRETS_SCAN_OMIT_PATHS = ".next/cache/**"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
