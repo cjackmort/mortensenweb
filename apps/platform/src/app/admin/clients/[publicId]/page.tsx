@@ -12,9 +12,20 @@ import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import { listClientPaymentRequests } from "@/db/repositories/admin/billing";
 import { isUmamiConfigured } from "@/lib/analytics/umami";
 import { formatCurrency } from "@/lib/payments/venmo";
+import { listBriefs } from "@/db/repositories/admin/briefs";
 import { ActivateForm, ReissueForm } from "./credential-forms";
 import { AddSiteForm, ConnectAnalyticsForm } from "./site-forms";
 import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
+import { BriefForm, DispatchBriefForm } from "./brief-forms";
+import { LaunchPanel } from "./launch-forms";
+
+const BRIEF_PILL: Record<string, string> = {
+  draft: "pill-neutral",
+  submitted: "pill-info",
+  dispatched: "pill-accent",
+  applied: "pill-success",
+  cancelled: "pill-neutral",
+};
 
 const INVOICE_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -62,10 +73,11 @@ export default async function ClientDetailPage({
     throw error;
   }
 
-  const [portalUsers, siteRows, invoices] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs] = await Promise.all([
     listOrganizationUsers(ctx, db, detail.organization.id),
     listSitesWithAnalytics(ctx, db, detail.organization.id),
     listClientPaymentRequests(ctx, db, detail.organization.id),
+    listBriefs(ctx, db, detail.organization.id),
   ]);
 
   const { client, organization, subscription, requests } = detail;
@@ -221,6 +233,14 @@ export default async function ClientDetailPage({
                 <dd>{site.primaryDomain ?? "—"}</dd>
                 <dt>Status</dt>
                 <dd>{site.status}</dd>
+                <dt>Repository</dt>
+                <dd>
+                  {site.repoOwner
+                    ? `${site.repoOwner}/${site.repoName}`
+                    : "not connected"}
+                </dd>
+                <dt>Hosting</dt>
+                <dd>{site.netlifySiteName ?? "not set up"}</dd>
               </dl>
 
               <ConnectAnalyticsForm
@@ -228,6 +248,20 @@ export default async function ClientDetailPage({
                 sitePublicId={site.publicId}
                 currentWebsiteId={site.umamiWebsiteId}
               />
+
+              <div style={{ marginTop: "1.5rem" }}>
+                <h3 style={{ fontSize: "0.95rem" }}>Launch</h3>
+                <LaunchPanel
+                  sitePublicId={site.publicId}
+                  clientPublicId={client.publicId}
+                  domain={site.primaryDomain}
+                  status={site.status}
+                  dnsSentAt={site.dnsInstructionsSentAt}
+                  liveVerifiedAt={site.liveVerifiedAt}
+                  automationEnabled={site.automationEnabled ?? false}
+                  hasRepository={Boolean(site.repoOwner)}
+                />
+              </div>
             </div>
           ))
         )}
@@ -239,6 +273,86 @@ export default async function ClientDetailPage({
             <code>UMAMI_API_BASE_URL</code> and <code>UMAMI_API_KEY</code> are
             set in the environment.
           </p>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>What they asked for</h2>
+          <span className="muted">{briefs.length}</span>
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Type what came out of the call. Pressing <em>Save and build</em> hands
+          it to the agent, which opens a pull request and builds a preview — the
+          client approves that preview before anything goes live.
+        </p>
+
+        <div className="action-block">
+          <BriefForm
+            clientPublicId={client.publicId}
+            sites={siteRows.map((site) => ({
+              publicId: site.publicId,
+              name: site.name,
+            }))}
+            hasSite={siteRows.length > 0}
+          />
+        </div>
+
+        {briefs.length > 0 && (
+          <div className="table-wrap">
+            <table className="stack">
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Summary</th>
+                  <th>Status</th>
+                  <th>Written</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {briefs.map((brief) => (
+                  <tr key={brief.publicId}>
+                    <td data-label="Kind">{brief.kind}</td>
+                    <td data-label="Summary">
+                      {/* First line only. The full text is in the issue, and a
+                          wall of call notes in a table row helps nobody. */}
+                      {(
+                        brief.features ??
+                        brief.colourDirection ??
+                        brief.contentNotes ??
+                        brief.body ??
+                        ""
+                      )
+                        .split("\n")[0]
+                        ?.slice(0, 90) || "—"}
+                    </td>
+                    <td data-label="Status">
+                      <span
+                        className={`pill ${BRIEF_PILL[brief.status] ?? "pill-neutral"}`}
+                      >
+                        {brief.status}
+                      </span>
+                    </td>
+                    <td data-label="Written">
+                      {brief.createdAt.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td data-label="">
+                      {brief.status === "draft" && (
+                        <DispatchBriefForm
+                          briefPublicId={brief.publicId}
+                          clientPublicId={client.publicId}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

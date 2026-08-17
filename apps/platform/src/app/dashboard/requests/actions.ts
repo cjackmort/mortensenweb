@@ -7,6 +7,11 @@ import { tenantContextFrom } from "@/db/repositories/context";
 import { createChangeRequest } from "@/db/repositories/client/change-requests";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
 import {
+  consumeChange,
+  getEntitlements,
+  refundChange,
+} from "@/db/repositories/client/entitlements";
+import {
   MAX_ATTACHMENTS_PER_REQUEST,
   REJECTION_MESSAGES,
   validateImageUpload,
@@ -26,8 +31,27 @@ import {
  */
 
 export type RequestSubmission =
-  | { ok: true; publicId: string; attached: number; rejected: string[] }
-  | { ok: false; message: string };
+  | {
+      ok: true;
+      publicId: string;
+      attached: number;
+      rejected: string[];
+      /** Null when the plan is unlimited. Drives the "2 left this month" line. */
+      remaining: number | null;
+    }
+  /**
+   * The allowance is spent. Distinguished from a plain failure because the UI
+   * response is completely different: this is an offer (upgrade, or pay for
+   * this one), not an error, and the client has done nothing wrong.
+   */
+  | {
+      ok: false;
+      reason: "allowance_exhausted";
+      message: string;
+      included: number;
+      overagePerChangeCents: number | null;
+    }
+  | { ok: false; reason?: "locked" | "invalid"; message: string };
 
 export async function submitChangeRequest(
   _previous: RequestSubmission | null,
@@ -67,13 +91,61 @@ export async function submitChangeRequest(
     return { ok: false, message: REJECTION_MESSAGES.too_many };
   }
 
-  const created = await createChangeRequest(db, ctx, {
-    title,
-    description: description || undefined,
-    category: category as never,
-    priority: priority as never,
-    sitePublicId: sitePublicId || undefined,
-  });
+  // Gate one: has the commercial relationship started at all? Checked before
+  // the allowance because "you haven't paid yet" and "you're out of changes"
+  // are different conversations, and answering the second to someone who has
+  // not paid would be nonsense.
+  const entitlements = await getEntitlements(db, ctx);
+  if (entitlements && !entitlements.changeRequestsUnlocked) {
+    return {
+      ok: false,
+      reason: "locked",
+      message:
+        "Change requests unlock once your first payment goes through. Head to Billing to get set up.",
+    };
+  }
+
+  // Gate two: is there allowance left? This *consumes* it — the claim happens
+  // before the request is created, so two submissions racing for the last
+  // change cannot both win. If anything below fails, it is handed back.
+  const claim = await consumeChange(db, ctx);
+  if (!claim.ok) {
+    if (claim.reason === "no_client") {
+      return {
+        ok: false,
+        reason: "invalid",
+        message: "Your account is not linked to a client record yet. Please contact us.",
+      };
+    }
+    return {
+      ok: false,
+      reason: "allowance_exhausted",
+      message:
+        claim.included === 1
+          ? "You've used your change for this month."
+          : `You've used all ${claim.included} of your changes this month.`,
+      included: claim.included,
+      overagePerChangeCents: claim.overagePerChangeCents,
+    };
+  }
+
+  let created;
+  try {
+    created = await createChangeRequest(db, ctx, {
+      title,
+      description: description || undefined,
+      category: category as never,
+      priority: priority as never,
+      sitePublicId: sitePublicId || undefined,
+      allowanceId: claim.allowanceId,
+    });
+  } catch (error) {
+    // The allowance was claimed and the request was not created. Give it back —
+    // charging someone for a change that does not exist is a billing error they
+    // will notice and we would not.
+    await refundChange(db, claim.allowanceId);
+    throw error;
+  }
 
   // Photos are attached after the request exists, and a failure on one is
   // reported rather than thrown — the request itself is already saved.
@@ -92,5 +164,11 @@ export async function submitChangeRequest(
 
   revalidatePath("/dashboard/requests");
 
-  return { ok: true, publicId: created.publicId, attached, rejected };
+  return {
+    ok: true,
+    publicId: created.publicId,
+    attached,
+    rejected,
+    remaining: claim.remaining,
+  };
 }

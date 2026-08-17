@@ -26,6 +26,70 @@ interface SiteOption {
   name: string;
 }
 
+export interface AllowanceSummary {
+  /** Null means unlimited. */
+  included: number | null;
+  used: number;
+  remaining: number | null;
+  label: string;
+  overagePerChangeCents: number | null;
+}
+
+function formatMoney(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    // Whole dollars read better on a price than "$39.00" does.
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  }).format(cents / 100);
+}
+
+/**
+ * "2 of 3 changes left this month."
+ *
+ * Shown before someone starts typing, not after they submit. Discovering the
+ * limit at the point of sending — having already written the request and picked
+ * the photos — is the version of this that makes people angry.
+ */
+function AllowanceMeter({ allowance }: { allowance: AllowanceSummary }) {
+  if (allowance.included === null) {
+    return (
+      <p className="field-hint">
+        Your plan includes unlimited changes. You&rsquo;ve sent{" "}
+        {allowance.used} this month.
+      </p>
+    );
+  }
+
+  const remaining = allowance.remaining ?? 0;
+
+  return (
+    <p className={remaining === 0 ? "notice" : "field-hint"}>
+      {remaining === 0 ? (
+        <>
+          You&rsquo;ve used all {allowance.included}{" "}
+          {allowance.included === 1 ? "change" : "changes"} included in{" "}
+          {allowance.label}.
+          {allowance.overagePerChangeCents !== null && (
+            <>
+              {" "}
+              You can still send this one for{" "}
+              {formatMoney(allowance.overagePerChangeCents)}, or move to a plan
+              with more included.
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {remaining} of {allowance.included}{" "}
+          {allowance.included === 1 ? "change" : "changes"} left in{" "}
+          {allowance.label}.
+        </>
+      )}
+    </p>
+  );
+}
+
 const CATEGORIES = [
   { value: "content", label: "Text or content change" },
   { value: "design", label: "Design or layout" },
@@ -41,7 +105,16 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function RequestForm({ sites }: { sites: SiteOption[] }) {
+export function RequestForm({
+  sites,
+  allowance,
+  locked,
+}: {
+  sites: SiteOption[];
+  allowance: AllowanceSummary | null;
+  /** True until the first payment clears. The form is replaced, not disabled. */
+  locked: boolean;
+}) {
   const [state, formAction, pending] = useActionState<
     RequestSubmission | null,
     FormData
@@ -51,6 +124,10 @@ export function RequestForm({ sites }: { sites: SiteOption[] }) {
     { name: string; url: string; size: number }[]
   >([]);
   const formRef = useRef<HTMLFormElement>(null);
+
+  const exhausted = Boolean(
+    state && !state.ok && state.reason === "allowance_exhausted",
+  );
 
   function onPick(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -65,6 +142,29 @@ export function RequestForm({ sites }: { sites: SiteOption[] }) {
     );
   }
 
+  // Locked replaces the form rather than disabling it. A greyed-out form with
+  // an explanation underneath still invites someone to fill it in and find out
+  // it does not work.
+  if (locked) {
+    return (
+      <div className="card">
+        <div className="card-head">
+          <h2>Request a change</h2>
+        </div>
+        <div className="notice">
+          <p style={{ marginTop: 0 }}>
+            <strong>Change requests unlock once your first payment goes
+            through.</strong>
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            Head to <a href="/dashboard/billing">Billing</a> to get set up — it
+            takes a minute, and everything opens up straight afterwards.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (state?.ok) {
     return (
       <div className="card">
@@ -76,6 +176,13 @@ export function RequestForm({ sites }: { sites: SiteOption[] }) {
               {" "}
               {state.attached}{" "}
               {state.attached === 1 ? "photo was" : "photos were"} attached.
+            </>
+          )}
+          {typeof state.remaining === "number" && (
+            <>
+              {" "}
+              You have {state.remaining}{" "}
+              {state.remaining === 1 ? "change" : "changes"} left this month.
             </>
           )}
         </div>
@@ -121,7 +228,36 @@ export function RequestForm({ sites }: { sites: SiteOption[] }) {
         <h2>Request a change</h2>
       </div>
 
-      {state && !state.ok && <p className="error">{state.message}</p>}
+      {/* An exhausted allowance is an offer, not an error. Same information,
+          completely different tone — the client has done nothing wrong. */}
+      {exhausted && state && !state.ok && "overagePerChangeCents" in state ? (
+        <div className="notice">
+          <p style={{ marginTop: 0 }}>
+            <strong>{state.message}</strong>
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            {state.overagePerChangeCents !== null ? (
+              <>
+                You can send this one for{" "}
+                {formatMoney(state.overagePerChangeCents)}, or{" "}
+                <a href="/dashboard/billing">move to a bigger plan</a> if
+                you&rsquo;re making changes often.
+              </>
+            ) : (
+              <>
+                <a href="/dashboard/billing">Upgrading your plan</a> will give
+                you more each month.
+              </>
+            )}
+          </p>
+        </div>
+      ) : (
+        state && !state.ok && <p className="error">{state.message}</p>
+      )}
+
+      {/* Suppressed once the refusal notice is up: it carries the same figures
+          and the same offer, and showing both says it twice in a row. */}
+      {allowance && !exhausted && <AllowanceMeter allowance={allowance} />}
 
       <label htmlFor="title">What would you like changed?</label>
       <input

@@ -49,6 +49,12 @@ export default async function AdminOverview() {
 
   const needsAttention = awaiting.length + overdue.length + openRequests.length;
 
+  // Prospects still in play. Converted and declined ones are history, and
+  // counting them would make the pipeline look permanently busy.
+  const liveProspects = prospects.filter(
+    (p) => p.status !== "converted" && p.status !== "declined",
+  ).length;
+
   return (
     <AppShell user={user}>
       <main className="shell">
@@ -56,6 +62,18 @@ export default async function AdminOverview() {
           <h1>Overview</h1>
           <span className="muted">
             {clients.length} client{clients.length === 1 ? "" : "s"}
+            {/* The prospect count was already being queried here and thrown
+                away. Showing it is what the query was clearly fetched for, and
+                it is the number that answers "is there anything in the top of
+                the funnel" without a second page load. */}
+            {liveProspects > 0 && (
+              <>
+                {" · "}
+                <Link href="/admin/prospects">
+                  {liveProspects} in the pipeline
+                </Link>
+              </>
+            )}
           </span>
         </div>
 
@@ -184,17 +202,18 @@ export default async function AdminOverview() {
           </div>
           <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.9rem" }}>
             <li>
-              <strong>Automatic reminders.</strong> The dunning ladder is written
-              and tested, but nothing runs it on a schedule — chasing is manual
-              from the Payments page.
+              <strong>Prospect site audits.</strong> Concept building works;
+              crawling a prospect&rsquo;s existing site to extract facts does
+              not. Briefs are typed by hand until it does.
             </li>
             <li>
-              <strong>Prospect pipeline.</strong> The table and statuses exist;
-              crawling, concept generation, and outreach do not.
+              <strong>Square payments.</strong> Checkout links and signature
+              verification are built and tested; the webhook route that receives
+              them is not, so Square payments still need confirming by hand.
             </li>
             <li>
-              <strong>Theme library.</strong> Stage 4. Nothing to show an
-              interface for yet.
+              <strong>Theme library.</strong> Stage 4. A scaffolded site is
+              whatever the template repository contains.
             </li>
           </ul>
           <p className="muted" style={{ fontSize: "0.85rem", margin: "0.75rem 0 0" }}>

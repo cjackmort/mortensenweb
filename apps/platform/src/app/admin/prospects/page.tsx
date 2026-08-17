@@ -3,32 +3,46 @@ import { currentUser } from "@/auth";
 import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
-import { listProspects } from "@/db/repositories/admin/clients";
+import {
+  listActivePlans,
+  listProspectsDetailed,
+} from "@/db/repositories/admin/prospects";
+import { isGithubConfigured } from "@/lib/github/app";
+import { isNetlifyConfigured } from "@/lib/netlify/api";
+import {
+  BuildConceptForm,
+  NewProspectForm,
+  ShareConceptForm,
+} from "./forms";
 
 export const dynamic = "force-dynamic";
 
 const PROSPECT_PILL: Record<string, string> = {
-  discovered: "pill-neutral",
+  new: "pill-neutral",
+  auditing: "pill-info",
   audited: "pill-info",
-  concept_generated: "pill-accent",
-  contacted: "pill-warning",
-  responded: "pill-accent",
+  concept_pending: "pill-warning",
+  concept_ready: "pill-accent",
+  shared: "pill-accent",
   converted: "pill-success",
-  rejected: "pill-neutral",
-  archived: "pill-neutral",
+  declined: "pill-neutral",
+  expired: "pill-neutral",
 };
+
+/** Statuses at which a demo exists and could be shown to someone. */
+const SHAREABLE = new Set(["concept_pending", "concept_ready", "shared"]);
 
 /**
  * Potential clients.
  *
- * Admin-only by construction: there is no client-facing repository anywhere in
- * the codebase that reads the `prospects` table, so this data cannot leak into
- * a tenant surface even by mistake.
+ * Admin-only by construction: no client-facing repository anywhere in the
+ * codebase reads the `prospects` table, so this data cannot reach a tenant
+ * surface even by mistake.
  *
- * Read-only for now. The concept-generation pipeline that fills this table is
- * Stage 3 proper — crawling a prospect's existing site, generating a concept,
- * and tracking outreach. What exists today is the table and its status field,
- * so this page shows what is there rather than pretending to more.
+ * The page is the front of the funnel — add a business, pick the plan you mean
+ * to pitch, have a demo built, then approve it and get a link to send. Every
+ * step after "build" is gated on an operator pressing something; nothing here
+ * contacts anybody.
  */
 export default async function AdminProspectsPage() {
   const user = await currentUser();
@@ -38,7 +52,14 @@ export default async function AdminProspectsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const prospects = await listProspects(ctx, db);
+
+  const [prospects, plans] = await Promise.all([
+    listProspectsDetailed(ctx, db),
+    listActivePlans(db),
+  ]);
+
+  const githubReady = isGithubConfigured();
+  const netlifyReady = isNetlifyConfigured();
 
   return (
     <AppShell user={user}>
@@ -48,73 +69,105 @@ export default async function AdminProspectsPage() {
           <span className="muted">{prospects.length}</span>
         </div>
 
-        <section className="card">
-          {prospects.length === 0 ? (
+        {/* Both are named because they fail at different points and the
+            distinction decides what an operator should do next. */}
+        {(!githubReady || !netlifyReady) && (
+          <p className="notice">
+            <strong>Demo building is partly unavailable.</strong>{" "}
+            {!githubReady && (
+              <>
+                The GitHub App isn&rsquo;t configured, so no repository can be
+                created.{" "}
+              </>
+            )}
+            {!netlifyReady && (
+              <>
+                Netlify isn&rsquo;t configured, so a repository would be created
+                with nowhere to deploy.
+              </>
+            )}
+          </p>
+        )}
+
+        <NewProspectForm
+          plans={plans.map((plan) => ({
+            key: plan.key,
+            name: plan.name,
+            defaultMonthlyCents: plan.defaultMonthlyCents,
+            includedChangesPerMonth: plan.includedChangesPerMonth,
+            includesAnalytics: plan.includesAnalytics,
+          }))}
+        />
+
+        {prospects.length === 0 ? (
+          <section className="card">
             <div className="empty">
               <p className="empty-title">No prospects yet.</p>
               <p>
-                Businesses you&rsquo;re considering approaching appear here once
-                the outreach pipeline is built.
+                Businesses you&rsquo;re considering approaching appear here.
               </p>
             </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="stack">
-                <thead>
-                  <tr>
-                    <th>Business</th>
-                    <th>Current site</th>
-                    <th>Industry</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {prospects.map((p) => (
-                    <tr key={p.publicId}>
-                      <td data-label="Business">
-                        {p.businessName}
-                        {p.isDemo && (
-                          <>
-                            {" "}
-                            <span className="badge">demo</span>
-                          </>
-                        )}
-                      </td>
-                      <td data-label="Current site">
-                        {p.sourceWebsiteUrl ? (
-                          // Not a link: these are unvetted third-party URLs
-                          // taken from crawled data, and a one-click path from
-                          // an admin session to an arbitrary site is a needless
-                          // risk. Copy it if you want to visit.
-                          <code style={{ fontSize: "0.8rem" }}>
-                            {p.sourceWebsiteUrl}
-                          </code>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td data-label="Industry">{p.industry ?? "—"}</td>
-                      <td data-label="Status">
-                        <span
-                          className={`pill ${PROSPECT_PILL[p.status] ?? "pill-neutral"}`}
-                        >
-                          {p.status.replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td data-label="Updated">
-                        {p.updatedAt.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+          </section>
+        ) : (
+          prospects.map((prospect) => (
+            <section key={prospect.publicId} className="card">
+              <div className="card-head">
+                <h2>
+                  {prospect.businessName}
+                  {prospect.isDemo && (
+                    <>
+                      {" "}
+                      <span className="badge">demo</span>
+                    </>
+                  )}
+                </h2>
+                <span
+                  className={`pill ${PROSPECT_PILL[prospect.status] ?? "pill-neutral"}`}
+                >
+                  {prospect.status.replace(/_/g, " ")}
+                </span>
+              </div>
+
+              <dl className="detail-grid" style={{ marginBottom: "1rem" }}>
+                <dt>Plan</dt>
+                <dd>{prospect.planName ?? "not chosen"}</dd>
+                <dt>Industry</dt>
+                <dd>{prospect.industry ?? "—"}</dd>
+                <dt>Current site</dt>
+                <dd>
+                  {prospect.sourceWebsiteUrl ? (
+                    // Not a link. These are unvetted third-party URLs, and a
+                    // one-click path from an admin session to an arbitrary site
+                    // is a needless risk. Copy it if you want to visit.
+                    <code style={{ fontSize: "0.8rem", wordBreak: "break-all" }}>
+                      {prospect.sourceWebsiteUrl}
+                    </code>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+                <dt>Updated</dt>
+                <dd>
+                  {prospect.updatedAt.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </dd>
+              </dl>
+
+              <div className="action-block">
+                {SHAREABLE.has(prospect.status) ? (
+                  <ShareConceptForm
+                    prospectPublicId={prospect.publicId}
+                    hasLiveShare={prospect.status === "shared"}
+                  />
+                ) : (
+                  <BuildConceptForm prospectPublicId={prospect.publicId} />
+                )}
+              </div>
+            </section>
+          ))
+        )}
       </main>
     </AppShell>
   );
