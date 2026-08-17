@@ -21,6 +21,7 @@ import {
   migrationScopeEnum,
   migrationStatusEnum,
   paymentMethodEnum,
+  paymentPurposeEnum,
   paymentRequestStatusEnum,
   paymentStatusEnum,
   subscriptionStatusEnum,
@@ -356,6 +357,13 @@ export const paymentRequests = pgTable(
     provider: text("provider"),
     providerReference: text("provider_reference"),
     checkoutUrl: text("checkout_url"),
+
+    /**
+     * What this request buys. `extra_change` is the one that does something on
+     * confirmation: it raises that month's allowance by one, which is why it
+     * must be recorded at creation rather than worked out afterwards.
+     */
+    purpose: paymentPurposeEnum("purpose").notNull().default("subscription"),
 
     /**
      * Set when the client presses "Pay with Venmo". It records intent only —

@@ -4,12 +4,16 @@ import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { getBillingOverview } from "@/db/repositories/client/billing";
+import { getEntitlements } from "@/db/repositories/client/entitlements";
+import { recurringAvailable } from "@/db/repositories/client/checkout";
 import {
   buildVenmoPaymentUrl,
   configuredVenmoHandle,
   formatCurrency,
 } from "@/lib/payments/venmo";
+import { isSquareConfigured } from "@/lib/payments/square";
 import { PayPanel } from "./pay-panel";
+import { UnlockPanel } from "./unlock-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +49,22 @@ export default async function BillingPage() {
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const overview = await getBillingOverview(db, ctx);
+  const [overview, entitlements, canRecur] = await Promise.all([
+    getBillingOverview(db, ctx),
+    getEntitlements(db, ctx),
+    recurringAvailable(db, ctx),
+  ]);
+
+  // The unlock panel is for a client who has never paid. Once they have, the
+  // ordinary "amount due" flow takes over — showing both would offer someone
+  // an "unlock" they already own.
+  const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
+  const cardAvailable = isSquareConfigured();
+  // Only when nothing has been raised yet. Once an invoice exists the "amount
+  // due" panel owns paying, and showing both would offer two routes to the
+  // same money — with two references, only one of which gets reconciled.
+  const showUnlock =
+    locked && cardAvailable && !overview.current && overview.monthlyPriceCents !== null;
 
   const handle = configuredVenmoHandle();
   const venmoUrl =
@@ -71,6 +90,15 @@ export default async function BillingPage() {
         </div>
 
         <Standing overview={overview} />
+
+        {showUnlock && (
+          <UnlockPanel
+            amountLabel={formatCurrency(overview.monthlyPriceCents!)}
+            planName={entitlements?.planName ?? null}
+            recurringAvailable={canRecur}
+            includesAnalytics={entitlements?.planIncludesAnalytics ?? true}
+          />
+        )}
 
         {overview.current && (
           <section className="card">
@@ -106,6 +134,7 @@ export default async function BillingPage() {
                 <PayPanel
                   requestPublicId={overview.current.publicId}
                   venmoUrl={venmoUrl}
+                  cardAvailable={cardAvailable}
                   reference={overview.current.reference}
                   amount={formatCurrency(
                     overview.current.amountCents,

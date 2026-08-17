@@ -1,0 +1,2 @@
+CREATE TYPE "public"."payment_purpose" AS ENUM('subscription', 'extra_change', 'other');--> statement-breakpoint
+ALTER TABLE "payment_requests" ADD COLUMN "purpose" "payment_purpose" DEFAULT 'subscription' NOT NULL;
