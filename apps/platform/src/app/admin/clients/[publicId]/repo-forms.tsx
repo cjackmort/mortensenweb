@@ -6,13 +6,19 @@ import {
   setAllowlistAction,
   type RepoActionResult,
 } from "./repo-actions";
+import { connectAnalyticsAction, type SiteActionResult } from "./site-actions";
 
 /**
- * Pointing the platform at a repository that already exists.
+ * Everything that makes a site workable, in one place.
  *
- * For clients whose site predates the portal. Everything built through
- * scaffolding is connected already; this is the other half, and without it a
- * client on the books before Stage 3 could never receive automated work.
+ * This was three things stacked inside one another — an analytics field, a
+ * repository box nested in the site card, a launch section below — each with
+ * its own heading and its own notice, two of which said the same thing in
+ * different words. The operator's actual question is singular: *is this site
+ * ready to be worked on?* It should be answerable by looking once.
+ *
+ * The order is the order things happen: point at the code, confirm where it
+ * deploys, connect analytics, then allow the agent to work.
  */
 
 export interface ConnectedRepo {
@@ -24,14 +30,43 @@ export interface ConnectedRepo {
   netlifySiteName: string | null;
 }
 
+function Row({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd className={warn ? "error" : undefined} style={{ margin: 0 }}>
+        {value}
+      </dd>
+    </>
+  );
+}
+
+const RULE = {
+  margin: "1.75rem 0",
+  border: 0,
+  borderTop: "1px solid var(--line)",
+} as const;
+
 export function RepositoryPanel({
   sitePublicId,
+  clientPublicId,
   siteName,
   connected,
+  umamiWebsiteId,
 }: {
   sitePublicId: string;
+  clientPublicId: string;
   siteName: string;
   connected: ConnectedRepo | null;
+  umamiWebsiteId: string | null;
 }) {
   const [connectState, connectAction, connecting] = useActionState<
     RepoActionResult | null,
@@ -41,52 +76,183 @@ export function RepositoryPanel({
     RepoActionResult | null,
     FormData
   >(setAllowlistAction, null);
+  const [umamiState, umamiAction, savingUmami] = useActionState<
+    SiteActionResult | null,
+    FormData
+  >(connectAnalyticsAction, null);
+
+  const previewsReady = Boolean(connected?.netlifySiteName);
 
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Repository</h2>
+        <h2>Site setup</h2>
         <span className="muted">{siteName}</span>
       </div>
 
+      {/* ---- 1. The code -------------------------------------------------- */}
       {connected ? (
         <>
           <dl className="contact" style={{ marginBottom: "1rem" }}>
-            <dt>Repository</dt>
-            <dd>
-              {connected.owner}/{connected.name}
-            </dd>
-            <dt>Branch</dt>
-            <dd>{connected.defaultBranch}</dd>
-            <dt>Netlify site</dt>
-            <dd>{connected.netlifySiteName ?? "not set — previews cannot be shown"}</dd>
-            <dt>Previews</dt>
-            <dd>
-              {connected.previewUrlStyle === "deploy_preview"
-                ? "Netlify builds them from GitHub"
-                : "The repository deploys its own"}
-            </dd>
+            <Row
+              label="Repository"
+              value={`${connected.owner}/${connected.name}`}
+            />
+            <Row label="Branch" value={connected.defaultBranch} />
+            <Row
+              label="Netlify site"
+              value={
+                connected.netlifySiteName ??
+                "not found — previews cannot be shown"
+              }
+              warn={!connected.netlifySiteName}
+            />
+            <Row
+              label="Previews"
+              value={
+                connected.previewUrlStyle === "deploy_preview"
+                  ? "Netlify builds them from GitHub"
+                  : "the repository publishes its own"
+              }
+            />
           </dl>
 
-          {connected.allowlisted ? (
-            <div className="notice notice-success" style={{ marginTop: 0 }}>
-              <strong>Automated work is allowed here.</strong> Change requests
-              for this site can be sent to the agent.
-            </div>
-          ) : (
-            <div className="notice" style={{ marginTop: 0 }}>
-              <strong>Automated work is switched off.</strong> The repository is
-              connected, but nothing will write to it until you allow it.
-            </div>
+          {!previewsReady && (
+            // Said once, plainly, where it matters — rather than left to be
+            // discovered half an hour later when the watchdog fails the
+            // request with no explanation attached.
+            <p className="notice">
+              <strong>Previews will not reach the client.</strong> Without a
+              Netlify site the portal cannot build a preview address: the agent
+              will work and open a pull request, and the client will be shown
+              nothing.
+            </p>
           )}
+        </>
+      ) : (
+        <p style={{ marginTop: 0 }}>
+          No repository connected, so change requests cannot be worked on.
+        </p>
+      )}
 
-          {allowState && (
+      {connectState && (
+        <p className={connectState.ok ? "notice notice-success" : "error"}>
+          {connectState.message}
+        </p>
+      )}
+
+      <details open={!connected} style={{ marginTop: connected ? "1rem" : 0 }}>
+        <summary style={{ cursor: "pointer" }}>
+          {connected ? "Change the repository" : "Connect a repository"}
+        </summary>
+
+        <form action={connectAction} style={{ marginTop: "1rem" }}>
+          <input type="hidden" name="sitePublicId" value={sitePublicId} />
+
+          <label htmlFor="repo">Repository</label>
+          <input
+            id="repo"
+            name="repo"
+            placeholder="cjackmort/ScottMortensenWebsite"
+            defaultValue={
+              connected ? `${connected.owner}/${connected.name}` : ""
+            }
+            required
+          />
+          <p className="field-hint">
+            Owner and name, or paste the GitHub URL. The Netlify site and how
+            previews are addressed are found automatically — fill the two below
+            in only if that comes back empty.
+          </p>
+
+          <label htmlFor="netlifySiteName">Netlify site name</label>
+          <input
+            id="netlifySiteName"
+            name="netlifySiteName"
+            placeholder="found automatically"
+            defaultValue={connected?.netlifySiteName ?? ""}
+          />
+
+          <label htmlFor="previewUrlStyle">How previews are built</label>
+          <select
+            id="previewUrlStyle"
+            name="previewUrlStyle"
+            defaultValue={connected?.previewUrlStyle ?? ""}
+          >
+            <option value="">Work it out automatically</option>
+            <option value="deploy_preview">
+              Netlify builds them from GitHub
+            </option>
+            <option value="pr_alias">The repository publishes its own</option>
+          </select>
+
+          <button type="submit" disabled={connecting}>
+            {connecting ? "Saving…" : connected ? "Save" : "Connect"}
+          </button>
+        </form>
+      </details>
+
+      {/* ---- 2. Analytics ------------------------------------------------- */}
+      <hr style={RULE} />
+
+      <h3 style={{ fontSize: "0.95rem", marginTop: 0 }}>Analytics</h3>
+
+      {umamiState &&
+        (umamiState.ok ? (
+          <p className="notice notice-success">Analytics connection saved.</p>
+        ) : (
+          <p className="error">{umamiState.message}</p>
+        ))}
+
+      <form action={umamiAction}>
+        <input type="hidden" name="clientPublicId" value={clientPublicId} />
+        <input type="hidden" name="sitePublicId" value={sitePublicId} />
+
+        <label htmlFor="umamiWebsiteId">Umami website ID</label>
+        <input
+          id="umamiWebsiteId"
+          name="umamiWebsiteId"
+          defaultValue={umamiWebsiteId ?? ""}
+          placeholder="4f5eaf4e-5e3e-4545-b742-d2fb05e1a911"
+        />
+        <p className="field-hint">
+          Umami &rarr; Websites &rarr; the site &rarr; Edit. The{" "}
+          <code>data-website-id</code> from the tracking snippet, not the API
+          key. Leave blank to disconnect.
+        </p>
+
+        <button type="submit" className="secondary" disabled={savingUmami}>
+          {savingUmami ? "Saving…" : "Save analytics"}
+        </button>
+      </form>
+
+      {/* ---- 3. Permission ------------------------------------------------ */}
+      {connected && (
+        <>
+          <hr style={RULE} />
+
+          <h3 style={{ fontSize: "0.95rem", marginTop: 0 }}>Automated work</h3>
+
+          {/* One statement of the current state, not two. This used to show a
+              standing notice and the action's result side by side, which read
+              as two different facts about the same setting. */}
+          {allowState ? (
             <p className={allowState.ok ? "notice notice-success" : "error"}>
               {allowState.message}
             </p>
+          ) : connected.allowlisted ? (
+            <p className="notice notice-success">
+              <strong>Allowed.</strong> Change requests for this site can be
+              sent to the agent.
+            </p>
+          ) : (
+            <p className="notice">
+              <strong>Not allowed yet.</strong> The repository is connected, but
+              nothing will write to it until you turn this on.
+            </p>
           )}
 
-          <form action={allowAction} style={{ marginTop: "1rem" }}>
+          <form action={allowAction}>
             <input type="hidden" name="sitePublicId" value={sitePublicId} />
             <input
               type="hidden"
@@ -101,90 +267,16 @@ export function RepositoryPanel({
               {allowing
                 ? "Saving…"
                 : connected.allowlisted
-                  ? "Switch automated work off"
+                  ? "Turn off"
                   : "Allow automated work"}
             </button>
           </form>
 
-          {/* Reversible, and said so plainly. An operator who becomes uneasy
-              needs to know that stopping is available and cheap, or they will
-              hesitate over allowing it in the first place. */}
           <p className="field-hint">
-            You can switch this off at any time. Doing so stops new work being
-            sent; anything already in flight finishes and still needs the
+            Reversible at any time. Turning it off stops new work being sent;
+            anything already in flight finishes and still needs the
             client&rsquo;s approval before it goes live.
           </p>
-        </>
-      ) : (
-        <>
-          <p style={{ marginTop: 0 }}>
-            This site has no repository connected, so change requests cannot be
-            worked on. Point it at one you already have.
-          </p>
-
-          {connectState && (
-            <p className={connectState.ok ? "notice notice-success" : "error"}>
-              {connectState.message}
-            </p>
-          )}
-
-          <form action={connectAction}>
-            <input type="hidden" name="sitePublicId" value={sitePublicId} />
-
-            <label htmlFor="repo">Repository</label>
-            <input
-              id="repo"
-              name="repo"
-              placeholder="cjackmort/ScottMortensenWebsite"
-              required
-            />
-            <p className="field-hint">
-              Owner and name, or paste the GitHub URL. The App must be able to
-              see it.
-            </p>
-
-            <label htmlFor="netlifySiteName">Netlify site name</label>
-            <input
-              id="netlifySiteName"
-              name="netlifySiteName"
-              placeholder="scott-mortensen-fine-arts"
-            />
-            {/* Without this there is no preview URL to build, and the failure
-                is silent: the agent works, the pull request opens, Netlify
-                builds a preview, and the client is shown nothing. */}
-            <p className="field-hint">
-              The name in Netlify, not the full address &mdash; the part before
-              <code>.netlify.app</code>. Previews cannot be shown to the client
-              without it.
-            </p>
-
-            <label htmlFor="previewUrlStyle">How previews are built</label>
-            <select
-              id="previewUrlStyle"
-              name="previewUrlStyle"
-              defaultValue="deploy_preview"
-            >
-              <option value="deploy_preview">
-                Netlify builds them from GitHub (existing site)
-              </option>
-              <option value="pr_alias">
-                The repository deploys its own (built from our template)
-              </option>
-            </select>
-            {/* This choice decides a URL the portal later fetches. Getting it
-                wrong is silent: the link 404s, the preview is never shown, and
-                the request sits on "being worked on" until the watchdog fails
-                it — with nothing pointing at the naming convention. */}
-            <p className="field-hint">
-              A site already connected to Netlify through GitHub uses the first.
-              Getting this wrong means previews never appear, so check if
-              you&rsquo;re unsure.
-            </p>
-
-            <button type="submit" disabled={connecting}>
-              {connecting ? "Connecting…" : "Connect repository"}
-            </button>
-          </form>
         </>
       )}
     </section>
