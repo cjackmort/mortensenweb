@@ -1,6 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  agentJobs,
   changeRequests,
   requestEvents,
   sites,
@@ -34,8 +35,19 @@ export async function listChangeRequests(
       category: changeRequests.category,
       createdAt: changeRequests.createdAt,
       updatedAt: changeRequests.updatedAt,
+
+      // The preview, so a request in the history says where to look rather
+      // than only how far along it is. Only a verified one: an unfetched URL
+      // is a link that may 404, and a client following a broken preview
+      // concludes the work is broken rather than merely unfinished.
+      previewUrl: sql<string | null>`case
+        when ${agentJobs.previewVerifiedAt} is not null
+        then ${agentJobs.previewUrl}
+      end`,
+      previewDecision: agentJobs.clientDecision,
     })
     .from(changeRequests)
+    .leftJoin(agentJobs, eq(agentJobs.requestId, changeRequests.id))
     .where(eq(changeRequests.organizationId, ctx.organizationId))
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 50);

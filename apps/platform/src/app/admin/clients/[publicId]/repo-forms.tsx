@@ -21,6 +21,7 @@ export interface ConnectedRepo {
   defaultBranch: string;
   allowlisted: boolean;
   previewUrlStyle: string;
+  netlifySiteName: string | null;
 }
 
 export function RepositoryPanel({
@@ -57,6 +58,8 @@ export function RepositoryPanel({
             </dd>
             <dt>Branch</dt>
             <dd>{connected.defaultBranch}</dd>
+            <dt>Netlify site</dt>
+            <dd>{connected.netlifySiteName ?? "not set — previews cannot be shown"}</dd>
             <dt>Previews</dt>
             <dd>
               {connected.previewUrlStyle === "deploy_preview"
@@ -138,6 +141,21 @@ export function RepositoryPanel({
             <p className="field-hint">
               Owner and name, or paste the GitHub URL. The App must be able to
               see it.
+            </p>
+
+            <label htmlFor="netlifySiteName">Netlify site name</label>
+            <input
+              id="netlifySiteName"
+              name="netlifySiteName"
+              placeholder="scott-mortensen-fine-arts"
+            />
+            {/* Without this there is no preview URL to build, and the failure
+                is silent: the agent works, the pull request opens, Netlify
+                builds a preview, and the client is shown nothing. */}
+            <p className="field-hint">
+              The name in Netlify, not the full address &mdash; the part before
+              <code>.netlify.app</code>. Previews cannot be shown to the client
+              without it.
             </p>
 
             <label htmlFor="previewUrlStyle">How previews are built</label>

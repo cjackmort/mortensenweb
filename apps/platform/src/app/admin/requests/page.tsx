@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { listAllChangeRequests } from "@/db/repositories/admin/clients";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
+import { DispatchButton } from "./dispatch-button";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ function RequestTable({
             <th>Status</th>
             <th>Priority</th>
             <th>Sent</th>
+            <th>Agent</th>
           </tr>
         </thead>
         <tbody>
@@ -110,6 +112,12 @@ function RequestTable({
                   month: "short",
                   day: "numeric",
                 })}
+              </td>
+              <td data-label="Agent">
+                <DispatchButton
+                  requestPublicId={r.publicId}
+                  status={r.status}
+                />
               </td>
             </tr>
           ))}
