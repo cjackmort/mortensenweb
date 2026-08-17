@@ -2,8 +2,10 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   auditLog,
+  changeAllowances,
   clients,
   paymentRequests,
+  servicePlans,
   subscriptions,
   webhookDeliveries,
 } from "@/db/schema";
@@ -127,10 +129,18 @@ async function systemActor(db: Database): Promise<AdminContext | null> {
  * an unlabelled payment settles is how one client gets credited for another's
  * money, and that error is close to undetectable once made.
  */
+interface MatchedRequest {
+  publicId: string;
+  clientId: string;
+  amountCents: number;
+  purpose: "subscription" | "extra_change" | "other";
+  coversPeriodStart: string | null;
+}
+
 async function findRequest(
   db: Database,
   event: { note?: string; orderId?: string },
-): Promise<{ publicId: string; clientId: string; amountCents: number } | null> {
+): Promise<MatchedRequest | null> {
   const reference = referenceFromNote(event.note);
 
   if (reference) {
@@ -139,6 +149,8 @@ async function findRequest(
         publicId: paymentRequests.publicId,
         clientId: paymentRequests.clientId,
         amountCents: paymentRequests.amountCents,
+        purpose: paymentRequests.purpose,
+        coversPeriodStart: paymentRequests.coversPeriodStart,
       })
       .from(paymentRequests)
       .where(eq(paymentRequests.reference, reference))
@@ -152,6 +164,8 @@ async function findRequest(
         publicId: paymentRequests.publicId,
         clientId: paymentRequests.clientId,
         amountCents: paymentRequests.amountCents,
+        purpose: paymentRequests.purpose,
+        coversPeriodStart: paymentRequests.coversPeriodStart,
       })
       .from(paymentRequests)
       .where(eq(paymentRequests.providerReference, event.orderId))
@@ -291,6 +305,75 @@ async function handleEvent(
       entityType: "payment_request",
       entityId: request.publicId,
       metadata: { expected: request.amountCents, received: event.amountCents },
+    });
+  }
+
+  // An extra change becomes available only now, on confirmed money — never
+  // when the client pressed pay. The increment is conditional on the row
+  // existing, so a client who buys capacity before submitting anything that
+  // month simply gets a fresh allowance created at their first submission with
+  // the plan's figure; the guard below avoids silently losing what they bought.
+  if (request.purpose === "extra_change" && request.coversPeriodStart) {
+    const raised = await db
+      .update(changeAllowances)
+      .set({ included: sql`${changeAllowances.included} + 1` })
+      .where(
+        and(
+          eq(changeAllowances.clientId, request.clientId),
+          eq(changeAllowances.periodStart, request.coversPeriodStart),
+          // Unlimited plans have a null included and need no top-up.
+          sql`${changeAllowances.included} IS NOT NULL`,
+        ),
+      )
+      .returning({ id: changeAllowances.id });
+
+    if (raised.length === 0) {
+      // No row for that month yet. Create one already credited, so the purchase
+      // is not lost between paying and submitting.
+      const plan = await db
+        .select({
+          included: servicePlans.includedChangesPerMonth,
+          subscriptionId: subscriptions.id,
+          periodEnd: paymentRequests.coversPeriodEnd,
+        })
+        .from(paymentRequests)
+        .innerJoin(clients, eq(clients.id, paymentRequests.clientId))
+        .leftJoin(
+          subscriptions,
+          and(
+            eq(subscriptions.clientId, clients.id),
+            eq(subscriptions.status, "active"),
+          ),
+        )
+        .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+        .where(eq(paymentRequests.publicId, request.publicId))
+        .limit(1);
+
+      const detail = plan[0];
+      if (detail?.included !== null && detail?.included !== undefined) {
+        await db
+          .insert(changeAllowances)
+          .values({
+            clientId: request.clientId,
+            subscriptionId: detail.subscriptionId,
+            periodStart: request.coversPeriodStart,
+            periodEnd: detail.periodEnd ?? request.coversPeriodStart,
+            included: detail.included + 1,
+            used: 0,
+          })
+          .onConflictDoUpdate({
+            target: [changeAllowances.clientId, changeAllowances.periodStart],
+            set: { included: sql`${changeAllowances.included} + 1` },
+          });
+      }
+    }
+
+    await db.insert(auditLog).values({
+      actorUserId: actor.userId,
+      action: "allowance.extra_change_purchased",
+      entityType: "payment_request",
+      entityId: request.publicId,
+      metadata: { period: request.coversPeriodStart, source: "square_webhook" },
     });
   }
 

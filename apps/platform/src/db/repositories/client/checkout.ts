@@ -8,6 +8,7 @@ import {
   subscriptions,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { currentPeriod } from "@/lib/billing/period";
 import { generatePaymentReference } from "@/lib/payments/venmo";
 import {
   createCheckoutLink,
@@ -92,6 +93,9 @@ async function insertPaymentRequest(
     subscriptionId: string | null;
     amountCents: number;
     note: string;
+    purpose: "subscription" | "extra_change" | "other";
+    coversPeriodStart?: string;
+    coversPeriodEnd?: string;
   },
 ) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -198,6 +202,7 @@ export async function beginCheckout(
       clientId: resolved.clientId,
       subscriptionId: resolved.subscriptionId,
       amountCents: resolved.monthlyPriceCents,
+      purpose: "subscription",
       note: resolved.planName ? `${resolved.planName} — first month` : "Website services",
     });
 
@@ -276,4 +281,127 @@ export async function recurringAvailable(
 ): Promise<boolean> {
   const resolved = await resolveClient(db, ctx);
   return Boolean(resolved?.squarePlanVariationId) && isSquareConfigured();
+}
+
+// ---------------------------------------------------------------------------
+// Buying one more change
+// ---------------------------------------------------------------------------
+
+export type ExtraChangeOutcome =
+  | { ok: true; url: string; amountCents: number }
+  | {
+      ok: false;
+      reason: "not_configured" | "no_client" | "not_offered" | "square_failed";
+      message: string;
+    };
+
+/**
+ * Buy a single additional change for the current month.
+ *
+ * The prompt a client sees when their allowance runs out has, until now, been
+ * an offer nothing could accept: it named a price and linked to a billing page
+ * that could not take it. This is the other half.
+ *
+ * Capacity is bought, not a specific request. That is a deliberate choice over
+ * attaching the payment to the change they were part-way through writing:
+ * tying them together would mean holding a half-finished request in a paid-or-
+ * not limbo, and a client who abandons the payment leaves a row nobody can
+ * explain. Buying capacity keeps the two independent — the allowance goes up,
+ * and they submit whenever they like.
+ *
+ * The allowance is **not** raised here. It moves when the money is confirmed,
+ * in the webhook, for the same reason nothing else in this codebase treats
+ * pressing a button as payment.
+ */
+export async function purchaseExtraChange(
+  db: Database,
+  ctx: TenantContext,
+  input: { returnUrl?: string } = {},
+): Promise<ExtraChangeOutcome> {
+  assertMutable(ctx);
+
+  if (!isSquareConfigured()) {
+    return {
+      ok: false,
+      reason: "not_configured",
+      message: "Card payments aren't set up yet. Get in touch and we'll sort this out.",
+    };
+  }
+
+  const rows = await db
+    .select({
+      clientId: clients.id,
+      subscriptionId: subscriptions.id,
+      planName: servicePlans.name,
+      overagePerChangeCents: servicePlans.overagePerChangeCents,
+    })
+    .from(clients)
+    .leftJoin(
+      subscriptions,
+      and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .where(eq(clients.organizationId, ctx.organizationId))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return { ok: false, reason: "no_client", message: "No client record found." };
+
+  // A null price means the plan does not sell extra changes. Refusing is right:
+  // inventing a price would be worse than telling them to upgrade.
+  if (!row.overagePerChangeCents) {
+    return {
+      ok: false,
+      reason: "not_offered",
+      message:
+        "Your plan doesn't offer extra changes — moving to a bigger plan is the way to get more.",
+    };
+  }
+
+  const period = currentPeriod();
+
+  const request = await insertPaymentRequest(db, {
+    clientId: row.clientId,
+    subscriptionId: row.subscriptionId,
+    amountCents: row.overagePerChangeCents,
+    purpose: "extra_change",
+    // The period is what ties the payment to the month whose allowance it
+    // raises. Without it the webhook would have to guess, and guessing would
+    // credit the wrong month for anyone paying near a boundary.
+    coversPeriodStart: period.start,
+    coversPeriodEnd: period.end,
+    note: "One additional change this month",
+  });
+
+  let link;
+  try {
+    link = await createCheckoutLink({
+      name: "One additional change",
+      amountCents: row.overagePerChangeCents,
+      reference: request.reference,
+      redirectUrl: input.returnUrl,
+      idempotencyKey: `payment_request:${request.publicId}`,
+    });
+  } catch (error) {
+    console.error("[checkout] Square rejected the extra-change request", error);
+    return {
+      ok: false,
+      reason: "square_failed",
+      message: "We couldn't start the payment just now. Please try again shortly.",
+    };
+  }
+
+  await db
+    .update(paymentRequests)
+    .set({
+      checkoutUrl: link.url,
+      providerReference: link.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentRequests.id, request.id));
+
+  return { ok: true, url: link.url, amountCents: row.overagePerChangeCents };
 }

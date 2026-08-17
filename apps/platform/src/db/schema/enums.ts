@@ -339,6 +339,20 @@ export const billingTreatmentEnum = pgEnum("billing_treatment", [
   "courtesy",
 ]);
 
+/**
+ * What a payment request is *for*.
+ *
+ * Recorded rather than inferred. Without it, "was this an extra change or the
+ * monthly fee?" would have to be guessed from whether a subscription id happens
+ * to be attached — and getting that wrong grants a client a change they did not
+ * buy, or fails to grant one they did.
+ */
+export const paymentPurposeEnum = pgEnum("payment_purpose", [
+  "subscription",
+  "extra_change",
+  "other",
+]);
+
 // ---- Briefs ---------------------------------------------------------------
 
 /**
