@@ -24,6 +24,7 @@ import {
 } from "@/db/repositories/client/change-requests";
 import { consumeChange } from "@/db/repositories/client/entitlements";
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
+import { netlifyKeyFor } from "@/db/repositories/admin/shipped";
 import {
   ALL_STATUSES,
   BLOCKING_STATUSES,
@@ -510,5 +511,27 @@ describe("cancelling a change", () => {
         .where(eq(agentJobs.id, job.id))
     )[0]!;
     expect(row.status).toBe("cancelled");
+  });
+});
+
+describe("addressing a Netlify site", () => {
+  it("uses the stored id when the portal scaffolded the site", () => {
+    expect(
+      netlifyKeyFor({ netlifySiteId: "abc-123", netlifySiteName: "scott" }),
+    ).toBe("abc-123");
+  });
+
+  it("falls back to the name for a repository connected in place", () => {
+    // The bug this fixes: connect-repo stores only the name, so requiring the
+    // id skipped those sites silently and their changes stayed at `merged`.
+    expect(
+      netlifyKeyFor({ netlifySiteId: null, netlifySiteName: "scott-mortensen-fine-arts" }),
+    ).toBe("scott-mortensen-fine-arts.netlify.app");
+  });
+
+  it("reports nothing usable rather than guessing", () => {
+    expect(
+      netlifyKeyFor({ netlifySiteId: null, netlifySiteName: null }),
+    ).toBeNull();
   });
 });
