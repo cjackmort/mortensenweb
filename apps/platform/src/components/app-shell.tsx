@@ -21,7 +21,15 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/clients", label: "Clients" },
   { href: "/admin/requests", label: "Requests" },
   { href: "/admin/payments", label: "Payments" },
-  { href: "/admin/prospects", label: "Prospects" },
+  // Prospects is hidden, not removed. Finding and pitching businesses moved out
+  // of the portal to the `/pitch` command in the agency repo, which researches
+  // keywords, rebuilds the site and previews it locally — so this tab duplicates
+  // a workflow that now lives somewhere better.
+  //
+  // The route, the crawler and the tables all still work; only the link is
+  // gone. Reversible in one line, which is the point: if the pitch workflow
+  // does not hold up, nothing has to be rebuilt to come back here.
+  // { href: "/admin/prospects", label: "Prospects" },
 ];
 
 const CLIENT_NAV: NavItem[] = [
