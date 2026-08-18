@@ -35,6 +35,14 @@ export interface AnalyticsSummary {
   referrers: Breakdown[];
   devices: Breakdown[];
   countries: Breakdown[];
+  /**
+   * What visitors actually did, rather than merely looked at.
+   *
+   * Empty until a site emits `data-umami-event` attributes — see the
+   * `site-build` skill. A client with 200 visitors and no idea whether any of
+   * them tried to call is being shown traffic, not business.
+   */
+  events: Breakdown[];
   /** When these figures were produced. Always shown. */
   generatedAt: Date;
 }
@@ -283,7 +291,7 @@ export async function fetchAnalytics(
   const window = { startAt, endAt };
 
   try {
-    const [stats, pageviewSeries, pages, referrers, devices, countries] =
+    const [stats, pageviewSeries, pages, referrers, devices, countries, events] =
       await Promise.all([
         umamiFetch<UmamiStatsResponse>(`/websites/${websiteId}/stats`, window),
         umamiFetch<{ pageviews: UmamiMetric[]; sessions: UmamiMetric[] }>(
@@ -305,6 +313,15 @@ export async function fetchAnalytics(
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
           ...window,
           type: "country",
+        }),
+        // Custom events. Umami exposes them through the same metrics endpoint,
+        // so this costs one more call rather than a second integration. A site
+        // that emits none returns an empty list, which the panel renders as a
+        // setup prompt rather than a zero.
+        umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
+          ...window,
+          type: "event",
+          limit: 12,
         }),
       ]);
 
@@ -336,6 +353,7 @@ export async function fetchAnalytics(
         referrers: toBreakdown(referrers),
         devices: toBreakdown(devices, 4),
         countries: toBreakdown(countries),
+        events: toBreakdown(events, 12),
         generatedAt: new Date(),
       },
     };
