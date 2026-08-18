@@ -194,6 +194,46 @@ export async function closePullRequest(
   return { closed: status === 200, status };
 }
 
+/**
+ * Delete a branch.
+ *
+ * Used after a cancelled change's pull request is closed. Leaving the branch
+ * behind means a client repository slowly fills with abandoned work, and — the
+ * reason this exists — someone reading the repository later cannot tell which
+ * branches represent the live site and which were called off.
+ *
+ * **Refuses to delete the default branch.** The caller passes a branch name
+ * derived from a pull request, and a malformed or missing head ref must not
+ * resolve to `master`. The guard is here rather than at the call site because
+ * this is the function that would do the damage.
+ *
+ * 404 and 422 are allowed: the branch is already gone, or GitHub will not
+ * delete it. Both describe the state this function exists to produce, and
+ * failing a client's cancellation because the cleanup was already done would
+ * be perverse.
+ */
+export async function deleteBranch(
+  repo: Repo,
+  branch: string,
+  { defaultBranch }: { defaultBranch: string },
+): Promise<{ deleted: boolean; status: number }> {
+  const name = branch.trim();
+
+  if (!name || name === defaultBranch) {
+    throw new Error(
+      `Refusing to delete "${name || "(empty)"}" — it is the default branch.`,
+    );
+  }
+
+  const { status } = await githubRequest(
+    repo.installationId,
+    `${repoPath(repo)}/git/refs/heads/${encodeURIComponent(name)}`,
+    { method: "DELETE", allowStatuses: [404, 422] },
+  );
+
+  return { deleted: status === 204, status };
+}
+
 // ---------------------------------------------------------------------------
 // Repository provisioning
 // ---------------------------------------------------------------------------

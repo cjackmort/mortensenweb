@@ -78,6 +78,10 @@ export async function approveAndApply(
   );
 
   revalidatePath("/dashboard/requests");
+  // The dashboard shows the approval banner, so it is stale the moment a
+  // decision is recorded. Without this the client approves, navigates back,
+  // and Next serves the router-cached page still asking them to review it.
+  revalidatePath("/dashboard");
 
   if (!decision.ok) return { ok: false, message: decision.message };
 
@@ -99,6 +103,10 @@ export async function approveAndApply(
   });
 
   revalidatePath("/dashboard/requests");
+  // The dashboard shows the approval banner, so it is stale the moment a
+  // decision is recorded. Without this the client approves, navigates back,
+  // and Next serves the router-cached page still asking them to review it.
+  revalidatePath("/dashboard");
 
   if (!outcome.ok) {
     // Their approval *is* recorded, so this is not a failure of their action.
@@ -132,6 +140,10 @@ export async function requestMoreChanges(
   );
 
   revalidatePath("/dashboard/requests");
+  // The dashboard shows the approval banner, so it is stale the moment a
+  // decision is recorded. Without this the client approves, navigates back,
+  // and Next serves the router-cached page still asking them to review it.
+  revalidatePath("/dashboard");
 
   if (!decision.ok) return { ok: false, message: decision.message };
 

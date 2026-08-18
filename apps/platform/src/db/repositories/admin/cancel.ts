@@ -7,7 +7,13 @@ import {
   repositoryConnections,
   requestEvents,
 } from "@/db/schema";
-import { closePullRequest, commentOnIssue, type Repo } from "@/lib/github/rest";
+import {
+  closePullRequest,
+  commentOnIssue,
+  deleteBranch,
+  getPullRequest,
+  type Repo,
+} from "@/lib/github/rest";
 import { refundChange } from "@/db/repositories/client/entitlements";
 import { isCancellable, isTooLateToCancel } from "@/lib/requests/status";
 
@@ -101,6 +107,7 @@ export async function cancelChangeRequest(
       installationId: repositoryConnections.installationId,
       owner: repositoryConnections.owner,
       name: repositoryConnections.name,
+      defaultBranch: repositoryConnections.defaultBranch,
     })
     .from(agentJobs)
     .leftJoin(
@@ -187,6 +194,7 @@ async function closeAbandonedPullRequest(
         installationId: string | null;
         owner: string | null;
         name: string | null;
+        defaultBranch: string | null;
       }
     | undefined,
 ): Promise<boolean> {
@@ -209,15 +217,44 @@ async function closeAbandonedPullRequest(
       "Closing this — the client cancelled the change request it was raised for.",
     );
 
+    // Read the branch name before closing: `head.ref` is only available from
+    // the pull request itself, and `agent_jobs` records the SHA rather than the
+    // ref it came from.
+    const pr = await getPullRequest(repo, job.prNumber);
+    const branch = pr.head?.ref ?? "";
+    const defaultBranch = job.defaultBranch ?? pr.base?.ref ?? "";
+
     const result = await closePullRequest(repo, job.prNumber);
+
+    // Then delete the branch the work sat on.
+    //
+    // A cancelled change that leaves its branch behind is the thing a client
+    // asked us to stop being: a repository accumulating abandoned work, where
+    // it is no longer obvious which branches describe the live site. The
+    // commits remain reachable through the closed pull request on GitHub, so
+    // this is tidying rather than destruction.
+    let branchDeleted = false;
+    if (branch && branch !== defaultBranch) {
+      const removed = await deleteBranch(repo, branch, { defaultBranch });
+      branchDeleted = removed.deleted;
+    }
 
     await db.insert(requestEvents).values({
       requestId,
       actorType: "system",
       kind: result.closed ? "pull_request_closed" : "pull_request_close_skipped",
-      body: result.closed
-        ? `Closed pull request #${job.prNumber}.`
-        : `Pull request #${job.prNumber} was already closed (HTTP ${result.status}).`,
+      body: [
+        result.closed
+          ? `Closed pull request #${job.prNumber}.`
+          : `Pull request #${job.prNumber} was already closed (HTTP ${result.status}).`,
+        branch
+          ? branchDeleted
+            ? `Deleted branch ${branch}.`
+            : `Branch ${branch} was left in place.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
       visibility: "internal",
     });
 
