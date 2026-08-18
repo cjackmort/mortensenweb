@@ -16,6 +16,7 @@ import { isGithubConfigured } from "@/lib/github/app";
 import { listTemplateRepos } from "@/lib/github/rest";
 import { scaffoldSite } from "./scaffold";
 import { dispatchBrief } from "./briefs";
+import { listConfirmedFacts } from "./audit";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -232,6 +233,7 @@ export async function buildConcept(
       serviceArea: prospects.serviceArea,
       notes: prospects.notes,
       referenceRepo: prospects.referenceRepo,
+      sourceWebsiteUrl: prospects.sourceWebsiteUrl,
       status: prospects.status,
       planName: servicePlans.name,
       planIncludesAnalytics: servicePlans.includesAnalytics,
@@ -357,7 +359,12 @@ export async function buildConcept(
     // instruction at all.
     body:
       instructions.body?.trim() ||
-      `Build a first version of a website for ${prospect.businessName}. Use the structure and visual language already present in this repository, replacing its content. Leave any detail you have not been given as a clear placeholder rather than inventing it.`,
+      // Deliberately short. This block is rendered as the *owner's* words and
+      // is fenced as data, so design direction placed here would be read as
+      // something a third party said they wanted — which the agent is told not
+      // to act on. The commission lives in the issue's framing instead; see
+      // `discoveryCommission` in lib/github/issue.ts.
+      `Build a first website for ${prospect.businessName}.`,
     authoredByUserId: ctx.userId,
     submittedAt: now,
   });
@@ -367,7 +374,12 @@ export async function buildConcept(
     .set({ status: "concept_pending", updatedAt: now })
     .where(eq(prospects.id, prospect.id));
 
-  const dispatched = await dispatchBrief(ctx, db, briefPublicId);
+  // Confirmed facts and their existing site, so the concept is built from what
+  // we actually know about this business rather than the template's filler.
+  const dispatched = await dispatchBrief(ctx, db, briefPublicId, {
+    verifiedFacts: await listConfirmedFacts(db, prospect.id),
+    sourceWebsiteUrl: prospect.sourceWebsiteUrl,
+  });
 
   if (!dispatched.ok) {
     // The repository and hosting are real and recorded. Only the agent run did
