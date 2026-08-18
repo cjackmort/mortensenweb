@@ -49,6 +49,26 @@ const NO_STORE = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    /**
+     * Uploads arrive through a server action, and the default cap is 1 MB.
+     *
+     * The form invites six photos at up to 10 MB. A single photo from a phone
+     * is 3–5 MB, so the request exceeded the limit before reaching any of our
+     * code: the action died, the browser reported the page as unresponsive,
+     * and everything the client had typed went with it. They then retyped it
+     * and hit the same wall.
+     *
+     * 6 MB rather than the 60 MB the form implies, because the client now
+     * downscales images before sending — see `request-form.tsx`. A 4000px
+     * phone photo becomes roughly 300 KB, so six of them fit comfortably, and
+     * this is a backstop rather than the working limit. It is also as much as
+     * a serverless request body can carry without a different upload path
+     * entirely.
+     */
+    serverActions: { bodySizeLimit: "6mb" },
+  },
+
   reactStrictMode: true,
 
   // The portal serves per-tenant data. A CDN or proxy caching an authenticated

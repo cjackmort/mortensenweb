@@ -6,6 +6,7 @@ import {
   MAX_ATTACHMENT_BYTES,
 } from "@/lib/storage";
 import { statusLabel } from "@/lib/requests/status";
+import { downscaleImage } from "@/lib/images/downscale";
 import { submitChangeRequest, type RequestSubmission } from "./actions";
 
 /**
@@ -130,17 +131,44 @@ export function RequestForm({
     state && !state.ok && state.reason === "allowance_exhausted",
   );
 
-  function onPick(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    // Revoke the previous batch so repeated picking does not leak object URLs.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [shrinking, setShrinking] = useState(false);
+
+  /**
+   * Shrink on pick, and put the shrunk files back on the input.
+   *
+   * The rewritten `DataTransfer` is what makes this work at all: a form
+   * submits whatever the input holds, so downscaling into a variable would
+   * still upload the originals. Replacing `input.files` means the small
+   * versions are what the server action receives.
+   */
+  async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files ?? []);
     previews.forEach((p) => URL.revokeObjectURL(p.url));
-    setPreviews(
-      files.map((file) => ({
-        name: file.name,
-        url: URL.createObjectURL(file),
-        size: file.size,
-      })),
-    );
+
+    if (picked.length === 0) {
+      setPreviews([]);
+      return;
+    }
+
+    setShrinking(true);
+    try {
+      const results = await Promise.all(picked.map(downscaleImage));
+
+      const transfer = new DataTransfer();
+      results.forEach((r) => transfer.items.add(r.file));
+      if (fileInputRef.current) fileInputRef.current.files = transfer.files;
+
+      setPreviews(
+        results.map((r) => ({
+          name: r.file.name,
+          url: URL.createObjectURL(r.file),
+          size: r.bytes,
+        })),
+      );
+    } finally {
+      setShrinking(false);
+    }
   }
 
   // Locked replaces the form rather than disabling it. A greyed-out form with
@@ -332,11 +360,15 @@ export function RequestForm({
       <input
         id="photos"
         name="photos"
+        ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp"
         multiple
         onChange={onPick}
       />
+      {shrinking && (
+        <p className="field-hint">Getting your photos ready…</p>
+      )}
       <p className="field-hint">
         Up to {MAX_ATTACHMENTS_PER_REQUEST} images,{" "}
         {Math.floor(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB each. JPEG, PNG, GIF,
@@ -360,7 +392,7 @@ export function RequestForm({
         </div>
       )}
 
-      <button type="submit" disabled={pending}>
+      <button type="submit" disabled={pending || shrinking}>
         {pending ? "Sending…" : "Send request"}
       </button>
     </form>
