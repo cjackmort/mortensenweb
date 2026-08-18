@@ -19,15 +19,32 @@ export interface NavItem {
 export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
+  // The longest href that this path sits under. Computed once for the whole
+  // nav rather than per item, because "most specific" is a property of the set.
+  const bestMatch = items
+    .map((item) => item.href)
+    .filter(
+      (href) =>
+        pathname === href || (href !== "/" && pathname.startsWith(`${href}/`)),
+    )
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <nav className="nav" aria-label="Sections">
       <div className="nav-inner">
         {items.map((item) => {
-          // Exact match for the section root, prefix match beneath it, so a
-          // detail page keeps its parent tab highlighted.
-          const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+          // Only the *most specific* match is active.
+          //
+          // Prefix-matching each item independently made the section root
+          // permanently active: Overview is `/admin`, and every other admin
+          // page starts with `/admin/`, so Overview stayed lit on Requests, on
+          // Payments, on everything. The client nav had the same fault with
+          // `/dashboard`.
+          //
+          // Comparing against the longest matching href instead means a nested
+          // page still highlights its parent — `/admin/clients/abc` lights
+          // Clients — while a sibling never lights its ancestor too.
+          const active = item.href === bestMatch;
 
           return (
             <Link
