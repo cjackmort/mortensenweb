@@ -34,6 +34,27 @@ import { findDeployForCommit, verifyUrlServes } from "@/lib/netlify/api";
  * silent failure, and the only thing that catches it is asking the URL.
  */
 
+/**
+ * How to address this site in Netlify's API.
+ *
+ * Two deploy models identify a site two ways: one the portal scaffolded carries
+ * `netlifySiteId`, while one connected in place records only `netlifySiteName`,
+ * because that path detected the site by name and never stored the id.
+ * Netlify accepts the default subdomain wherever it accepts a site id, so the
+ * name is a usable key rather than a lookup.
+ *
+ * Requiring the id is what made this job skip every connected-in-place site in
+ * silence, leaving the change at `merged` — the exact state it exists to clear.
+ */
+export function netlifyKeyFor(site: {
+  netlifySiteId: string | null;
+  netlifySiteName: string | null;
+}): string | null {
+  if (site.netlifySiteId) return site.netlifySiteId;
+  if (site.netlifySiteName) return `${site.netlifySiteName}.netlify.app`;
+  return null;
+}
+
 export interface ShipProgress {
   markedDeployed: string[];
   markedVerified: string[];
@@ -52,6 +73,7 @@ export async function advanceShippedChanges(
       status: changeRequests.status,
       mergeCommitSha: agentJobs.mergeCommitSha,
       netlifySiteId: sites.netlifySiteId,
+      netlifySiteName: sites.netlifySiteName,
       productionUrl: sites.productionUrl,
       siteId: sites.id,
     })
@@ -79,13 +101,15 @@ export async function advanceShippedChanges(
     // the batch, the same way the cron runner isolates its four jobs.
     try {
       if (row.status === "merged") {
-        if (!row.netlifySiteId || !row.mergeCommitSha) {
+        const netlifyKey = netlifyKeyFor(row);
+
+        if (!netlifyKey || !row.mergeCommitSha) {
           awaitingDeploy += 1;
           continue;
         }
 
         const deploy = await findDeployForCommit(
-          row.netlifySiteId,
+          netlifyKey,
           row.mergeCommitSha,
         );
 
@@ -94,6 +118,15 @@ export async function advanceShippedChanges(
         if (!deploy || deploy.state !== "ready") {
           awaitingDeploy += 1;
           continue;
+        }
+
+        // Backfill the id now we have it from a real deploy record, so the
+        // lookup above stops depending on the name-shaped fallback.
+        if (!row.netlifySiteId && deploy.site_id && row.siteId) {
+          await db
+            .update(sites)
+            .set({ netlifySiteId: deploy.site_id })
+            .where(eq(sites.id, row.siteId));
         }
 
         await db

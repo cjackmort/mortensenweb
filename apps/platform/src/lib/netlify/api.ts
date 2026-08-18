@@ -210,6 +210,12 @@ export async function getSite(siteId: string): Promise<NetlifySite | null> {
 
 export interface NetlifyDeploy {
   id: string;
+  /**
+   * The site this deploy belongs to. Named here so a site identified only by
+   * name — the connected-in-place model — can have its id recovered and stored
+   * the first time a deploy is read.
+   */
+  site_id?: string;
   state: string;
   /** Present on alias/branch deploys; this is the URL a client would open. */
   deploy_ssl_url?: string;

@@ -180,6 +180,7 @@ export async function connectExistingRepo(
   // A value the operator supplied still wins: detection is a convenience, and
   // overriding it must remain possible for the case it gets something wrong.
   let detectedSiteName: string | undefined;
+  let detectedSiteId: string | undefined;
   let detectedStyle: "pr_alias" | "deploy_preview" | undefined;
 
   if (!input.netlifySiteName && isNetlifyConfigured()) {
@@ -187,6 +188,11 @@ export async function connectExistingRepo(
       const linked = await findSiteByRepo(`${input.owner}/${repo.name}`);
       if (linked) {
         detectedSiteName = linked.name;
+        // Stored as well as the name. Only the scaffolding path used to set
+        // this, so a connected-in-place site had no id — and anything keyed on
+        // the id, such as looking up the deploy for a merge commit, skipped it
+        // in silence rather than failing.
+        detectedSiteId = linked.id;
         detectedStyle = "deploy_preview";
       }
     } catch (error) {
@@ -199,12 +205,13 @@ export async function connectExistingRepo(
   const siteName = input.netlifySiteName ?? detectedSiteName;
   const style = input.previewUrlStyle ?? detectedStyle;
 
-  if (style || siteName) {
+  if (style || siteName || detectedSiteId) {
     await db
       .update(sites)
       .set({
         ...(style ? { previewUrlStyle: style } : {}),
         ...(siteName ? { netlifySiteName: siteName.trim() } : {}),
+        ...(detectedSiteId ? { netlifySiteId: detectedSiteId } : {}),
         updatedAt: new Date(),
       })
       .where(eq(sites.id, site.id));
