@@ -8,6 +8,8 @@ import {
   listProspectsDetailed,
   listReferenceSites,
 } from "@/db/repositories/admin/prospects";
+import { latestAudit, listFactsForProspect } from "@/db/repositories/admin/audit";
+import { AuditPanel } from "./audit-panel";
 import { isGithubConfigured } from "@/lib/github/app";
 import { isNetlifyConfigured } from "@/lib/netlify/api";
 import {
@@ -59,6 +61,21 @@ export default async function AdminProspectsPage() {
     listActivePlans(db),
     listReferenceSites(),
   ]);
+
+  // Facts and audit status per prospect, keyed for the panel below. Fetched
+  // after the list because it needs the ids, and in parallel across prospects
+  // because each is two small indexed reads.
+  const audits = Object.fromEntries(
+    await Promise.all(
+      prospects.map(async (prospect) => {
+        const [facts, lastAudit] = await Promise.all([
+          listFactsForProspect(ctx, db, prospect.publicId),
+          latestAudit(ctx, db, prospect.publicId),
+        ]);
+        return [prospect.publicId, { facts, lastAudit }] as const;
+      }),
+    ),
+  );
 
   const githubReady = isGithubConfigured();
   const netlifyReady = isNetlifyConfigured();
@@ -172,6 +189,16 @@ export default async function AdminProspectsPage() {
                   <BuildConceptForm prospectPublicId={prospect.publicId} />
                 )}
               </div>
+
+              {/* Below the concept controls on purpose: reading their site is
+                  what you do first, but once a concept exists the controls for
+                  it are what you came back for. */}
+              <AuditPanel
+                prospectPublicId={prospect.publicId}
+                websiteUrl={prospect.sourceWebsiteUrl ?? null}
+                facts={audits[prospect.publicId]?.facts ?? []}
+                lastAudit={audits[prospect.publicId]?.lastAudit ?? null}
+              />
             </section>
           ))
         )}

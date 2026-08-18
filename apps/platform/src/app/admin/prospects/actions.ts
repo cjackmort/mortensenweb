@@ -9,6 +9,10 @@ import {
   approveAndShareConcept,
   revokeShares,
 } from "@/db/repositories/admin/shares";
+import {
+  auditProspectSite,
+  recordFactVerdict,
+} from "@/db/repositories/admin/audit";
 
 /**
  * Operator actions on the front of the funnel.
@@ -163,4 +167,78 @@ export async function revokeSharesAction(
         ? "There were no live links to revoke."
         : `Revoked ${count} ${count === 1 ? "link" : "links"}.`,
   };
+}
+
+/**
+ * Read a prospect's current website and extract candidate facts.
+ *
+ * Nothing here reaches the prospect and nothing touches their site beyond
+ * fetching public pages as an anonymous visitor. Everything it finds is stored
+ * unverified and waits for the operator's verdict below.
+ */
+export async function auditProspectAction(
+  _previous: ProspectResult | null,
+  formData: FormData,
+): Promise<ProspectResult> {
+  const user = await requireAdmin();
+  if (!user) return { ok: false, message: "Only an admin can audit a site." };
+
+  const prospectPublicId = String(formData.get("prospectPublicId") ?? "").trim();
+  if (!prospectPublicId) return { ok: false, message: "No prospect was specified." };
+
+  const ctx = adminContextFrom(user);
+  const db = await getDb();
+
+  try {
+    const outcome = await auditProspectSite(ctx, db, { prospectPublicId });
+    revalidatePath("/admin/prospects");
+
+    if (!outcome.ok) return { ok: false, message: outcome.message };
+
+    return {
+      ok: true,
+      message: `Read ${outcome.pagesFetched} ${outcome.pagesFetched === 1 ? "page" : "pages"} and found ${outcome.factsFound} things to check.`,
+    };
+  } catch (error) {
+    // A crawl failure is an operational matter, not a stack trace to show an
+    // operator mid-task. The job row already carries the detail.
+    console.error("[prospects] audit failed", {
+      prospectPublicId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return {
+      ok: false,
+      message: "The audit could not finish. The job record has the detail.",
+    };
+  }
+}
+
+/**
+ * Confirming or rejecting one crawled fact.
+ *
+ * The only route to `user_verified`, which is the only state a generated site
+ * may render. A `sensitive` fact is refused here whatever is clicked.
+ */
+export async function factVerdictAction(
+  _previous: ProspectResult | null,
+  formData: FormData,
+): Promise<ProspectResult> {
+  const user = await requireAdmin();
+  if (!user) return { ok: false, message: "Only an admin can confirm a fact." };
+
+  const factId = String(formData.get("factId") ?? "").trim();
+  const verdict = String(formData.get("verdict") ?? "");
+  if (!factId) return { ok: false, message: "No fact was specified." };
+  if (verdict !== "user_verified" && verdict !== "conflicting") {
+    return { ok: false, message: "Unrecognised verdict." };
+  }
+
+  const ctx = adminContextFrom(user);
+  const db = await getDb();
+
+  const outcome = await recordFactVerdict(ctx, db, factId, verdict);
+  revalidatePath("/admin/prospects");
+  return outcome.ok
+    ? { ok: true, message: outcome.message }
+    : { ok: false, message: outcome.message };
 }
