@@ -38,7 +38,7 @@ npm run dev --workspace apps/platform
 | | |
 | --- | --- |
 | `npm run dev --workspace apps/platform` | development server |
-| `npm test --workspace apps/platform` | the suite (232 tests) |
+| `npm test --workspace apps/platform` | the suite (298 tests) |
 | `npm run lint --workspace apps/platform` | ESLint, flat config |
 | `npm run typecheck --workspace apps/platform` | `tsc --noEmit` |
 | `npm run db:generate --workspace apps/platform` | migration from a schema change |
@@ -57,9 +57,18 @@ migrations to Neon on merge to `main`. Nothing needs running by hand.
 | Template | `cjackmort/client-site-template`, marked as a template |
 | First client | Scott Mortensen Fine Arts — `cjackmort/ScottMortensenWebsite` |
 
-Square is built and tested but has no account behind it; the driver, webhook
-receiver and checkout are complete and dormant. `docs/square-setup.md` is the
+Square is configured in **sandbox**: token, location, webhook subscription and
+signature key are set, and `/api/webhooks/square` answers 401 to an unsigned
+request rather than 503. No payment has been taken end to end yet, so the
+unlock path is armed but unproven. Going to production means replacing all five
+values — sandbox and production share nothing. `docs/square-setup.md` is the
 setup, `docs/github-app-setup.md` the equivalent for GitHub.
+
+Prospecting has moved **out of the portal**. `/pitch` in the agency repo
+researches keywords, rebuilds the site on the Astro template and previews it
+locally; `/pitch-send` deploys and drafts the email. The Prospects tab is
+commented out in `app-shell.tsx` — the route, crawler and tables all still
+work, and one line brings it back.
 
 ## Things that cost a day to learn
 
@@ -116,15 +125,49 @@ Nothing is invented on a client's behalf. An unconfirmed detail stays an obvious
 placeholder — a wrong phone number on a real business's website is worse than a
 visible gap.
 
+## What the client sees
+
+The loop a client actually touches, all of it shipped and none of it yet used
+by a real person:
+
+- **Five-stage progress track** — received, making preview, needs your
+  approval, published, confirmed live. `merged` sits at Published with the
+  deploy running; nothing reaches "confirmed live" until the site has been
+  fetched and answered.
+- **Cancel**, up to the moment a change is live. Closes the pull request behind
+  it and always refunds the month's change.
+- **One open request per site.** The rule is sequencing, not throttling: an
+  agent branch is cut from the default branch at dispatch, so a change built
+  before the previous one landed can undo it on merge. The block releases at
+  `merged`, the point the branch it will be cut from contains the last change.
+  `blocksNewRequest` is defined as `isCancellable` and a test asserts they agree
+  across every status — anything that can block a client is something they can
+  clear themselves, so the rule cannot trap anyone.
+- **Escalation.** The agent emits `<!-- agent-escalation: reason -->` in a pull
+  request body and the request moves to `needs_operator`, surfacing in the
+  admin queue with the repo, the pull request and a clone-and-run line. The
+  client is told a person is handling it, never that their request was complex.
+
 ## Known gaps
 
-- Square is unexercised; no account, no webhook subscription
+- No payment has been taken through Square, in sandbox or production
+- **Nothing above has been exercised through the UI by a person** — the suite
+  covers the logic, but no one has clicked cancel or watched an escalation
+- Client repositories own their copy of `claude.yml`, so an existing client
+  does not get new agent instructions until they are copied across
+- The one-open-request rule is enforced in application code; a genuine
+  double-submit race needs a partial unique index on `(site_id) WHERE status
+  NOT IN (settled)`, not added because the migration fails if production
+  already holds two open requests on one site
+- Analytics shows pages, referrers, devices and countries. Umami also exposes
+  `type=event`, so click tracking is possible once sites emit
+  `data-umami-event` attributes — nothing does yet
 - Plan override and billing render inside the per-site loop, though both are
   client-level
 - No health endpoint; production health is inferred from status codes
-- Prospect site crawling does not exist, so briefs are typed by hand
 - The theme library is a stub — Stage 4, and the largest remaining piece
 - Two deploy models: scaffolded repositories publish themselves by CLI, while a
   repository connected in place uses Netlify's Git integration. Now that a
   Netlify `installation_id` is known to be readable and reusable, these could
   collapse into one.
+- One moderate Dependabot advisory, unexamined
