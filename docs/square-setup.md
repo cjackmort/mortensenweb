@@ -88,25 +88,52 @@ deriving the URL from the incoming request — would let an attacker-controlled
 
 ## 5. Subscription plans (one variation id per plan)
 
-Only needed for recurring billing. A one-off charge works without any of this.
+**Only needed for automatic recurring billing.** A one-off charge — including
+the first payment that unlocks a client's account, and buying an extra change —
+works without any of this. With `square_plan_variation_id` empty,
+`recurringAvailable()` returns false and the portal simply does not offer
+recurring. Nothing breaks. Skip this section until you want cards charged
+monthly without anyone doing anything.
 
-Square Dashboard → **Items & services** → **Subscription plans** → **Create
-plan**. Name it to match a plan in the portal (`Care — Basic`), then **Add
-frequency option** — monthly, at the price in `service_plans`.
+Square splits a subscription in two, and this is the part that confuses:
 
-A plan can have several frequency options, and each one is a separate
-**variation**. The portal wants the *variation* id, not the plan id — passing a
-plan id produces a checkout that fails in a way the error message does not
-explain.
+- an **item** carries the name and price the customer sees;
+- a **plan** carries only the settings — frequency and discount. Its name is
+  internal and is never shown to anyone.
 
-Find it in Developer Console → **Catalog** (or from a `SearchCatalogObjects`
-response); it is the `plan_variation_id`. Record it against the matching plan:
+A plan cannot be saved without at least one item assigned to it, so the item
+comes first.
+
+1. Square **Dashboard** (`squareup.com/dashboard`, *not* the Developer Console)
+   → **Items & services** → **Items** → create an item named as the client
+   should see it — `Care — Basic` — priced to match the `service_plans` row.
+2. **Items & services** → **Subscription plans** → **Create plan**. Name it for
+   yourself, **Assign items** → the item from step 1, then **Add frequency
+   option** → Monthly.
+3. Save.
+
+Each frequency option is a separate **variation**, and the portal wants the
+*variation* id, not the plan id — a plan id produces a checkout that fails in a
+way the error message does not explain.
+
+To read the ids back, ask the API rather than hunting for a Catalog screen that
+moves between Square's redesigns:
+
+```bash
+npm run square:plans --workspace apps/platform
+```
+
+It reads `SQUARE_ACCESS_TOKEN` from `.env.local` — never pass a token as an
+argument, where it lands in shell history and the process list — and prints each
+variation with its cadence, price, and the `UPDATE` to run:
 
 ```sql
 UPDATE service_plans
    SET square_plan_variation_id = '<variation id>'
  WHERE key = 'care-basic';
 ```
+
+Run it in Neon's SQL editor.
 
 The portal deliberately does not create catalogue objects. Automating a
 five-minute task done three times in the business's life would mean carrying the
