@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne, or } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   auditedPages,
@@ -397,4 +397,62 @@ export async function latestAudit(
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+/**
+ * The facts an operator has confirmed, for a prospect's site brief.
+ *
+ * Only `user_verified` and `user_supplied` — the two states Stage 0 §7.2 says
+ * may render as claims on a generated site. `unverified` is a crawler's guess,
+ * `conflicting` is one the operator rejected, and `sensitive` is never
+ * auto-published at all. Anything outside those two would put a claim on a real
+ * business's website that nobody stood behind.
+ *
+ * Taken by prospect id and handed to `dispatchBrief` by the caller, because at
+ * concept time a prospect has no link to an organization — that relation only
+ * exists after conversion.
+ *
+ * One value per key, highest confidence first: a brief listing three different
+ * phone numbers is worse than one listing the best-attested.
+ */
+export async function listConfirmedFacts(
+  db: Database,
+  prospectId: string,
+): Promise<{ key: string; value: string }[]> {
+  const rows = await db
+    .select({
+      key: businessFacts.key,
+      value: businessFacts.value,
+      confidence: businessFacts.confidence,
+    })
+    .from(businessFacts)
+    .where(
+      and(
+        eq(businessFacts.prospectId, prospectId),
+        // Stage 0 allows two things to render as a claim, and they live in
+        // different columns: a fact the operator confirmed (`verification`),
+        // or one they typed in themselves rather than a crawler finding it
+        // (`source_type`). Reading both from `verification` would silently
+        // match nothing, since `user_supplied` is not one of its values.
+        or(
+          eq(businessFacts.verification, "user_verified"),
+          eq(businessFacts.sourceType, "user_supplied"),
+        ),
+        // Belt and braces: a sensitive claim is never published, even if it
+        // was typed in rather than crawled.
+        ne(businessFacts.verification, "sensitive"),
+      ),
+    )
+    .orderBy(desc(businessFacts.confidence));
+
+  const seen = new Set<string>();
+  const facts: { key: string; value: string }[] = [];
+
+  for (const row of rows) {
+    if (!row.value || seen.has(row.key)) continue;
+    seen.add(row.key);
+    facts.push({ key: row.key, value: row.value });
+  }
+
+  return facts;
 }

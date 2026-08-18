@@ -154,10 +154,23 @@ export type BriefDispatchOutcome =
  * differently under the same failure would be two sets of operational
  * behaviour to learn.
  */
+export interface BriefContext {
+  /**
+   * Facts the operator confirmed, and the business's existing site.
+   *
+   * Passed in rather than looked up here: at concept time a prospect has no
+   * link to an organization — that relation only exists after conversion — so
+   * only the caller holding the prospect can resolve them.
+   */
+  verifiedFacts?: { key: string; value: string }[];
+  sourceWebsiteUrl?: string | null;
+}
+
 export async function dispatchBrief(
   ctx: AdminContext,
   db: Database,
   briefPublicId: string,
+  context: BriefContext = {},
 ): Promise<BriefDispatchOutcome> {
   if (!isGithubConfigured()) {
     return {
@@ -282,6 +295,8 @@ export async function dispatchBrief(
         contentNotes: brief.contentNotes,
         body: brief.body,
         businessName: brief.businessName,
+        verifiedFacts: context.verifiedFacts,
+        sourceWebsiteUrl: context.sourceWebsiteUrl,
       }),
       labels: ["portal-brief", "claude"],
     });

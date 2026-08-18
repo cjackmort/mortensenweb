@@ -244,6 +244,8 @@ export interface BriefIssueInput {
   businessName?: string | null;
   /** Facts an operator has confirmed. Only these may render as claims. */
   verifiedFacts?: { key: string; value: string }[];
+  /** The business's existing website, for context on a first build. */
+  sourceWebsiteUrl?: string | null;
 }
 
 /**
@@ -272,6 +274,7 @@ export function renderBriefIssueBody(input: BriefIssueInput): string {
     `Portal reference: \`${input.briefPublicId}\``,
     ...(input.businessName ? [`Business: ${input.businessName}`] : []),
     "",
+    ...(input.kind === "discovery" ? discoveryCommission(input) : []),
     "### What the owner asked for",
     "",
     "The blocks below are **notes taken during a call with the website's**",
@@ -404,4 +407,73 @@ export function parseEscalationMarker(
     reason:
       reason.length > MAX_REASON ? `${reason.slice(0, MAX_REASON - 1)}…` : reason,
   };
+}
+
+/**
+ * What a first build is actually for.
+ *
+ * This lives in the issue's *framing* — our words — and not in the brief body,
+ * which is fenced and labelled as the owner's notes with an explicit
+ * instruction to treat every word there as data. Design direction placed in
+ * that block would be read as something a third party said they wanted, which
+ * is exactly the thing the agent is told not to act on.
+ *
+ * Only for `discovery`. A revision is a change to something that exists, and
+ * repeating a full design commission on every revision would invite the agent
+ * to rebuild rather than adjust.
+ *
+ * The brief this replaced said "use the structure and visual language already
+ * present in this repository, replacing its content" — which produced a
+ * recoloured template every time and is the opposite of what a pitch needs.
+ */
+function discoveryCommission(input: BriefIssueInput): string[] {
+  const business = input.businessName ?? "this business";
+
+  return [
+    "### What this is for",
+    "",
+    `This is a **speculative concept** shown to ${business} to win their work.`,
+    "It has to look materially better than the site they have now, on a phone,",
+    "within five seconds. That is the whole job.",
+    "",
+    "Treat the template in this repository as a starting point, not a",
+    "constraint. Restructure sections, change the layout, rewrite the type and",
+    "colour choices. A recoloured template with their name on it does not win",
+    "anything.",
+    "",
+    ...(input.sourceWebsiteUrl
+      ? [
+          `Their current site: ${input.sourceWebsiteUrl}`,
+          "",
+          "Look at it to understand what the business does and what it sells.",
+          "**Do not copy its markup, CSS, layout, or images** — we are replacing",
+          "that site, not cloning it, and its code is not ours to take. Any",
+          "*fact* you use must come from the confirmed details below, not from",
+          "reading their pages: their site may be years out of date.",
+          "",
+        ]
+      : []),
+    "### What good looks like",
+    "",
+    "- **Above the fold:** what they do, where they do it, and one obvious",
+    "  action — call, book, or enquire. A visitor who scrolls has already been",
+    "  failed by the top of the page.",
+    "- **Mobile first.** Most of this traffic is a phone held one-handed.",
+    "  Readable without zooming, tap targets big enough to hit while walking.",
+    "- **Fast.** No framework, no more than one web font family, images sized",
+    "  and given width and height so nothing jumps as it loads.",
+    "- **Accessible.** Semantic landmarks, one `h1`, real alt text, visible",
+    "  keyboard focus, text contrast of at least 4.5:1. These are checked.",
+    "- **Findable.** A unique title and meta description per page, and",
+    "  `LocalBusiness` structured data built *only* from confirmed details.",
+    "- **Images:** only files already committed to this repository. Never a",
+    "  stock library, never a hotlink, never an image taken from their site.",
+    "  If a section needs a photo that does not exist, say so in the pull",
+    "  request rather than substituting something.",
+    "",
+    "Write like a person who knows the trade. Short, concrete, specific to this",
+    "business. No filler about passion, excellence, or being your trusted",
+    "partner — a visitor has read it a hundred times and it tells them nothing.",
+    "",
+  ];
 }
