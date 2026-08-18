@@ -5,12 +5,13 @@ import { AppShell } from "@/components/app-shell";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
 import { RequestProgress } from "@/components/request-progress";
+import { CancelRequestButton } from "./requests/cancel-button";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { listChangeRequests } from "@/db/repositories/client/change-requests";
 import { resolveClientAnalytics } from "@/lib/analytics/resolve";
 import { RANGES, isValidRange, type RangeDays } from "@/lib/analytics/umami";
-import { openCount, stageIndex } from "@/lib/requests/status";
+import { isCancellable, openCount, stageIndex } from "@/lib/requests/status";
 
 export const dynamic = "force-dynamic";
 
@@ -224,6 +225,18 @@ export default async function ClientDashboard({
                     status={r.status}
                     stage={stageIndex(r.status)}
                   />
+
+                  {/* Also here, not only on Requests. This list is where a
+                      client looks first, and a cancel control they cannot find
+                      is one that does not exist — the request stays open, and
+                      the one-per-site rule then blocks them from raising
+                      anything else. */}
+                  {isCancellable(r.status) && (
+                    <CancelRequestButton
+                      requestPublicId={r.publicId}
+                      hasPreview={Boolean(r.previewUrl)}
+                    />
+                  )}
                 </div>
               ))}
               {openRequests > 0 && (
