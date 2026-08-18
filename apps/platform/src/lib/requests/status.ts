@@ -23,7 +23,8 @@ export type ChangeRequestStatus =
   | "verified"
   | "closed"
   | "failed"
-  | "rolled_back";
+  | "rolled_back"
+  | "needs_operator";
 
 /**
  * States where nothing further is expected from us.
@@ -110,6 +111,7 @@ export const BLOCKING_STATUSES = [
   "pr_open",
   "changes_requested",
   "failed",
+  "needs_operator",
 ] as const satisfies readonly ChangeRequestStatus[];
 
 /** Every value in the enum. Lets tests assert the sets above are exhaustive. */
@@ -128,6 +130,7 @@ export const ALL_STATUSES = [
   "closed",
   "failed",
   "rolled_back",
+  "needs_operator",
 ] as const satisfies readonly ChangeRequestStatus[];
 
 export function isTooLateToCancel(status: string): boolean {
@@ -153,6 +156,7 @@ const PILL: Record<ChangeRequestStatus, string> = {
   rejected: "pill-neutral",
   failed: "pill-danger",
   rolled_back: "pill-danger",
+  needs_operator: "pill-warning",
 };
 
 export function statusPill(status: string): string {
@@ -180,6 +184,7 @@ const LABEL: Record<ChangeRequestStatus, string> = {
   rejected: "not going ahead",
   failed: "problem — we're on it",
   rolled_back: "undone",
+  needs_operator: "with our team",
 };
 
 export function statusLabel(status: string): string {
@@ -231,6 +236,7 @@ const STAGE_OF: Record<ChangeRequestStatus, number> = {
   rejected: -1,
   failed: -1,
   rolled_back: -1,
+  needs_operator: -1,
 };
 
 /**
@@ -266,6 +272,11 @@ export function effectSummary(status: string): string {
       return "Live on your site and checked.";
     case "changes_requested":
       return "We need something from you before this can go ahead.";
+    case "needs_operator":
+      // Never "too complex" or anything implying their request was a problem.
+      // It is our system deferring to a person, which is our business, not
+      // theirs — and it is still going to happen.
+      return "One of us is handling this one personally. We'll be in touch.";
     case "rejected":
       return "We're not going ahead with this one.";
     case "rolled_back":
