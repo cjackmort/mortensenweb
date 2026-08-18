@@ -25,7 +25,10 @@ import {
 import { consumeChange } from "@/db/repositories/client/entitlements";
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
 import {
+  ALL_STATUSES,
+  BLOCKING_STATUSES,
   STAGES,
+  blocksNewRequest,
   isCancellable,
   isOpen,
   stageIndex,
@@ -236,6 +239,32 @@ describe("which requests may be cancelled", () => {
   });
 });
 
+describe("the rule can never trap a client", () => {
+  it("blocks exactly what it lets you cancel", () => {
+    // The invariant that makes deadlock impossible by construction. If these
+    // two sets ever diverge, the gap between them is a set of states where a
+    // client is blocked from raising anything and cannot clear it themselves.
+    for (const status of ALL_STATUSES) {
+      expect(blocksNewRequest(status)).toBe(isCancellable(status));
+    }
+  });
+
+  it("keeps the query's literal list honest", () => {
+    // BLOCKING_STATUSES is spelled out for Drizzle and so is a second source of
+    // truth. This is what stops it drifting from the function.
+    const derived = ALL_STATUSES.filter(blocksNewRequest).sort();
+    expect([...BLOCKING_STATUSES].sort()).toEqual(derived);
+  });
+
+  it("releases the block once the change is on the default branch", () => {
+    // The bug this replaced: blocking until `verified` locked a client out for
+    // good, because nothing advanced a request past `merged`.
+    expect(blocksNewRequest("merged")).toBe(false);
+    expect(blocksNewRequest("deployed")).toBe(false);
+    expect(blocksNewRequest("pr_open")).toBe(true);
+  });
+});
+
 describe("one open request per site", () => {
   it("finds the open request blocking a site", async () => {
     await createChangeRequest(db, acme.ctx, {
@@ -258,21 +287,36 @@ describe("one open request per site", () => {
     ).toBeNull();
   });
 
-  it("keeps blocking while a change is deployed but unconfirmed", async () => {
-    // The reason the rule exists. The next agent branch is cut from whatever is
-    // on the default branch, so until this deploy is confirmed we do not know
-    // the next change will be built on top of it.
+  it("stops blocking once the change is merged, before it is verified", async () => {
+    // The next agent branch is cut from the default branch, which now contains
+    // this change — so the next request is safe to raise. Holding out for
+    // `verified` is what locked clients out when nothing advanced past merged.
     const created = await createChangeRequest(db, acme.ctx, {
-      title: "Deployed but unverified",
+      title: "Merged, deploy still running",
       sitePublicId: acme.siteAPublicId,
     });
     await db
       .update(changeRequests)
-      .set({ status: "deployed" })
+      .set({ status: "merged" })
+      .where(eq(changeRequests.id, created.id));
+
+    expect(
+      await findOpenRequestForSite(db, acme.ctx, acme.siteAPublicId),
+    ).toBeNull();
+  });
+
+  it("keeps blocking while a change is still only a pull request", async () => {
+    const created = await createChangeRequest(db, acme.ctx, {
+      title: "Waiting on approval",
+      sitePublicId: acme.siteAPublicId,
+    });
+    await db
+      .update(changeRequests)
+      .set({ status: "pr_open" })
       .where(eq(changeRequests.id, created.id));
 
     const open = await findOpenRequestForSite(db, acme.ctx, acme.siteAPublicId);
-    expect(open?.status).toBe("deployed");
+    expect(open?.status).toBe("pr_open");
   });
 
   it("stops blocking once the request is settled", async () => {

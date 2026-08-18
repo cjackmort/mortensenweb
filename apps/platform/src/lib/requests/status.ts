@@ -69,6 +69,67 @@ export function isCancellable(status: string): boolean {
   return !SETTLED.has(status) && !TOO_LATE_TO_CANCEL.has(status);
 }
 
+/**
+ * Does this request stop the client raising another one on the same site?
+ *
+ * The rule exists for sequencing: an agent branch is cut from the site's
+ * default branch at dispatch, so a change built before the previous one landed
+ * can undo it on merge. Once a pull request is **merged**, the default branch
+ * contains it and the next branch cut from it is safe — so `merged` releases
+ * the block. Waiting for `verified` would be waiting for information the
+ * *client* needs, which is a different question from whether the next change
+ * can safely be built.
+ *
+ * That distinction is not academic. Nothing advanced a request past `merged`
+ * for a while, so blocking until `verified` meant a client was locked out for
+ * good after their first successful change.
+ *
+ * **The invariant:** this is deliberately the same set as `isCancellable`.
+ * Anything that can block you is something you can cancel yourself, so the
+ * rule can never trap a client with no way out. Keep them equal — if they ever
+ * diverge, the gap between them is a deadlock.
+ */
+export function blocksNewRequest(status: string): boolean {
+  return isCancellable(status);
+}
+
+/**
+ * The blocking statuses, spelled out for the database query.
+ *
+ * Drizzle needs literals, so this cannot be derived from `blocksNewRequest` at
+ * the call site. A test asserts the two agree for every status in the enum —
+ * without it this list is a second source of truth that drifts silently, which
+ * is the exact failure `status.ts` was created to prevent.
+ */
+export const BLOCKING_STATUSES = [
+  "submitted",
+  "triaged",
+  "approved",
+  "dispatched",
+  "in_progress",
+  "pr_open",
+  "changes_requested",
+  "failed",
+] as const satisfies readonly ChangeRequestStatus[];
+
+/** Every value in the enum. Lets tests assert the sets above are exhaustive. */
+export const ALL_STATUSES = [
+  "submitted",
+  "triaged",
+  "in_progress",
+  "approved",
+  "rejected",
+  "dispatched",
+  "pr_open",
+  "changes_requested",
+  "merged",
+  "deployed",
+  "verified",
+  "closed",
+  "failed",
+  "rolled_back",
+] as const satisfies readonly ChangeRequestStatus[];
+
 export function isTooLateToCancel(status: string): boolean {
   return TOO_LATE_TO_CANCEL.has(status);
 }

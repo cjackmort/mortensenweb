@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -7,7 +7,7 @@ import {
   sites,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
-import { SETTLED_STATUSES } from "@/lib/requests/status";
+import { BLOCKING_STATUSES } from "@/lib/requests/status";
 import {
   assertMutable,
   NotFoundError,
@@ -130,11 +130,11 @@ export async function listClientVisibleEvents(
  * the first landed, so merging it can quietly undo the first: the client asked
  * for two things and got one, with nothing reporting a problem.
  *
- * Keyed off `SETTLED_STATUSES`, the same set the progress track calls settled,
- * so "still open" means one thing across the whole platform. Note that
- * `deployed` is *not* settled — the next change stays blocked until the deploy
- * has been confirmed live, which is exactly when the branch it will be cut from
- * is known to contain the last one.
+ * Keyed off `BLOCKING_STATUSES`, which releases at `merged` — the point the
+ * default branch actually contains the change, and so the point the next branch
+ * cut from it is safe. Waiting for `verified` would be waiting on information
+ * the client needs rather than on branch safety, and would lock a client out
+ * for good on any change that never gets verified.
  *
  * `siteId` null is its own bucket rather than a wildcard: requests not attached
  * to a site block each other, and do not block a site.
@@ -161,7 +161,7 @@ export async function findOpenRequestForSite(
         siteId === null
           ? isNull(changeRequests.siteId)
           : eq(changeRequests.siteId, siteId),
-        notInArray(changeRequests.status, [...SETTLED_STATUSES]),
+        inArray(changeRequests.status, [...BLOCKING_STATUSES]),
       ),
     )
     .orderBy(desc(changeRequests.createdAt))
