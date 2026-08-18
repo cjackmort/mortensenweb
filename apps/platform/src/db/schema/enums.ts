@@ -267,6 +267,11 @@ export const requestStatusEnum = pgEnum("request_status", [
   "closed",
   "failed",
   "rolled_back",
+  // A change the agent judged beyond what it should attempt unattended. Not a
+  // failure: nothing broke, and the work is still wanted — it is waiting for a
+  // person. Kept distinct from `failed` because the client wording, the operator
+  // queue, and what happens next are all different.
+  "needs_operator",
 ]);
 
 export const requestPriorityEnum = pgEnum("request_priority", [

@@ -358,3 +358,50 @@ export function renderBriefIssueTitle(
   const label = kind === "discovery" ? "Build the site" : "Apply requested changes";
   return `[${briefPublicId.slice(0, 8)}] ${label}${subject}`;
 }
+
+/**
+ * The agent's way of saying "a person should do this one".
+ *
+ * The workflow prompt already told the agent not to improvise and to explain
+ * what was blocking. The problem was that it explained in prose, which nothing
+ * could act on: the request stayed on "being worked on" until the watchdog
+ * failed it half an hour later and told the client something had gone wrong.
+ * Nothing had gone wrong — the agent made the right call and there was no way
+ * to say so.
+ *
+ * A marker rather than prose classification, for the same reason
+ * `agent-job:` is one: matching on wording means the pipeline changes meaning
+ * whenever the model phrases something differently.
+ *
+ * The reason is captured but deliberately capped and stripped of newlines. It
+ * is written by a model that has just read untrusted client text, so it is
+ * treated as a label, not as a document.
+ *
+ * Note what the pattern does *not* do: bound the reason's length. Capping it in
+ * the regex means an over-long reason stops the marker matching at all, so the
+ * escalation is missed entirely and the request sits until the watchdog fails
+ * it — the silent skip, one level down again. The marker always wins; the
+ * reason is truncated afterwards, where being too long is harmless.
+ */
+const ESCALATION_PATTERN = /<!--\s*agent-escalation\s*:?([\s\S]*?)-->/;
+
+/** Longest reason kept. Beyond this it is a document, not a label. */
+const MAX_REASON = 200;
+
+export function parseEscalationMarker(
+  body: string | null | undefined,
+): { escalated: boolean; reason: string | null } {
+  if (!body) return { escalated: false, reason: null };
+
+  const match = ESCALATION_PATTERN.exec(body);
+  if (!match) return { escalated: false, reason: null };
+
+  const reason = (match[1] ?? "").replace(/\s+/g, " ").trim();
+  if (reason.length === 0) return { escalated: true, reason: null };
+
+  return {
+    escalated: true,
+    reason:
+      reason.length > MAX_REASON ? `${reason.slice(0, MAX_REASON - 1)}…` : reason,
+  };
+}

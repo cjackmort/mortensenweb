@@ -1238,3 +1238,19 @@ input[type="file"] {
   background: var(--surface-sunk);
   cursor: pointer;
 }
+
+/* A command the operator copies to their own machine. Monospace, scrollable
+   rather than wrapping — a wrapped shell command invites a half-copied paste. */
+.handoff {
+  background: var(--surface-sunken, var(--accent-wash));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  margin: 0.5rem 0 0;
+  overflow-x: auto;
+  font-size: 0.82rem;
+}
+
+.handoff code {
+  white-space: pre;
+}

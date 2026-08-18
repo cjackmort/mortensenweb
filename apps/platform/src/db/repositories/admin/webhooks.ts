@@ -11,7 +11,7 @@ import {
   webhookDeliveries,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
-import { parseAgentJobMarker } from "@/lib/github/issue";
+import { parseAgentJobMarker, parseEscalationMarker } from "@/lib/github/issue";
 import { previewUrlFor, verifyUrlServes } from "@/lib/netlify/api";
 
 /**
@@ -211,6 +211,47 @@ async function handlePullRequest(
   const headSha = pr.head?.sha ?? null;
   const action = payload.action ?? "";
   const now = new Date();
+
+  // The agent asking for a person, before anything else is considered.
+  //
+  // Checked ahead of the action branches because an escalation is a statement
+  // about the *request*, not about this pull request's lifecycle. The agent
+  // opens one carrying the marker and whatever partial work it did; without
+  // this the request would sit on "being worked on" until the watchdog failed
+  // it half an hour later and told the client something went wrong. Nothing
+  // went wrong — the agent made exactly the call we want it to make.
+  //
+  // A pull request that escalates is never merged automatically: the merge
+  // guard still applies, and `needs_operator` is not a state Apply acts on.
+  const escalation = parseEscalationMarker(pr.body);
+  if (escalation.escalated && job.requestId) {
+    await db
+      .update(changeRequests)
+      .set({ status: "needs_operator", updatedAt: now })
+      .where(eq(changeRequests.id, job.requestId));
+
+    await db.insert(requestEvents).values([
+      {
+        requestId: job.requestId,
+        actorType: "agent",
+        kind: "escalated",
+        // Operator-facing: the agent's own words about what stopped it, which
+        // is the thing that decides how the handoff session should start.
+        body: escalation.reason ?? "The agent asked for a person, without a reason.",
+        visibility: "internal",
+        metadata: { prNumber: pr.number ?? null },
+      },
+      {
+        requestId: job.requestId,
+        actorType: "system",
+        kind: "escalated_notice",
+        body: "One of us is handling this one personally. We'll be in touch.",
+        visibility: "client_visible",
+      },
+    ]);
+
+    return { status: "processed", note: "Escalated to the operator." };
+  }
 
   if (action === "closed") {
     const merged = Boolean(pr.merged);

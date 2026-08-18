@@ -24,6 +24,7 @@ import {
 } from "@/db/repositories/client/change-requests";
 import { consumeChange } from "@/db/repositories/client/entitlements";
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
+import { parseEscalationMarker } from "@/lib/github/issue";
 import { netlifyKeyFor } from "@/db/repositories/admin/shipped";
 import {
   ALL_STATUSES,
@@ -511,6 +512,65 @@ describe("cancelling a change", () => {
         .where(eq(agentJobs.id, job.id))
     )[0]!;
     expect(row.status).toBe("cancelled");
+  });
+});
+
+describe("escalating a change to a person", () => {
+  it("reads the marker and its reason", () => {
+    const parsed = parseEscalationMarker(
+      "<!-- agent-job:01ARZ3NDEKTSV4RRFFQ69G5FAV -->\n" +
+        "<!-- agent-escalation: needs a new page template -->\n\nDetail here.",
+    );
+    expect(parsed.escalated).toBe(true);
+    expect(parsed.reason).toBe("needs a new page template");
+  });
+
+  it("accepts a bare marker with no reason", () => {
+    expect(parseEscalationMarker("<!-- agent-escalation -->").escalated).toBe(true);
+    expect(parseEscalationMarker("<!-- agent-escalation -->").reason).toBeNull();
+  });
+
+  it("does not fire on an ordinary pull request", () => {
+    // Every normal agent PR carries the job marker. Confusing the two would
+    // escalate every change that ever succeeded.
+    expect(
+      parseEscalationMarker("<!-- agent-job:01ARZ3NDEKTSV4RRFFQ69G5FAV -->\nSwapped the hero.")
+        .escalated,
+    ).toBe(false);
+    expect(parseEscalationMarker(null).escalated).toBe(false);
+  });
+
+  it("flattens and caps the reason", () => {
+    // Written by a model that has just read untrusted client text, so it is
+    // treated as a label rather than a document.
+    // An over-long reason must never stop the marker matching: missing the
+    // escalation entirely is far worse than truncating a label.
+    const parsed = parseEscalationMarker(
+      `<!-- agent-escalation: ${"x".repeat(400)} -->`,
+    );
+    expect(parsed.escalated).toBe(true);
+    expect(parsed.reason).toHaveLength(200);
+    expect(parsed.reason?.endsWith("…")).toBe(true);
+
+    const wrapped = parseEscalationMarker(
+      "<!-- agent-escalation: needs   a\tnew page -->",
+    );
+    expect(wrapped.reason).toBe("needs a new page");
+  });
+});
+
+describe("an escalated request", () => {
+  it("still blocks the site and can still be cancelled", () => {
+    // It is open work waiting on a person, so it holds the slot — and the
+    // invariant means the client is never trapped by it.
+    expect(blocksNewRequest("needs_operator")).toBe(true);
+    expect(isCancellable("needs_operator")).toBe(true);
+    expect(isOpen("needs_operator")).toBe(true);
+  });
+
+  it("is not shown as a point on the happy path", () => {
+    // A part-filled progress bar would suggest it is still moving on its own.
+    expect(stageIndex("needs_operator")).toBeNull();
   });
 });
 
