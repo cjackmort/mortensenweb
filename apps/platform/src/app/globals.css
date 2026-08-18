@@ -244,7 +244,12 @@ code {
 .nav a[aria-current="page"] {
   color: var(--accent);
   border-bottom-color: var(--accent);
-  font-weight: 600;
+  font-weight: 650;
+  /* A wash behind the active tab as well as the underline. Two signals rather
+     than one, so the current section is obvious at a glance and does not
+     depend on noticing two pixels of colour. */
+  background: var(--accent-wash);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
 .shell {
@@ -270,14 +275,17 @@ code {
   gap: 1rem;
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 1rem;
-  margin-bottom: 1.5rem;
+  padding-bottom: 1.1rem;
+  margin-bottom: 1.75rem;
 }
 
 .masthead h1 {
-  font-size: 1.35rem;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  /* The page had no clear first thing to read: the title sat at 1.35rem while
+     stat values were 1.75rem, so the numbers shouted over the heading and
+     nothing established a hierarchy. */
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -293,9 +301,9 @@ code {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.1rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.1rem;
   box-shadow: var(--shadow-sm);
 }
 
@@ -306,11 +314,13 @@ code {
 }
 
 .card > h2 {
+  /* Was 0.75rem uppercase grey — indistinguishable from a caption, so a card
+     read as a slab with no title. A section heading should be legible as a
+     heading first and a label second. */
   margin: 0 0 0.9rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
   font-weight: 650;
 }
 
@@ -325,10 +335,9 @@ code {
 
 .card-head > h2 {
   margin: 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
   font-weight: 650;
 }
 
@@ -377,7 +386,13 @@ code {
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  /* "Is anyone looking at my site" is the question this page exists to answer,
+     so the answer is the largest thing on it. Tabular figures stop the row
+     jittering as numbers change between loads. */
+  font-size: 2.5rem;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
   line-height: 1.1;
   font-weight: 650;
   letter-spacing: -0.02em;
