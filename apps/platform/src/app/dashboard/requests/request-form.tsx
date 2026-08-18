@@ -91,15 +91,6 @@ function AllowanceMeter({ allowance }: { allowance: AllowanceSummary }) {
   );
 }
 
-const CATEGORIES = [
-  { value: "content", label: "Text or content change" },
-  { value: "design", label: "Design or layout" },
-  { value: "bug", label: "Something looks broken" },
-  { value: "seo", label: "Search or visibility" },
-  { value: "feature", label: "Something new" },
-  { value: "other", label: "Something else" },
-];
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -291,13 +282,21 @@ export function RequestForm({
         maxLength={200}
       />
 
-      <label htmlFor="description">Any detail that would help</label>
+      <label htmlFor="description">Tell us what you want</label>
       <textarea
         id="description"
         name="description"
-        placeholder="Where it is, what it should say, anything we should know."
+        rows={7}
+        placeholder="Describe it however you'd say it out loud. Where it is, what it should say, what you don't like about it now — as much or as little as you want."
       />
+      <p className="field-hint">
+        No need to be technical. We&rsquo;ll work out the details and send you a
+        preview before anything changes on your site.
+      </p>
 
+      {/* One site is the normal case, so the picker only appears when the
+          choice is real. Two questions where one has a single possible answer
+          is a form that feels longer than it is. */}
       {sites.length > 1 && (
         <>
           <label htmlFor="sitePublicId">Which site?</label>
@@ -314,19 +313,14 @@ export function RequestForm({
         <input type="hidden" name="sitePublicId" value={sites[0]!.publicId} />
       )}
 
-      <label htmlFor="category">What kind of change?</label>
-      <select id="category" name="category" defaultValue="content">
-        {CATEGORIES.map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.label}
-          </option>
-        ))}
-      </select>
-
-      <label className="checkbox">
-        <input type="checkbox" name="priority" value="high" />
-        <span>This one is urgent</span>
-      </label>
+      {/* Category and priority are gone from the form.
+          
+          Both asked the client to classify their own request, which is our job
+          and not theirs — someone who wants a phone number changed should not
+          have to decide whether that is "content" or "a bug", and every one of
+          those choices is a chance to stall. The agent reads what they wrote
+          and works it out, which is what it is for. `category` defaults to
+          `other` server-side and nothing downstream branches on it. */}
 
       <label htmlFor="photos">Photos (optional)</label>
       <input
