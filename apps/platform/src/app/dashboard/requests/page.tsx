@@ -13,9 +13,10 @@ import {
 } from "@/db/repositories/client/entitlements";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { RequestProgress } from "@/components/request-progress";
-import { stageIndex } from "@/lib/requests/status";
+import { isCancellable, stageIndex } from "@/lib/requests/status";
 import { RequestForm } from "./request-form";
 import { PreviewPanel } from "./preview-panel";
+import { CancelRequestButton } from "./cancel-button";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,13 @@ export default async function ClientRequestsPage() {
             </div>
           ) : (
             requests.map((request) => (
-              <div key={request.publicId} className="request-item">
+              <div
+                key={request.publicId}
+                // The target of the "in progress: …" link on the form above.
+                id={`request-${request.publicId}`}
+                className="request-item"
+                style={{ scrollMarginTop: "1.5rem" }}
+              >
                 <div className="request-head">
                   <p className="request-title">{request.title}</p>
                   <span className="muted" style={{ fontSize: "0.8rem" }}>
@@ -169,6 +176,17 @@ export default async function ClientRequestsPage() {
                       </span>
                     )}
                   </p>
+                )}
+
+                {/* Offered only where the server would honour it — see
+                    `isCancellable`. A change that has already merged is past
+                    the point of calling off, and showing the button anyway
+                    would be an invitation to a refusal. */}
+                {isCancellable(request.status) && (
+                  <CancelRequestButton
+                    requestPublicId={request.publicId}
+                    hasPreview={Boolean(request.previewUrl)}
+                  />
                 )}
               </div>
             ))

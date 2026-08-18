@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import { createChangeRequest } from "@/db/repositories/client/change-requests";
+import {
+  createChangeRequest,
+  findOpenRequestForSite,
+  getChangeRequestOrThrow,
+} from "@/db/repositories/client/change-requests";
+import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
+import { NotFoundError } from "@/db/repositories/context";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
 import { autoDispatchIfEnabled } from "@/db/repositories/admin/agent-jobs";
 import {
@@ -51,6 +57,17 @@ export type RequestSubmission =
       message: string;
       included: number;
       overagePerChangeCents: number | null;
+    }
+  /**
+   * One change is already open on this site. Carries the offender so the form
+   * can link to it — "you already have one" without saying which one leaves the
+   * client hunting through their history for it.
+   */
+  | {
+      ok: false;
+      reason: "one_at_a_time";
+      message: string;
+      openRequest: { publicId: string; title: string; status: string };
     }
   | { ok: false; reason?: "locked" | "invalid"; message: string };
 
@@ -106,7 +123,35 @@ export async function submitChangeRequest(
     };
   }
 
-  // Gate two: is there allowance left? This *consumes* it — the claim happens
+  // Gate two: is something already in flight for this site? Before the
+  // allowance for the same reason gate one is: "you already have one running"
+  // and "you're out of changes" are different conversations, and consuming a
+  // change to then refuse the request would spend it on nothing.
+  //
+  // This is a sequencing rule, not a quota. See `findOpenRequestForSite`.
+  let openForSite;
+  try {
+    openForSite = await findOpenRequestForSite(db, ctx, sitePublicId || undefined);
+  } catch {
+    // resolveSiteId throws for a site that is not this tenant's.
+    return { ok: false, reason: "invalid", message: "We couldn't find that site." };
+  }
+
+  if (openForSite) {
+    return {
+      ok: false,
+      reason: "one_at_a_time",
+      message:
+        "You've already got a change in progress. We do one at a time so a new change is always built on top of the last one — otherwise the second can quietly undo the first.",
+      openRequest: {
+        publicId: openForSite.publicId,
+        title: openForSite.title,
+        status: openForSite.status,
+      },
+    };
+  }
+
+  // Gate three: is there allowance left? This *consumes* it — the claim happens
   // before the request is created, so two submissions racing for the last
   // change cannot both win. If anything below fails, it is handed back.
   const claim = await consumeChange(db, ctx);
@@ -194,4 +239,62 @@ export async function submitChangeRequest(
     rejected,
     remaining: claim.remaining,
   };
+}
+
+export type CancelRequestResult = { ok: boolean; message: string };
+
+/**
+ * "Actually, forget this one."
+ *
+ * The tenant is resolved from the session and the request is looked up through
+ * the tenant-scoped repository *before* anything else happens, so the only
+ * thing the form controls is which of their own requests they are cancelling.
+ * `getChangeRequestOrThrow` raises `NotFoundError` for another tenant's
+ * request, which is reported as not-found rather than forbidden — a 403 would
+ * confirm the request exists.
+ *
+ * Cancelling is what makes the one-at-a-time rule survivable. Without it, a
+ * client who dislikes a preview and does not want it rebuilt has no way out of
+ * their own open request, and cannot raise anything else until an operator
+ * intervenes.
+ */
+export async function cancelRequest(
+  _previous: CancelRequestResult | null,
+  formData: FormData,
+): Promise<CancelRequestResult> {
+  const user = await currentUser();
+  if (!user) return { ok: false, message: "Please sign in again." };
+  if (!user.organizationId) {
+    return { ok: false, message: "Your account is not linked to an organization yet." };
+  }
+
+  const requestPublicId = String(formData.get("requestPublicId") ?? "").trim();
+  if (!requestPublicId) return { ok: false, message: "No request was specified." };
+
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  const ctx = tenantContextFrom(user, user.organizationId);
+  const db = await getDb();
+
+  let request;
+  try {
+    request = await getChangeRequestOrThrow(db, ctx, requestPublicId);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "We couldn't find that request." };
+    }
+    throw error;
+  }
+
+  const outcome = await cancelChangeRequest(db, {
+    requestId: request.id,
+    actorUserId: ctx.userId,
+    actorType: "client",
+    reason,
+  });
+
+  revalidatePath("/dashboard/requests");
+  revalidatePath("/dashboard");
+
+  return { ok: outcome.ok, message: outcome.message };
 }

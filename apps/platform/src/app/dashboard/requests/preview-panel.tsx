@@ -163,7 +163,11 @@ export function PreviewPanel({ items }: { items: PreviewItem[] }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="card">
+    // The anchor the dashboard's "waiting on you" banner links to. Named rather
+    // than positional so the banner keeps landing here if the page is reordered.
+    // `scroll-margin-top` keeps the heading clear of the sticky header instead
+    // of jumping to it and hiding it.
+    <section className="card" id="awaiting-approval" style={{ scrollMarginTop: "1.5rem" }}>
       <div className="card-head">
         <h2>Ready for you to look at</h2>
         <span className="muted">{items.length}</span>

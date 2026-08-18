@@ -5,6 +5,7 @@ import {
   MAX_ATTACHMENTS_PER_REQUEST,
   MAX_ATTACHMENT_BYTES,
 } from "@/lib/storage";
+import { statusLabel } from "@/lib/requests/status";
 import { submitChangeRequest, type RequestSubmission } from "./actions";
 
 /**
@@ -249,6 +250,26 @@ export function RequestForm({
                 you more each month.
               </>
             )}
+          </p>
+        </div>
+      ) : state && !state.ok && state.reason === "one_at_a_time" ? (
+        /* Also not an error. They have done nothing wrong, and the answer is
+           "finish or cancel that one first" — so it names the request that is
+           in the way rather than leaving them to work it out from a list. */
+        <div className="notice">
+          <p style={{ marginTop: 0 }}>
+            <strong>{state.message}</strong>
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            In progress:{" "}
+            <a href={`#request-${state.openRequest.publicId}`}>
+              {state.openRequest.title}
+            </a>{" "}
+            <span className="muted">
+              &mdash; {statusLabel(state.openRequest.status)}
+            </span>
+            . Finish that one, or cancel it, and you can send this straight
+            after.
           </p>
         </div>
       ) : (

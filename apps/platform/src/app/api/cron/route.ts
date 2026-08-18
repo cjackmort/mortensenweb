@@ -3,13 +3,14 @@ import { getDb } from "@/db/client";
 import { expireStalledJobs } from "@/db/repositories/admin/agent-jobs";
 import { reverifyPendingPreviews } from "@/db/repositories/admin/webhooks";
 import { reverifyLiveSites } from "@/db/repositories/admin/launch";
+import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
 import { expireStaleShares } from "@/db/repositories/admin/maintenance";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
  * The scheduled work.
  *
- * Four jobs that have to run whether or not anyone is looking:
+ * Five jobs that have to run whether or not anyone is looking:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -23,6 +24,11 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      The operator should hear it here, not from the client.
  *   4. **Share expiry.** A concept for a business that never replied should not
  *      stay reachable indefinitely.
+ *   5. **Following merged changes to the site.** The merge webhook is the last
+ *      thing that touched a shipped request, so it stopped at `merged` and the
+ *      client was left reading "Not on your site yet" about a change that was
+ *      live. This is the other half of the loop's last mile: confirm the deploy
+ *      for the merge commit, then confirm the site actually serves.
  *
  * ## Authentication
  *
@@ -72,6 +78,7 @@ export async function POST(request: Request): Promise<Response> {
   const jobs: [string, () => Promise<unknown>][] = [
     ["previewsVerified", () => reverifyPendingPreviews(db)],
     ["jobsExpired", () => expireStalledJobs(db)],
+    ["shippedChanges", () => advanceShippedChanges(db)],
     ["liveSiteProblems", () => reverifyLiveSites(db)],
     ["sharesExpired", () => expireStaleShares(db)],
   ];

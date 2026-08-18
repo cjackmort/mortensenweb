@@ -163,6 +163,37 @@ export async function mergePullRequest(
   };
 }
 
+/**
+ * Close a pull request without merging it.
+ *
+ * The counterpart to `mergePullRequest`, used when a client cancels a change
+ * the agent has already built. Leaving the pull request open would mean an
+ * abandoned change sitting on the repository that the merge guard would still
+ * consider a candidate, and that a later reader would take for outstanding work.
+ *
+ * 404 and 422 are allowed rather than thrown: the first means the pull request
+ * is already gone, the second that GitHub will not reopen or re-close it in its
+ * current state. Both describe a pull request that is not open, which is the
+ * outcome this function exists to produce — failing the client's cancellation
+ * because the thing they wanted closed is already closed would be perverse.
+ */
+export async function closePullRequest(
+  repo: Repo,
+  number: number,
+): Promise<{ closed: boolean; status: number }> {
+  const { status } = await githubRequest(
+    repo.installationId,
+    `${repoPath(repo)}/pulls/${number}`,
+    {
+      method: "PATCH",
+      body: { state: "closed" },
+      allowStatuses: [404, 422],
+    },
+  );
+
+  return { closed: status === 200, status };
+}
+
 // ---------------------------------------------------------------------------
 // Repository provisioning
 // ---------------------------------------------------------------------------

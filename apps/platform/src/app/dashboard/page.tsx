@@ -70,6 +70,14 @@ export default async function ClientDashboard({
   const { site, state, data, showingDemo, isDemoSite } = analytics;
   const openRequests = openCount(requests);
 
+  // Anything the client is holding up. `previewUrl` is already gated on the
+  // preview having been fetched and answered, so a request only reaches this
+  // banner once there is something real to look at; `pending` excludes the ones
+  // they have already decided on.
+  const awaitingApproval = requests.filter(
+    (r) => r.previewUrl && r.previewDecision === "pending",
+  );
+
   return (
     <AppShell user={user}>
       <main className="shell">
@@ -91,6 +99,34 @@ export default async function ClientDashboard({
             </span>
           )}
         </div>
+
+        {/* Directly under the title, above the visitor figures. A preview
+            waiting on the client is the only thing on this page where nothing
+            happens until they act, and the previous version left it findable
+            only by going to Requests and scrolling — so previews sat unapproved
+            for days. It links straight to the approval panel, not to the
+            preview itself: opening the preview from here would show them the
+            change with no way to say yes to it. */}
+        {awaitingApproval.length > 0 && (
+          <div className="notice notice-action">
+            <strong>
+              {awaitingApproval.length === 1
+                ? "Your change is ready to look at."
+                : `${awaitingApproval.length} changes are ready to look at.`}
+            </strong>{" "}
+            {awaitingApproval.length === 1 && awaitingApproval[0] && (
+              <span className="muted">{awaitingApproval[0].title}</span>
+            )}
+            <p style={{ margin: "0.5rem 0 0" }}>
+              Nothing changes on your site until you approve it.
+            </p>
+            <p style={{ margin: "0.75rem 0 0" }}>
+              <Link className="button" href="/dashboard/requests#awaiting-approval">
+                Review it now
+              </Link>
+            </p>
+          </div>
+        )}
 
         {showingDemo && <DemoBanner state={state} />}
         {isDemoSite && !showingDemo && (

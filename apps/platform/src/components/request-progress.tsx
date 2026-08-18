@@ -9,7 +9,7 @@ import {
  * "Has my change happened yet?" — answered without making the client interpret
  * pipeline vocabulary.
  *
- * Two renderings, because two situations. On the happy path a four-step track
+ * Two renderings, because two situations. On the happy path a five-step track
  * shows how far along the change is. Off it — rejected, failed, rolled back —
  * the track is replaced entirely, since a part-filled progress bar would
  * suggest the change is still on its way when it is not.
