@@ -48,7 +48,29 @@ export async function listChangeRequests(
       previewDecision: agentJobs.clientDecision,
     })
     .from(changeRequests)
-    .leftJoin(agentJobs, eq(agentJobs.requestId, changeRequests.id))
+    // The *latest* job only.
+    //
+    // A request dispatched more than once — a failed run retried, or a revision
+    // after "ask for changes" — has several `agent_jobs` rows. Joining on
+    // `request_id` alone emits one result row per job, so a request appears
+    // repeatedly in the list, and worse: the dashboard's approval banner reads
+    // an older job that is still `pending` and keeps telling the client to
+    // review something they already approved.
+    .leftJoin(
+      agentJobs,
+      and(
+        eq(agentJobs.requestId, changeRequests.id),
+        eq(
+          agentJobs.id,
+          sql`(
+            select aj.id from agent_jobs aj
+            where aj.request_id = ${changeRequests.id}
+            order by aj.created_at desc
+            limit 1
+          )`,
+        ),
+      ),
+    )
     .where(eq(changeRequests.organizationId, ctx.organizationId))
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 50);

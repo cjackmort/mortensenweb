@@ -21,6 +21,7 @@ import {
 import {
   createChangeRequest,
   findOpenRequestForSite,
+  listChangeRequests,
 } from "@/db/repositories/client/change-requests";
 import { consumeChange } from "@/db/repositories/client/entitlements";
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
@@ -593,5 +594,53 @@ describe("addressing a Netlify site", () => {
     expect(
       netlifyKeyFor({ netlifySiteId: null, netlifySiteName: null }),
     ).toBeNull();
+  });
+});
+
+describe("a request that was dispatched more than once", () => {
+  it("reports only the latest job, so an approved change stops asking", () => {
+    // The bug: `listChangeRequests` joined `agent_jobs` on `request_id` alone,
+    // so a re-dispatched request emitted one row per job. The dashboard banner
+    // then read an *older* job still marked `pending` and kept telling the
+    // client to review a change they had already approved.
+    return (async () => {
+      const created = await createChangeRequest(db, acme.ctx, {
+        title: "Rebuilt after a failed run",
+        sitePublicId: acme.siteAPublicId,
+      });
+
+      const older = new Date("2026-08-01T10:00:00Z");
+      const newer = new Date("2026-08-02T10:00:00Z");
+
+      // The first attempt: preview verified, never decided on.
+      await db.insert(agentJobs).values({
+        publicId: newPublicId(),
+        requestId: created.id,
+        status: "failed",
+        previewUrl: "https://preview-1.example",
+        previewVerifiedAt: older,
+        createdAt: older,
+      });
+
+      // The retry, which the client approved.
+      await db.insert(agentJobs).values({
+        publicId: newPublicId(),
+        requestId: created.id,
+        status: "pr_open",
+        previewUrl: "https://preview-2.example",
+        previewVerifiedAt: newer,
+        clientDecision: "approved",
+        clientDecisionAt: newer,
+        createdAt: newer,
+      });
+
+      const rows = await listChangeRequests(db, acme.ctx, { limit: 50 });
+      const mine = rows.filter((r) => r.publicId === created.publicId);
+
+      // One row, not two.
+      expect(mine).toHaveLength(1);
+      expect(mine[0]?.previewDecision).toBe("approved");
+      expect(mine[0]?.previewUrl).toBe("https://preview-2.example");
+    })();
   });
 });
