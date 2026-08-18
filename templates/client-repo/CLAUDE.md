@@ -40,6 +40,34 @@ old site, not a stock library. Those break, and may not be licensed.
 **Removing an image.** Remove the markup, the `alt`, and any preload. Leave the
 file itself in the repository unless the request says to delete it.
 
+## Click tracking
+
+The portal shows the client which photos people open and how many go on to get
+in touch. That only works if the markup says so — analytics reports what it is
+told about, and an untagged site reports nothing however many visitors it has.
+
+Add `data-umami-event` to anything worth counting, using a `name: detail`
+label:
+
+```html
+<a href="/work/chief-in-waiting" data-umami-event="photo: Chief in Waiting">
+<a href="tel:+13035550100" data-umami-event="called">
+<a href="mailto:hi@example.com" data-umami-event="emailed">
+<button type="submit" data-umami-event="enquiry sent">
+```
+
+The subject goes in the event **name**, not in Umami's event properties: one
+API call instead of two, and it behaves the same on Umami Cloud and
+self-hosted, whose property endpoints differ.
+
+Use `photo:` for anything image-like — the portal groups those separately,
+because photographs are opened constantly while calls are rare, and ranking
+them in one list buries every call under a gallery.
+
+Tag every photo the site shows, every phone and email link, and every form
+submit. Do not tag navigation: knowing someone clicked "About" is noise, and a
+long list of nothing teaches the client to stop reading the panel.
+
 ## What never to touch
 
 - `.github/` — workflows, including the one running you

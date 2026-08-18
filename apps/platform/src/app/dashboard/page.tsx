@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
 import { RequestProgress } from "@/components/request-progress";
+import { ClickSummary } from "@/components/click-summary";
 import { CancelRequestButton } from "./requests/cancel-button";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
@@ -184,6 +185,11 @@ export default async function ClientDashboard({
             <BarList rows={data.countries} unit="visitors" />
           </section>
         </div>
+
+        {/* After the where-they-came-from grid and before requests: this is
+            the answer to "is the site working", which sits naturally between
+            audience and admin. */}
+        <ClickSummary events={data.events} />
 
         <section className="card">
           <div className="card-head">

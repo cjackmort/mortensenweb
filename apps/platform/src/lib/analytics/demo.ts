@@ -96,6 +96,17 @@ export function demoAnalytics(
       { label: "Canada", value: Math.round(visitorsTotal * 0.07) },
       { label: "United Kingdom", value: Math.round(visitorsTotal * 0.05) },
     ],
+    // Shaped like a real artist's site: photographs dominate, and the calls
+    // that follow are a fraction of them. A demo showing every event at a
+    // similar height would teach the wrong thing about what the panel is for.
+    events: [
+      { label: "photo: Chief in Waiting", value: Math.round(visitorsTotal * 0.31) },
+      { label: "photo: Bison Coat Rack", value: Math.round(visitorsTotal * 0.22) },
+      { label: "photo: Mountain Lion", value: Math.round(visitorsTotal * 0.18) },
+      { label: "photo: Coal Miner", value: Math.round(visitorsTotal * 0.11) },
+      { label: "called", value: Math.round(visitorsTotal * 0.07) },
+      { label: "emailed", value: Math.round(visitorsTotal * 0.04) },
+    ],
     generatedAt: new Date(),
   };
 }
