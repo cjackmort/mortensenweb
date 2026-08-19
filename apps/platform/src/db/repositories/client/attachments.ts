@@ -62,6 +62,8 @@ export async function attachImageToRequest(
   ctx: TenantContext,
   requestPublicId: string,
   upload: ValidatedUpload,
+  /** What the client calls this photo, and anything they said about it. */
+  meta: { title?: string; caption?: string } = {},
 ) {
   assertMutable(ctx);
   const requestId = await requireOwnRequest(db, ctx, requestPublicId);
@@ -76,6 +78,8 @@ export async function attachImageToRequest(
   const inserted = await db
     .insert(requestAttachments)
     .values({
+      title: meta.title?.trim() || null,
+      caption: meta.caption?.trim() || null,
       publicId: newPublicId(),
       requestId,
       r2Key: key,

@@ -108,6 +108,17 @@ export const requestAttachments = pgTable(
       .references(() => changeRequests.id, { onDelete: "cascade" }),
     /** Random opaque key. User filenames never appear in the object key. */
     r2Key: text("r2_key").notNull(),
+    /**
+     * What the client calls this photo, and what it is.
+     *
+     * Without a name the issue could only offer "Attachment 1", so a request
+     * saying "put the new one in the gallery" had nothing to match against and
+     * the agent ignored the upload entirely. The caption carries whatever the
+     * client wants said about it — a price, a material, a dimension — which is
+     * usually the thing that has to appear next to it on the page.
+     */
+    title: text("title"),
+    caption: text("caption"),
     filenameOriginal: text("filename_original"),
     contentTypeDeclared: text("content_type_declared"),
     /** Result of magic-byte inspection, not the client's claim. */
@@ -337,7 +348,8 @@ export const siteBriefs = pgTable(
     check(
       "site_briefs_not_empty",
       sql`length(btrim(coalesce(${t.colourDirection}, '') || coalesce(${t.features}, '') || coalesce(${t.contentNotes}, '') || coalesce(${t.body}, ''), E' 	
-')) > 0`,
+
+')) > 0`,
     ),
     check(
       "site_briefs_submitted_complete",

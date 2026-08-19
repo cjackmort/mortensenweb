@@ -204,7 +204,14 @@ export async function submitChangeRequest(
       rejected.push(`${file.name}: ${REJECTION_MESSAGES[check.reason]}`);
       continue;
     }
-    await attachImageToRequest(db, ctx, created.publicId, check.upload);
+    // The name and description the client typed beside this thumbnail. Indexed
+    // by position, which matches because the form renders one pair of fields
+    // per picked file and the input's `files` list is what was submitted.
+    const position = files.indexOf(file);
+    await attachImageToRequest(db, ctx, created.publicId, check.upload, {
+      title: String(formData.get(`photoTitle${position}`) ?? ""),
+      caption: String(formData.get(`photoCaption${position}`) ?? ""),
+    });
     attached += 1;
   }
 
