@@ -370,20 +370,55 @@ export function RequestForm({
       </p>
 
       {previews.length > 0 && (
-        <div className="preview-grid">
-          {previews.map((preview) => (
-            <figure key={preview.url} className="preview">
-              {/* Local object URL, not yet uploaded. next/image cannot
-                  optimise a blob: URL, so a plain img is correct here. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview.url} alt="" />
-              <figcaption>
-                {preview.name}
-                <span>{formatBytes(preview.size)}</span>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
+        <>
+          {/* Naming happens here, beside the thumbnail, rather than in a
+              separate step. The client can see which photo they are naming,
+              and the name is what makes it referable: "put the new one in the
+              gallery" needs something called "new" for the agent to match. */}
+          <p className="field-hint" style={{ marginTop: "0.75rem" }}>
+            Give each photo a name so you can refer to it above — and anything
+            that should appear beside it, like a price.
+          </p>
+          <div className="preview-grid">
+            {previews.map((preview, index) => (
+              <figure key={preview.url} className="preview">
+                {/* Local object URL, not yet uploaded. next/image cannot
+                    optimise a blob: URL, so a plain img is correct here. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview.url} alt="" />
+                <figcaption>
+                  <label
+                    htmlFor={`photo-title-${index}`}
+                    className="visually-hidden"
+                  >
+                    Name for {preview.name}
+                  </label>
+                  <input
+                    id={`photo-title-${index}`}
+                    name={`photoTitle${index}`}
+                    type="text"
+                    placeholder="Name it — e.g. new"
+                    maxLength={80}
+                  />
+                  <label
+                    htmlFor={`photo-caption-${index}`}
+                    className="visually-hidden"
+                  >
+                    Description for {preview.name}
+                  </label>
+                  <input
+                    id={`photo-caption-${index}`}
+                    name={`photoCaption${index}`}
+                    type="text"
+                    placeholder="Optional — $100, hand carved"
+                    maxLength={200}
+                  />
+                  <span>{formatBytes(preview.size)}</span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </>
       )}
 
       <button type="submit" disabled={pending || shrinking}>

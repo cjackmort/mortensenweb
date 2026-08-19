@@ -114,7 +114,14 @@ export interface IssueInput {
   priority: string;
   desiredTiming?: string | null;
   /** Short-lived signed URLs. They expire; that is why they carry a caveat. */
-  attachmentUrls?: string[];
+  /**
+   * Photos the client attached, with whatever they called them.
+   *
+   * Named rather than numbered because the agent has to match them against a
+   * request written in the client's own words — "put the new one in the
+   * gallery" needs something called "new" to point at.
+   */
+  attachmentUrls?: { url: string; title: string | null; caption: string | null }[];
   /** Paths the request is expected to touch, if the operator narrowed it. */
   allowedPaths?: string[];
 }
@@ -196,13 +203,19 @@ export function renderIssueBody(input: IssueInput): string {
 
   if (input.attachmentUrls?.length) {
     sections.push(
+      "### Photos the client attached",
       "",
-      "### Attachments",
+      "**These are the client's own photos and they are meant to be used.**",
+      "Download each one into the repository's image directory and commit it,",
+      "then reference it by its local path. Do not leave the download URL in",
+      "the markup — it expires.",
       "",
-      "Links expire shortly after this issue is opened. If one has expired, say",
-      "so rather than guessing at what it showed.",
+      ...input.attachmentUrls.flatMap((a, index) => {
+        const name = a.title ?? `Photo ${index + 1}`;
+        const said = a.caption ? ` — the client says: ${a.caption}` : "";
+        return [`- **${name}**${said} — [download](${a.url})`];
+      }),
       "",
-      ...input.attachmentUrls.map((url, index) => `- [Attachment ${index + 1}](${url})`),
     );
   }
 

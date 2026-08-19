@@ -109,19 +109,43 @@ jobs:
 
             ## Images
 
-            The only images available are the ones already committed to this
-            repository. Where they live differs by site — `src/images/` in a
-            repository built from our template, something else in one that
-            predates it. **If the repository has a CLAUDE.md, it is
-            authoritative about the layout; read it before assuming a path.**
+            Two sources, and only two.
 
-            Never link to an image anywhere else — not the client's old
-            website, not a stock library, not any external URL. Those links
-            break and may not be licensed for this use.
+            **Photos the client attached to this request.** The issue lists
+            these under "Photos the client attached", each with a name and a
+            download link. **These are theirs and they are meant to be used.**
+            Download each one into the repository's image directory and commit
+            it, then reference it by its local path:
 
-            If the request asks for a photo that is not in the repository, say
-            so in your pull request instead of substituting something. Someone
-            will add it. Every image needs an `alt` describing what it shows.
+            ```bash
+            curl -fsSL -o src/images/<sensible-name>.jpg "<the download URL>"
+            ```
+
+            Use the name the client gave the photo for the filename, lowercased
+            and hyphenated. Commit the file — a page referencing an image that
+            was never committed builds fine and renders a broken icon.
+
+            **Images already committed to this repository.** Where they live
+            differs by site — `src/images/` in one built from our template,
+            something else in one that predates it. **If the repository has a
+            CLAUDE.md, it is authoritative about the layout; read it before
+            assuming a path.**
+
+            Nothing else. Never a stock library, never the client's old site,
+            never any other external URL left in the markup — those break and
+            may not be licensed. The download links above are the exception
+            precisely because the file is fetched and committed rather than
+            linked.
+
+            **Never substitute a different photo.** If a request asks for a
+            photo and none is attached and none obviously matches in the
+            repository, say so in the pull request and change nothing. Adding
+            some other image that happened to be lying unused is not the
+            change that was asked for — it puts a picture on a real business's
+            website that nobody chose, and the client has to notice it to undo
+            it.
+
+            Every image needs an `alt` describing what it shows.
 
             ## Scope
 
