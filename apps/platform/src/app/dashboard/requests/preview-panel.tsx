@@ -6,6 +6,7 @@ import {
   requestMoreChanges,
   type ApplyResult,
 } from "./preview-actions";
+import { CancelRequestButton } from "./cancel-button";
 
 /**
  * "Here's your change — have a look."
@@ -117,6 +118,22 @@ function PreviewCard({ item }: { item: PreviewItem }) {
           </button>
         )}
       </div>
+
+      {/* The third answer.
+          
+          Approve and ask-for-changes both assume the client still wants the
+          change. "Never mind" is a real answer to a preview and it belongs
+          here, beside the other two — a cancel control further down the page,
+          below the form, is one a client looking at their preview will not
+          find. Until now they had no way to withdraw a request from the screen
+          where they had just decided against it, and the one-per-site rule then
+          blocked them from raising anything else. */}
+      {!showNote && (
+        <CancelRequestButton
+          requestPublicId={item.requestPublicId}
+          hasPreview
+        />
+      )}
 
       {showNote && (
         <form action={changesAction} style={{ marginTop: "0.75rem" }}>
