@@ -10,6 +10,7 @@ import { CancelRequestButton } from "./requests/cancel-button";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { listChangeRequests } from "@/db/repositories/client/change-requests";
+import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { resolveClientAnalytics } from "@/lib/analytics/resolve";
 import { RANGES, isValidRange, type RangeDays } from "@/lib/analytics/umami";
 import { isCancellable, openCount, stageIndex } from "@/lib/requests/status";
@@ -64,21 +65,26 @@ export default async function ClientDashboard({
   // Analytics is fetched alongside the rest rather than after it: the Umami
   // call is cached for five minutes, so this costs nothing on a warm cache and
   // one round trip on a cold one.
-  const [analytics, requests] = await Promise.all([
+  const [analytics, requests, awaitingApproval] = await Promise.all([
     resolveClientAnalytics(db, ctx, days),
     listChangeRequests(db, ctx, { limit: 5 }),
+    // The same query the Requests page uses to build its panel.
+    //
+    // This banner used to derive its own answer from `listChangeRequests` —
+    // "has a verified preview and a pending decision" — while the panel asked
+    // for jobs in `pr_open`. Two definitions of one thing, so they disagreed:
+    // a job that was cancelled or failed while its decision was still pending
+    // satisfied the banner and not the panel, and the client was told three
+    // changes were waiting on a page that showed none.
+    //
+    // One source, so they cannot drift again.
+    listPreviewsAwaitingDecision(db, ctx),
   ]);
 
   const { site, state, data, showingDemo, isDemoSite } = analytics;
   const openRequests = openCount(requests);
 
-  // Anything the client is holding up. `previewUrl` is already gated on the
-  // preview having been fetched and answered, so a request only reaches this
-  // banner once there is something real to look at; `pending` excludes the ones
-  // they have already decided on.
-  const awaitingApproval = requests.filter(
-    (r) => r.previewUrl && r.previewDecision === "pending",
-  );
+
 
   return (
     <AppShell user={user}>
@@ -117,7 +123,7 @@ export default async function ClientDashboard({
                 : `${awaitingApproval.length} changes are ready to look at.`}
             </strong>{" "}
             {awaitingApproval.length === 1 && awaitingApproval[0] && (
-              <span className="muted">{awaitingApproval[0].title}</span>
+              <span className="muted">{awaitingApproval[0].requestTitle}</span>
             )}
             <p style={{ margin: "0.5rem 0 0" }}>
               Nothing changes on your site until you approve it.
