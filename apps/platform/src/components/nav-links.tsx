@@ -50,6 +50,13 @@ export function NavLinks({ items }: { items: NavItem[] }) {
             <Link
               key={item.href}
               href={item.href}
+              // Every page here is `force-dynamic`, so a click is a server
+              // round trip and the tab sits dead until it returns. Prefetching
+              // on hover and viewport entry means the payload is usually
+              // already there by the time the click lands. There are four
+              // tabs, all of them ones an operator uses constantly, so the
+              // cost of fetching ahead is small and paid while idle.
+              prefetch
               aria-current={active ? "page" : undefined}
             >
               {item.label}
