@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
-import { expireStalledJobs } from "@/db/repositories/admin/agent-jobs";
+import {
+  dispatchSubmittedRequests,
+  expireStalledJobs,
+} from "@/db/repositories/admin/agent-jobs";
 import { reverifyPendingPreviews } from "@/db/repositories/admin/webhooks";
 import { reverifyLiveSites } from "@/db/repositories/admin/launch";
 import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
@@ -10,7 +13,7 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Five jobs that have to run whether or not anyone is looking:
+ * Six jobs that have to run whether or not anyone is looking:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -24,7 +27,12 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      The operator should hear it here, not from the client.
  *   4. **Share expiry.** A concept for a business that never replied should not
  *      stay reachable indefinitely.
- *   5. **Following merged changes to the site.** The merge webhook is the last
+ *   5. **Dispatching submitted requests.** Auto-dispatch used to run inside
+ *      the client's submit action, where opening a GitHub issue shared a
+ *      ten-second budget with the photo uploads — together they timed the
+ *      function out, and a client whose request had been saved saw a
+ *      connection error and typed it again.
+ *   6. **Following merged changes to the site.** The merge webhook is the last
  *      thing that touched a shipped request, so it stopped at `merged` and the
  *      client was left reading "Not on your site yet" about a change that was
  *      live. This is the other half of the loop's last mile: confirm the deploy
@@ -76,6 +84,9 @@ export async function POST(request: Request): Promise<Response> {
   const results: Record<string, unknown> = {};
 
   const jobs: [string, () => Promise<unknown>][] = [
+    // First: a request sitting undispatched is a client waiting with nothing
+    // happening, which is the most visible of these failures.
+    ["requestsDispatched", () => dispatchSubmittedRequests(db)],
     ["previewsVerified", () => reverifyPendingPreviews(db)],
     ["jobsExpired", () => expireStalledJobs(db)],
     ["shippedChanges", () => advanceShippedChanges(db)],

@@ -692,3 +692,54 @@ export async function closeChangeRequest(
 
   return { ok: true };
 }
+
+/**
+ * Dispatch requests that are waiting, on a schedule.
+ *
+ * Auto-dispatch used to run inside the client's submit action. Opening a GitHub
+ * issue is a network round trip, and doing it there put it in the same
+ * ten-second function budget as the blob uploads — together they were enough to
+ * time the request out, so a client whose submission had in fact been saved saw
+ * a connection error and typed it all again.
+ *
+ * Moving it here costs at most five minutes of delay and nothing else: a
+ * preview has to be built and then reviewed by an operator before the client
+ * sees it either way.
+ *
+ * Bounded per run. The daily cap inside `runDispatch` is the real backstop;
+ * this limit only stops one tick trying to open forty issues inside a function
+ * timeout, which is the failure it was created to remove.
+ */
+export async function dispatchSubmittedRequests(
+  db: Database,
+  { limit = 5 }: { limit?: number } = {},
+): Promise<{ dispatched: number; refused: number }> {
+  if (!isAutoDispatchEnabled()) return { dispatched: 0, refused: 0 };
+
+  const waiting = await db
+    .select({ publicId: changeRequests.publicId })
+    .from(changeRequests)
+    .where(eq(changeRequests.status, "submitted"))
+    .orderBy(changeRequests.createdAt)
+    .limit(limit);
+
+  let dispatched = 0;
+  let refused = 0;
+
+  for (const request of waiting) {
+    try {
+      const outcome = await runDispatch(db, { requestPublicId: request.publicId }, { automatic: true });
+      if (outcome.ok) dispatched += 1;
+      else refused += 1;
+    } catch (error) {
+      // One unreachable repository must not stop the rest of the batch.
+      refused += 1;
+      console.error("[dispatch] scheduled dispatch failed", {
+        requestPublicId: request.publicId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
+
+  return { dispatched, refused };
+}
