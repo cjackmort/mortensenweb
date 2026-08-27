@@ -92,6 +92,13 @@
       "when": 1787103305139,
       "tag": "0012_omniscient_jack_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787794110744,
+      "tag": "0013_cooing_power_pack",
+      "breakpoints": true
     }
   ]
 }

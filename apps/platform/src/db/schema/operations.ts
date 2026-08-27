@@ -260,6 +260,23 @@ export const agentJobs = pgTable(
       .notNull()
       .default("pending"),
     clientDecisionAt: timestamp("client_decision_at", { withTimezone: true }),
+    /**
+     * When an operator released this preview to the client.
+     *
+     * Temporary, while the agents are still being trusted. A preview is not
+     * shown to a client until a person has opened it and decided it is worth
+     * showing — the alternative is a client watching the agent learn on their
+     * own website, which costs confidence that is hard to win back.
+     *
+     * Null means built but not yet released. The client-facing query requires
+     * this to be set, so forgetting to release is a preview nobody sees rather
+     * than one shown by accident.
+     */
+    operatorReleasedAt: timestamp("operator_released_at", { withTimezone: true }),
+    operatorReleasedBy: uuid("operator_released_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
     clientDecisionByUserId: uuid("client_decision_by_user_id").references(
       () => users.id,
       { onDelete: "set null" },

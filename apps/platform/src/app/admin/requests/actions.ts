@@ -8,6 +8,7 @@ import {
   closeChangeRequest,
   dispatchChangeRequest,
 } from "@/db/repositories/admin/agent-jobs";
+import { holdPreview, releasePreview } from "@/db/repositories/admin/release";
 
 /**
  * Starting automated work on a request.
@@ -117,4 +118,49 @@ export async function closeRequestAction(
   }
 
   return { ok: true, message: "Closed." };
+}
+
+/**
+ * Releasing a preview to the client, or holding it back.
+ *
+ * Temporary while the agents earn trust — see `db/repositories/admin/release`.
+ */
+export type ReleaseResult = { ok: boolean; message: string };
+
+export async function releasePreviewAction(
+  _previous: ReleaseResult | null,
+  formData: FormData,
+): Promise<ReleaseResult> {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") {
+    return { ok: false, message: "Only an admin can release a preview." };
+  }
+
+  const agentJobPublicId = String(formData.get("agentJobPublicId") ?? "").trim();
+  if (!agentJobPublicId) return { ok: false, message: "No preview was specified." };
+
+  const outcome = await releasePreview(adminContextFrom(user), await getDb(), agentJobPublicId);
+  revalidatePath("/admin/requests");
+  // The client's own pages change the moment this lands.
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/requests");
+  return outcome;
+}
+
+export async function holdPreviewAction(
+  _previous: ReleaseResult | null,
+  formData: FormData,
+): Promise<ReleaseResult> {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") {
+    return { ok: false, message: "Only an admin can hold a preview." };
+  }
+
+  const agentJobPublicId = String(formData.get("agentJobPublicId") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "");
+  if (!agentJobPublicId) return { ok: false, message: "No preview was specified." };
+
+  const outcome = await holdPreview(adminContextFrom(user), await getDb(), agentJobPublicId, reason);
+  revalidatePath("/admin/requests");
+  return outcome;
 }

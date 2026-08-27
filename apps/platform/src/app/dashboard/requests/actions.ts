@@ -12,7 +12,6 @@ import {
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
 import { NotFoundError } from "@/db/repositories/context";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
-import { autoDispatchIfEnabled } from "@/db/repositories/admin/agent-jobs";
 import {
   consumeChange,
   getEntitlements,
@@ -195,47 +194,43 @@ export async function submitChangeRequest(
 
   // Photos are attached after the request exists, and a failure on one is
   // reported rather than thrown — the request itself is already saved.
-  const rejected: string[] = [];
-  let attached = 0;
-
-  for (const file of files) {
-    const check = await validateImageUpload(file);
-    if (!check.ok) {
-      rejected.push(`${file.name}: ${REJECTION_MESSAGES[check.reason]}`);
-      continue;
-    }
-    // The name and description the client typed beside this thumbnail. Indexed
-    // by position, which matches because the form renders one pair of fields
-    // per picked file and the input's `files` list is what was submitted.
-    const position = files.indexOf(file);
-    await attachImageToRequest(db, ctx, created.publicId, check.upload, {
-      title: String(formData.get(`photoTitle${position}`) ?? ""),
-      caption: String(formData.get(`photoCaption${position}`) ?? ""),
-    });
-    attached += 1;
-  }
-
-  // Automatic dispatch, where the operator has opted in. Last, after the photos
-  // the agent is meant to see, and swallowed whichever way it goes: the request
-  // is saved and the allowance is spent by this point, so a refusal here — no
-  // connected repository, cap reached, GitHub unreachable — is an operational
-  // matter for us and not a failed submission to hand back to someone who did
-  // nothing wrong. The id is the one just created, never anything off the form,
-  // so this unscoped call cannot be pointed at another tenant's request.
-  try {
-    const dispatched = await autoDispatchIfEnabled(db, created.publicId);
-    if (!dispatched.ok && dispatched.reason !== "disabled") {
-      console.warn("[requests] automatic dispatch refused", {
-        requestPublicId: created.publicId,
-        reason: dispatched.reason,
+  //
+  // Uploaded in parallel rather than one after another. Each attachment is a
+  // round trip to blob storage, and six of them in series against a ten-second
+  // function budget is most of the budget spent waiting. Sequentially this was
+  // timing out and the client saw a connection error having lost everything
+  // they typed.
+  const results = await Promise.all(
+    files.map(async (file, position) => {
+      const check = await validateImageUpload(file);
+      if (!check.ok) {
+        return { ok: false as const, note: `${file.name}: ${REJECTION_MESSAGES[check.reason]}` };
+      }
+      await attachImageToRequest(db, ctx, created.publicId, check.upload, {
+        // The name and description typed beside this thumbnail. Indexed by
+        // position, which matches because the form renders one pair of fields
+        // per picked file and the input's `files` list is what was submitted.
+        title: String(formData.get(`photoTitle${position}`) ?? ""),
+        caption: String(formData.get(`photoCaption${position}`) ?? ""),
       });
-    }
-  } catch (error) {
-    console.error("[requests] automatic dispatch failed", {
-      requestPublicId: created.publicId,
-      message: error instanceof Error ? error.message : "unknown",
-    });
-  }
+      return { ok: true as const };
+    }),
+  );
+
+  const rejected = results.filter((r) => !r.ok).map((r) => r.note!);
+  const attached = results.filter((r) => r.ok).length;
+
+  // Automatic dispatch is deliberately NOT done here any more.
+  //
+  // Opening a GitHub issue is a network round trip, and doing it inside the
+  // submit action put it in the same ten-second budget as the blob uploads.
+  // Together they were enough to time the function out, and a client whose
+  // request "failed" had in fact had it saved — they just could not tell, so
+  // they typed it again.
+  //
+  // The scheduled job picks up `submitted` requests instead, within five
+  // minutes. Nothing downstream cares about the delay: a preview has to be
+  // built and then reviewed before the client sees it either way.
 
   revalidatePath("/dashboard/requests");
 

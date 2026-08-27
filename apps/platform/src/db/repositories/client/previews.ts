@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -63,6 +63,13 @@ export async function listPreviewsAwaitingDecision(
       and(
         eq(changeRequests.organizationId, ctx.organizationId),
         eq(agentJobs.status, "pr_open"),
+        // Released by a person, not merely built.
+        //
+        // Temporary, while the agents are still earning trust: a client should
+        // not be the one discovering that a change came out wrong. Null means
+        // built and waiting on the operator, so forgetting to release shows the
+        // client nothing rather than showing them something unreviewed.
+        isNotNull(agentJobs.operatorReleasedAt),
       ),
     )
     .orderBy(desc(agentJobs.createdAt));

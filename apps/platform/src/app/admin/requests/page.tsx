@@ -5,6 +5,8 @@ import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { listAllChangeRequests } from "@/db/repositories/admin/clients";
 import { listEscalations } from "@/db/repositories/admin/escalations";
+import { listPreviewsAwaitingRelease } from "@/db/repositories/admin/release";
+import { ReleasePanel } from "./release-panel";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
 import { DispatchButton } from "./dispatch-button";
 
@@ -26,9 +28,10 @@ export default async function AdminRequestsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [all, escalations] = await Promise.all([
+  const [all, escalations, awaitingRelease] = await Promise.all([
     listAllChangeRequests(ctx, db, { limit: 200 }),
     listEscalations(ctx, db),
+    listPreviewsAwaitingRelease(ctx, db),
   ]);
 
   const open = all.filter((r) => isOpen(r.status));
@@ -52,6 +55,13 @@ export default async function AdminRequestsPage() {
             under a table of things proceeding normally is how one sits for a
             week. Everything needed to start is here, so the queue does not send
             you off to assemble it. */}
+        <ReleasePanel
+          items={awaitingRelease.map((item) => ({
+            ...item,
+            builtAt: item.builtAt ? item.builtAt.toISOString() : null,
+          }))}
+        />
+
         {escalations.length > 0 && (
           <section className="card">
             <div className="card-head">
