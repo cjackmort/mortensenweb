@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { currentUser, signIn } from "@/auth";
+import { AuthShell } from "@/components/auth-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -44,13 +45,16 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="shell">
-      <form className="form" action={attempt}>
-        <h1 style={{ fontSize: "1.1rem", marginBottom: "0.25rem" }}>
-          Mortensen Web Co.
+    <AuthShell>
+      <form action={attempt}>
+        <div className="auth-mark" aria-hidden="true">
+          M
+        </div>
+        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.3rem" }}>
+          Welcome back
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
-          Client &amp; administration portal
+          Sign in to Mortensen Web Co.
         </p>
 
         {failed && (
@@ -101,6 +105,6 @@ export default async function LoginPage({
           <Link href="/get-started">Get started with your welcome email</Link>
         </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }

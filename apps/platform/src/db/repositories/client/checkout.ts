@@ -96,6 +96,13 @@ async function insertPaymentRequest(
     purpose: "subscription" | "extra_change" | "other";
     coversPeriodStart?: string;
     coversPeriodEnd?: string;
+    /**
+     * Which rail this invoice was raised expecting. Not a commitment — a
+     * client can still pay by whichever rail is actually available when they
+     * act — but it's what `confirmPaymentReceived` defaults `method` to on
+     * the ledger row if nothing more specific is passed at confirmation time.
+     */
+    method?: "square" | "venmo";
   },
 ) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -109,9 +116,21 @@ async function insertPaymentRequest(
           reference: generatePaymentReference(),
           amountCents: input.amountCents,
           status: "open",
-          method: "square",
-          provider: "square",
+          method: input.method ?? "square",
+          provider: input.method === "venmo" ? null : "square",
           note: input.note,
+          // These three were previously accepted by this function's own type
+          // signature and then silently dropped here — every caller believed
+          // it was tagging purpose/period and wasn't. The consequence was
+          // invisible until something actually read `purpose` back: an
+          // extra-change purchase would insert as a plain "subscription" row,
+          // which `getBillingOverview` would surface as the amount due (wrong
+          // label) and which the allowance-increment logic downstream would
+          // never recognise as an extra-change purchase at all (silently
+          // never crediting the allowance, even once confirmed).
+          purpose: input.purpose,
+          coversPeriodStart: input.coversPeriodStart ?? null,
+          coversPeriodEnd: input.coversPeriodEnd ?? null,
         })
         .returning({
           id: paymentRequests.id,
@@ -286,6 +305,127 @@ export async function recurringAvailable(
 // ---------------------------------------------------------------------------
 // Buying one more change
 // ---------------------------------------------------------------------------
+
+export type ExtraChangeRequestOutcome =
+  | {
+      ok: true;
+      publicId: string;
+      reference: string;
+      amountCents: number;
+      businessName: string;
+    }
+  | {
+      ok: false;
+      reason: "no_client" | "not_offered";
+      message: string;
+    };
+
+/**
+ * The invoice for one additional change this month — created if it doesn't
+ * already exist, reused if it does.
+ *
+ * Provider-agnostic on purpose: this only produces the payment request row,
+ * not a checkout link. Square (when configured) mints a card link from it
+ * separately; Venmo builds its hand-off URL from the amount and reference
+ * directly, the same way it does for the main "amount due" flow. That split
+ * is what let this feature ship with just Venmo wired up — the request/reuse
+ * logic never had to know which rails happen to be configured.
+ *
+ * Reusing an existing open request matters for the same reason `beginCheckout`
+ * reuses one: the reference is what a Venmo note gets matched against, and a
+ * client who taps "buy another" twice in one month should get the same
+ * invoice both times, not two.
+ */
+export async function getOrCreateExtraChangeRequest(
+  db: Database,
+  ctx: TenantContext,
+): Promise<ExtraChangeRequestOutcome> {
+  assertMutable(ctx);
+
+  const resolved = await resolveClient(db, ctx);
+  if (!resolved) {
+    return { ok: false, reason: "no_client", message: "No client record found." };
+  }
+
+  const rows = await db
+    .select({ overagePerChangeCents: servicePlans.overagePerChangeCents })
+    .from(clients)
+    .leftJoin(
+      subscriptions,
+      and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .where(eq(clients.organizationId, ctx.organizationId))
+    .limit(1);
+
+  const overagePerChangeCents = rows[0]?.overagePerChangeCents ?? null;
+
+  const period = currentPeriod();
+
+  const existing = await db
+    .select({
+      publicId: paymentRequests.publicId,
+      reference: paymentRequests.reference,
+      amountCents: paymentRequests.amountCents,
+    })
+    .from(paymentRequests)
+    .where(
+      and(
+        eq(paymentRequests.clientId, resolved.clientId),
+        eq(paymentRequests.purpose, "extra_change"),
+        eq(paymentRequests.coversPeriodStart, period.start),
+        inArray(paymentRequests.status, [
+          "open",
+          "overdue",
+          "awaiting_confirmation",
+        ]),
+      ),
+    )
+    .limit(1);
+
+  if (existing[0]) {
+    return {
+      ok: true,
+      publicId: existing[0].publicId,
+      reference: existing[0].reference,
+      amountCents: existing[0].amountCents,
+      businessName: resolved.businessName,
+    };
+  }
+
+  // A null price means the plan does not sell extra changes. Refusing is
+  // right: inventing a price would be worse than telling them to upgrade.
+  if (!overagePerChangeCents) {
+    return {
+      ok: false,
+      reason: "not_offered",
+      message:
+        "Your plan doesn't offer extra changes — moving to a bigger plan is the way to get more.",
+    };
+  }
+
+  const created = await insertPaymentRequest(db, {
+    clientId: resolved.clientId,
+    subscriptionId: resolved.subscriptionId,
+    amountCents: overagePerChangeCents,
+    purpose: "extra_change",
+    coversPeriodStart: period.start,
+    coversPeriodEnd: period.end,
+    note: "One additional change this month",
+    method: "venmo",
+  });
+
+  return {
+    ok: true,
+    publicId: created.publicId,
+    reference: created.reference,
+    amountCents: overagePerChangeCents,
+    businessName: resolved.businessName,
+  };
+}
 
 export type ExtraChangeOutcome =
   | { ok: true; url: string; amountCents: number }

@@ -1,4 +1,4 @@
-import type { AnalyticsSummary, RangeDays } from "./umami";
+import type { AnalyticsSummary, PriorPeriod, RangeDays } from "./umami";
 
 /**
  * Demo analytics.
@@ -40,23 +40,42 @@ export function demoAnalytics(
 ): AnalyticsSummary {
   const random = mulberry32(seedFrom(`${siteKey}:${days}`));
 
+  /*
+   * Twice the range is generated, and only the second half is shown.
+   *
+   * The dashboard reports change against the preceding window of equal length,
+   * so a demo that generated the visible days alone would have nothing to
+   * compare them to and every arrow would be missing — which is exactly the
+   * part of the layout that most needs reviewing before a real site connects.
+   * Generating the run-up and discarding its series costs one loop and gives a
+   * comparison that is genuinely consistent with the visible days rather than
+   * a second invented number that happens to sit near them.
+   */
   const series = [];
   let visitorsTotal = 0;
   let pageviewsTotal = 0;
+  let priorVisitors = 0;
+  let priorPageviews = 0;
 
-  for (let i = days - 1; i >= 0; i -= 1) {
+  for (let i = days * 2 - 1; i >= 0; i -= 1) {
     const day = new Date();
     day.setDate(day.getDate() - i);
     const dow = day.getDay();
 
     // A small local business: quiet weekends, a gentle upward drift.
     const weekend = dow === 0 || dow === 6 ? 0.55 : 1;
-    const drift = 1 + ((days - i) / days) * 0.35;
+    const drift = 1 + ((days * 2 - i) / (days * 2)) * 0.35;
     const visitors = Math.max(
       1,
       Math.round((6 + random() * 14) * weekend * drift),
     );
     const pageviews = Math.round(visitors * (1.8 + random() * 1.4));
+
+    if (i >= days) {
+      priorVisitors += visitors;
+      priorPageviews += pageviews;
+      continue;
+    }
 
     visitorsTotal += visitors;
     pageviewsTotal += pageviews;
@@ -67,11 +86,31 @@ export function demoAnalytics(
     });
   }
 
+  const bounceRate = 0.38 + random() * 0.12;
+  const avgSecondsOnSite = Math.round(95 + random() * 70);
+
+  /*
+   * Visits and pageviews come out of the run-up above, so they carry whatever
+   * the drift produced — an improvement, in practice. The other two are set
+   * here, and bounce rate is deliberately set to have got *worse*: a demo
+   * whose four arrows are all green never shows anyone the red one, and the
+   * red one is the case worth checking, since it is the only place the
+   * component has to decide that a fall is good news and a rise is not.
+   */
+  const previous: PriorPeriod = {
+    visitors: priorVisitors,
+    pageviews: priorPageviews,
+    // Lower before than now: more people are leaving straight away. Bad news,
+    // and it must render red despite the arrow pointing up.
+    bounceRate: bounceRate * 0.91,
+    avgSecondsOnSite: Math.round(avgSecondsOnSite * 0.93),
+  };
+
   return {
     visitors: visitorsTotal,
     pageviews: pageviewsTotal,
-    bounceRate: 0.38 + random() * 0.12,
-    avgSecondsOnSite: Math.round(95 + random() * 70),
+    bounceRate,
+    avgSecondsOnSite,
     series,
     topPages: [
       { label: "/", value: Math.round(pageviewsTotal * 0.42) },
@@ -107,6 +146,7 @@ export function demoAnalytics(
       { label: "called", value: Math.round(visitorsTotal * 0.07) },
       { label: "emailed", value: Math.round(visitorsTotal * 0.04) },
     ],
+    previous,
     generatedAt: new Date(),
   };
 }

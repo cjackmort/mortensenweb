@@ -75,7 +75,7 @@ function AllowanceMeter({ allowance }: { allowance: AllowanceSummary }) {
           {allowance.overagePerChangeCents !== null && (
             <>
               {" "}
-              You can still send this one for{" "}
+              <a href="/dashboard/billing">Buy one more</a> for{" "}
               {formatMoney(allowance.overagePerChangeCents)}, or move to a plan
               with more included.
             </>
@@ -258,8 +258,9 @@ export function RequestForm({
           <p style={{ marginBottom: 0 }}>
             {state.overagePerChangeCents !== null ? (
               <>
-                You can send this one for{" "}
-                {formatMoney(state.overagePerChangeCents)}, or{" "}
+                <a href="/dashboard/billing">Buy one more change</a> for{" "}
+                {formatMoney(state.overagePerChangeCents)} and send this right
+                after, or{" "}
                 <a href="/dashboard/billing">move to a bigger plan</a> if
                 you&rsquo;re making changes often.
               </>

@@ -48,13 +48,20 @@ function formatDay(iso: string): string {
  * Two series on ONE axis — both are counts of the same kind, so a shared scale
  * is honest. A second y-axis would let the two lines cross wherever the scales
  * happened to put them, which invents a relationship that is not in the data.
+ *
+ * `gradientId` exists because SVG gradient ids are document-global: two charts
+ * on one page sharing an id means the second silently paints with the first
+ * one's fill. Every instance needs its own, and the default is only safe
+ * because there is exactly one full-size chart per page today.
  */
 export function TimeSeriesChart({
   series,
   labelled = true,
+  gradientId = "chart-area-fade",
 }: {
   series: SeriesPoint[];
   labelled?: boolean;
+  gradientId?: string;
 }) {
   if (series.length === 0) return null;
 
@@ -90,6 +97,15 @@ export function TimeSeriesChart({
         aria-label={`Visitors and pageviews over the last ${series.length} days`}
         preserveAspectRatio="xMidYMid meet"
       >
+        <defs>
+          {/* Vertical fade under the visitors line. Stop colours are set in
+              CSS so the gradient follows light and dark like everything else. */}
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" className="chart-grad-from" />
+            <stop offset="100%" className="chart-grad-to" />
+          </linearGradient>
+        </defs>
+
         {ticks.map((t) => (
           <g key={t}>
             <line
@@ -119,7 +135,7 @@ export function TimeSeriesChart({
           ) : null,
         )}
 
-        <path d={areaPath} className="chart-area" />
+        <path d={areaPath} className="chart-area" fill={`url(#${gradientId})`} />
         <path d={path("pageviews")} className="chart-line chart-series-2" />
         <path d={path("visitors")} className="chart-line chart-series-1" />
 
@@ -153,18 +169,86 @@ export function TimeSeriesChart({
 }
 
 /**
+ * The shape of a run of days, beside the number that counts them.
+ *
+ * Deliberately axis-less. A sparkline answers "climbing or falling", not "how
+ * many" — the figure next to it already answers that, and the full chart with
+ * real axes is a few hundred pixels below. Adding ticks would turn it into a
+ * chart too small to read from.
+ *
+ * Hidden from assistive technology on purpose: the trend it draws is stated in
+ * words by the delta beside it, so announcing it again would be one fact read
+ * out twice. `id` is required rather than defaulted because several of these
+ * render on one page and SVG gradient ids are document-global.
+ */
+export function Sparkline({
+  values,
+  id,
+}: {
+  values: number[];
+  id: string;
+}) {
+  // Two points is the minimum that can slope. One is a dot with no trend, and
+  // drawing it would imply a flat line that the data does not support.
+  if (values.length < 2) return null;
+
+  const W = 84;
+  const H = 30;
+  const inset = 3;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  // A flat run would divide by zero and collapse to the top edge; centre it.
+  const span = max - min || 1;
+
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) =>
+    max === min ? H / 2 : inset + (1 - (v - min) / span) * (H - inset * 2);
+
+  const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+  const area = `${line} L${W},${H} L0,${H} Z`;
+  const lastIndex = values.length - 1;
+
+  return (
+    <svg
+      className="spark"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" className="chart-grad-from" />
+          <stop offset="100%" className="chart-grad-to" />
+        </linearGradient>
+      </defs>
+      <path d={area} className="spark-area" fill={`url(#${id})`} />
+      <path d={line} className="spark-line" vectorEffect="non-scaling-stroke" />
+      <circle cx={x(lastIndex)} cy={y(values[lastIndex]!)} r={2} className="spark-dot" />
+    </svg>
+  );
+}
+
+/**
  * A ranked breakdown.
  *
  * One colour for every bar, deliberately. Rank is already encoded by length and
  * order; colouring each bar differently would imply a categorical identity that
  * does not exist, and would burn a palette slot per row.
+ *
+ * The share of the total is shown beside the count because the count alone is
+ * not usable: "29" is meaningless until you know whether that is a quarter of
+ * the traffic or all of it. It comes out of the same numbers, so it costs
+ * nothing and invents nothing.
  */
 export function BarList({
   rows,
   unit,
+  showShare = true,
 }: {
   rows: Breakdown[];
   unit: string;
+  showShare?: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -175,23 +259,64 @@ export function BarList({
   }
 
   const max = Math.max(...rows.map((r) => r.value), 1);
+  // Share of what is listed, which is not always share of everything: these
+  // breakdowns are the top handful of rows, so a long tail is excluded from
+  // the denominator as well as from the list.
+  const total = rows.reduce((sum, r) => sum + r.value, 0);
 
   return (
     <ul className="barlist">
+      {rows.map((row) => {
+        const share = total > 0 ? Math.round((row.value / total) * 100) : 0;
+        return (
+          <li key={row.label}>
+            <span className="barlist-label" title={row.label}>
+              {row.label}
+            </span>
+            <span className="barlist-track" aria-hidden="true">
+              <span
+                className="barlist-fill"
+                style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }}
+              />
+            </span>
+            <span className="barlist-value">
+              {row.value.toLocaleString("en-US")}
+              <span className="sr-only"> {unit}</span>
+              {showShare && total > 0 && (
+                <span className="barlist-share">
+                  {share}
+                  <span aria-hidden="true">%</span>
+                  <span className="sr-only"> percent of those listed</span>
+                </span>
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * A labelled figure per row.
+ *
+ * For measures that share no unit with each other — a duration next to a rate
+ * next to a count. Bars would rank them against one another, which is a
+ * comparison the numbers do not support.
+ */
+export function StatLines({
+  rows,
+}: {
+  rows: { label: string; value: string; note?: string }[];
+}) {
+  return (
+    <ul className="statline">
       {rows.map((row) => (
         <li key={row.label}>
-          <span className="barlist-label" title={row.label}>
-            {row.label}
-          </span>
-          <span className="barlist-track" aria-hidden="true">
-            <span
-              className="barlist-fill"
-              style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }}
-            />
-          </span>
-          <span className="barlist-value">
-            {row.value.toLocaleString("en-US")}
-            <span className="sr-only"> {unit}</span>
+          <span className="statline-label">{row.label}</span>
+          <span className="statline-figure">
+            {row.note && <span className="barlist-share">{row.note}</span>}
+            {row.value}
           </span>
         </li>
       ))}

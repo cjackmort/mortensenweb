@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { currentUser, signIn } from "@/auth";
+import { AuthShell } from "@/components/auth-shell";
 import { getDb } from "@/db/client";
 import {
   MIN_PASSWORD_LENGTH,
@@ -92,10 +93,13 @@ export default async function ChangePasswordPage({
   }
 
   return (
-    <main className="shell">
-      <form className="form" action={submit}>
-        <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
-          {isFirstRun ? "Choose your password" : "Change your password"}
+    <AuthShell>
+      <form action={submit}>
+        <div className="auth-mark" aria-hidden="true">
+          M
+        </div>
+        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
+          {isFirstRun ? "Almost there — choose your password" : "Change your password"}
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
           {isFirstRun
@@ -151,6 +155,6 @@ export default async function ChangePasswordPage({
           {isFirstRun ? "Save password and continue" : "Update password"}
         </button>
       </form>
-    </main>
+    </AuthShell>
   );
 }

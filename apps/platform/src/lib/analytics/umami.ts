@@ -24,6 +24,23 @@ export interface Breakdown {
   value: number;
 }
 
+/**
+ * The same four headline figures for the window immediately before this one,
+ * of the same length. Present only so the dashboard can say "up 12% on the
+ * previous 30 days" — which is a different and usually more useful fact than
+ * the count itself, because a client already knows roughly what normal is.
+ *
+ * Null rather than zeroed when the comparison call fails. A missing comparison
+ * must render as no arrow at all: a 0% change and an unavailable change look
+ * identical once they are drawn, and mean opposite things.
+ */
+export interface PriorPeriod {
+  visitors: number;
+  pageviews: number;
+  bounceRate: number;
+  avgSecondsOnSite: number;
+}
+
 export interface AnalyticsSummary {
   visitors: number;
   pageviews: number;
@@ -43,8 +60,29 @@ export interface AnalyticsSummary {
    * them tried to call is being shown traffic, not business.
    */
   events: Breakdown[];
+  /** The equivalent window before this one, or null when it is unavailable. */
+  previous: PriorPeriod | null;
   /** When these figures were produced. Always shown. */
   generatedAt: Date;
+}
+
+/**
+ * Change from `previous` to `current`, as a signed fraction.
+ *
+ * Null when there is no honest answer. Growth from zero is the case that
+ * matters: every naive implementation divides by it and renders `Infinity`,
+ * and the ones that guard usually return 100%, which claims the traffic
+ * doubled when it actually appeared out of nothing. Both are worse than
+ * showing no arrow, so a zero baseline yields null and the caller draws
+ * nothing.
+ */
+export function percentChange(
+  current: number,
+  previous: number,
+): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  if (previous <= 0) return null;
+  return (current - previous) / previous;
 }
 
 /**
@@ -287,13 +325,25 @@ export async function fetchAnalytics(
   if (!websiteId) return { kind: "not_connected" };
 
   const endAt = Date.now();
-  const startAt = endAt - days * 24 * 60 * 60 * 1000;
+  const span = days * 24 * 60 * 60 * 1000;
+  const startAt = endAt - span;
   const window = { startAt, endAt };
+  // The window immediately before this one, same length, no overlap: the last
+  // 30 days against the 30 before them. Comparing against a *calendar* month
+  // would be a different question, and a misleading one on the 3rd.
+  const priorWindow = { startAt: startAt - span, endAt: startAt };
 
   try {
-    const [stats, pageviewSeries, pages, referrers, devices, countries, events] =
+    const [stats, prior, pageviewSeries, pages, referrers, devices, countries, events] =
       await Promise.all([
         umamiFetch<UmamiStatsResponse>(`/websites/${websiteId}/stats`, window),
+        // The comparison is the one call allowed to fail on its own. Everything
+        // else here is the page; this is an annotation on it, and losing the
+        // arrows is much better than losing the figures they annotate.
+        umamiFetch<UmamiStatsResponse>(
+          `/websites/${websiteId}/stats`,
+          priorWindow,
+        ).catch(() => null),
         umamiFetch<{ pageviews: UmamiMetric[]; sessions: UmamiMetric[] }>(
           `/websites/${websiteId}/pageviews`,
           { ...window, unit: "day", timezone: process.env.BUSINESS_TIMEZONE ?? "America/Denver" },
@@ -330,6 +380,22 @@ export async function fetchAnalytics(
     const bounces = statValue(stats.bounces);
     const totalTime = statValue(stats.totaltime);
 
+    const priorVisitors = prior ? statValue(prior.visitors) : 0;
+    const previous: PriorPeriod | null = prior
+      ? {
+          visitors: priorVisitors,
+          pageviews: statValue(prior.pageviews),
+          bounceRate:
+            priorVisitors > 0
+              ? Math.min(1, statValue(prior.bounces) / priorVisitors)
+              : 0,
+          avgSecondsOnSite:
+            priorVisitors > 0
+              ? Math.round(statValue(prior.totaltime) / priorVisitors)
+              : 0,
+        }
+      : null;
+
     const sessionsByDate = new Map(
       (pageviewSeries.sessions ?? []).map((s) => [s.x ?? "", s.y]),
     );
@@ -354,6 +420,7 @@ export async function fetchAnalytics(
         devices: toBreakdown(devices, 4),
         countries: toBreakdown(countries),
         events: toBreakdown(events, 12),
+        previous,
         generatedAt: new Date(),
       },
     };

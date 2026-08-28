@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { currentUser, signIn } from "@/auth";
+import { AuthShell } from "@/components/auth-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +44,12 @@ export default async function GetStartedPage({
   }
 
   return (
-    <main className="shell">
-      <form className="form" action={attempt}>
-        <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+    <AuthShell>
+      <form action={attempt}>
+        <div className="auth-mark" aria-hidden="true">
+          M
+        </div>
+        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
           Welcome — let&rsquo;s get you set up
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
@@ -103,6 +107,6 @@ export default async function GetStartedPage({
           Already set up your password? <Link href="/login">Sign in</Link>
         </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }

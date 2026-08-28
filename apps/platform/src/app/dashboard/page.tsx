@@ -25,6 +25,13 @@ export const dynamic = "force-dynamic";
  * answer it is the wrong default. The full breakdowns stay on the Visitors
  * page; this is the headline and the shape of the last 30 days.
  *
+ * The page is four panels, not fourteen cards. Each panel answers one question
+ * — how many, where from, what they looked at, what we owe you — and the parts
+ * of an answer are divided inside it by hairlines rather than each being given
+ * its own bordered box. The previous version drew a border, a radius and a
+ * shadow around every individual figure, which made eight numbers read as eight
+ * competing rectangles with no hierarchy between them.
+ *
  * Every query goes through a `TenantContext` built from the session's own
  * organization. There is no code path here that could read another client's
  * data, and nothing on this page can reach the Potential Clients area.
@@ -84,7 +91,15 @@ export default async function ClientDashboard({
   const { site, state, data, showingDemo, isDemoSite } = analytics;
   const openRequests = openCount(requests);
 
+  // What the change arrows are measured against, spelled out for anyone
+  // listening to the page rather than looking at it.
+  const comparedTo = `previous ${days} days`;
 
+  const updatedAt = data.generatedAt.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Denver",
+  });
 
   return (
     <AppShell user={user}>
@@ -143,121 +158,155 @@ export default async function ClientDashboard({
           </p>
         )}
 
-        <nav className="rangebar" aria-label="Time range">
-          {(Object.keys(RANGES) as unknown as RangeDays[]).map((value) => (
-            <Link
-              key={value}
-              href={`/dashboard?range=${value}`}
-              aria-current={Number(value) === days ? "true" : undefined}
-            >
-              {RANGES[value]}
-            </Link>
-          ))}
-        </nav>
+        {/* ---------------------------------------------- headline figures */}
 
-        <StatRow data={data} />
-
-        <section className="card">
-          <div className="card-head">
-            <h2>Visitors over time</h2>
-            <span className="muted">{RANGES[days]}</span>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>
+              Your visitors{" "}
+              <span className="panel-sub">· updated {updatedAt}</span>
+            </h2>
+            {/* The range filter belongs to these figures, so it sits in their
+                header rather than floating as a loose row of buttons above the
+                panel with nothing to attach itself to. */}
+            <nav className="segmented" aria-label="Time range">
+              {(Object.keys(RANGES) as unknown as RangeDays[]).map((value) => (
+                <Link
+                  key={value}
+                  href={`/dashboard?range=${value}`}
+                  aria-current={Number(value) === days ? "true" : undefined}
+                >
+                  {RANGES[value].replace("Last ", "")}
+                </Link>
+              ))}
+            </nav>
           </div>
-          <TimeSeriesChart series={data.series} />
-          <SeriesTable series={data.series} />
+
+          <StatRow data={data} comparedTo={comparedTo} />
+
+          <div className="panel-body">
+            <TimeSeriesChart series={data.series} />
+            <SeriesTable series={data.series} />
+          </div>
         </section>
 
-        <div className="grid grid-2">
-          <section className="card">
-            <h2>Most viewed pages</h2>
-            <BarList rows={data.topPages} unit="views" />
-          </section>
+        {/* ------------------------------------------------- the audience */}
 
-          <section className="card">
-            <h2>How they found you</h2>
-            <BarList rows={data.referrers} unit="visitors" />
-            <p className="muted" style={{ fontSize: "0.8rem", margin: "0.75rem 0 0" }}>
-              &ldquo;Direct&rdquo; means they typed the address or used a
-              bookmark — often someone you gave a card to.
-            </p>
-          </section>
-
-          <section className="card">
-            <h2>What they used</h2>
-            <BarList rows={data.devices} unit="visitors" />
-          </section>
-
-          <section className="card">
-            <h2>Where they were</h2>
-            <BarList rows={data.countries} unit="visitors" />
-          </section>
-        </div>
-
-        {/* After the where-they-came-from grid and before requests: this is
-            the answer to "is the site working", which sits naturally between
-            audience and admin. */}
-        <ClickSummary events={data.events} />
-
-        <section className="card">
-          <div className="card-head">
-            <h2>Recent requests</h2>
-            <Link href="/dashboard/requests">
-              {requests.length === 0 ? "Request a change" : "All requests"}
-            </Link>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Where your visitors came from</h2>
+            <span className="panel-sub">{RANGES[days]}</span>
           </div>
 
-          {requests.length === 0 ? (
-            <div className="empty">
-              <p className="empty-title">No requests yet.</p>
-              <p>
-                Anything you&rsquo;d like changed on your site — send it over
-                and we&rsquo;ll pick it up.
-              </p>
-              <p style={{ marginTop: "1rem" }}>
-                <Link className="button" href="/dashboard/requests">
-                  Request a change
-                </Link>
+          <div className="panel-split panel-split-3">
+            <div>
+              <h3>How they found you</h3>
+              <BarList rows={data.referrers} unit="visitors" />
+              <p className="panel-note">
+                &ldquo;Direct&rdquo; means they typed the address or used a
+                bookmark — often someone you gave a card to.
               </p>
             </div>
-          ) : (
-            <>
-              {requests.map((r) => (
-                <div key={r.publicId} className="request-item">
-                  <div className="request-head">
-                    <p className="request-title">{r.title}</p>
-                    <span className="muted" style={{ fontSize: "0.8rem" }}>
-                      sent{" "}
-                      {new Date(r.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        timeZone: "America/Denver",
-                      })}
-                    </span>
-                  </div>
-                  <RequestProgress
-                    status={r.status}
-                    stage={stageIndex(r.status)}
-                  />
 
-                  {/* Also here, not only on Requests. This list is where a
-                      client looks first, and a cancel control they cannot find
-                      is one that does not exist — the request stays open, and
-                      the one-per-site rule then blocks them from raising
-                      anything else. */}
-                  {isCancellable(r.status) && (
-                    <CancelRequestButton
-                      requestPublicId={r.publicId}
-                      hasPreview={Boolean(r.previewUrl)}
-                    />
-                  )}
-                </div>
-              ))}
-              {openRequests > 0 && (
-                <p className="muted" style={{ margin: "1rem 0 0", fontSize: "0.85rem" }}>
-                  {openRequests} still in progress.
+            <div>
+              <h3>What they used</h3>
+              <BarList rows={data.devices} unit="visitors" />
+            </div>
+
+            <div>
+              <h3>Where they were</h3>
+              <BarList rows={data.countries} unit="visitors" />
+            </div>
+          </div>
+        </section>
+
+        {/* --------------------------------------------- what they did */}
+
+        {/* Pages and clicks share a panel because they answer one question in
+            two halves: what people opened, and what they then did about it. */}
+        <section className="panel">
+          <div className="panel-head">
+            <h2>What they looked at</h2>
+            <span className="panel-sub">{RANGES[days]}</span>
+          </div>
+
+          <div className="panel-split panel-split-2">
+            <div>
+              <h3>Most viewed pages</h3>
+              <BarList rows={data.topPages} unit="views" />
+            </div>
+
+            <ClickSummary events={data.events} />
+          </div>
+        </section>
+
+        {/* -------------------------------------------------- the work */}
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Recent requests</h2>
+            <span className="panel-head-actions">
+              <Link href="/dashboard/requests">
+                {requests.length === 0 ? "Request a change" : "All requests"}
+              </Link>
+            </span>
+          </div>
+
+          <div className="panel-body">
+            {requests.length === 0 ? (
+              <div className="empty">
+                <p className="empty-title">No requests yet.</p>
+                <p>
+                  Anything you&rsquo;d like changed on your site — send it over
+                  and we&rsquo;ll pick it up.
                 </p>
-              )}
-            </>
-          )}
+                <p style={{ marginTop: "1rem" }}>
+                  <Link className="button" href="/dashboard/requests">
+                    Request a change
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <>
+                {requests.map((r) => (
+                  <div key={r.publicId} className="request-item">
+                    <div className="request-head">
+                      <p className="request-title">{r.title}</p>
+                      <span className="muted" style={{ fontSize: "0.8rem" }}>
+                        sent{" "}
+                        {new Date(r.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          timeZone: "America/Denver",
+                        })}
+                      </span>
+                    </div>
+                    <RequestProgress
+                      status={r.status}
+                      stage={stageIndex(r.status)}
+                    />
+
+                    {/* Also here, not only on Requests. This list is where a
+                        client looks first, and a cancel control they cannot find
+                        is one that does not exist — the request stays open, and
+                        the one-per-site rule then blocks them from raising
+                        anything else. */}
+                    {isCancellable(r.status) && (
+                      <CancelRequestButton
+                        requestPublicId={r.publicId}
+                        hasPreview={Boolean(r.previewUrl)}
+                      />
+                    )}
+                  </div>
+                ))}
+                {openRequests > 0 && (
+                  <p className="muted" style={{ margin: "1rem 0 0", fontSize: "0.85rem" }}>
+                    {openRequests} still in progress.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </section>
       </main>
     </AppShell>

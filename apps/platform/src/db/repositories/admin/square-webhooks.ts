@@ -2,10 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   auditLog,
-  changeAllowances,
   clients,
   paymentRequests,
-  servicePlans,
   subscriptions,
   webhookDeliveries,
 } from "@/db/schema";
@@ -308,74 +306,11 @@ async function handleEvent(
     });
   }
 
-  // An extra change becomes available only now, on confirmed money — never
-  // when the client pressed pay. The increment is conditional on the row
-  // existing, so a client who buys capacity before submitting anything that
-  // month simply gets a fresh allowance created at their first submission with
-  // the plan's figure; the guard below avoids silently losing what they bought.
-  if (request.purpose === "extra_change" && request.coversPeriodStart) {
-    const raised = await db
-      .update(changeAllowances)
-      .set({ included: sql`${changeAllowances.included} + 1` })
-      .where(
-        and(
-          eq(changeAllowances.clientId, request.clientId),
-          eq(changeAllowances.periodStart, request.coversPeriodStart),
-          // Unlimited plans have a null included and need no top-up.
-          sql`${changeAllowances.included} IS NOT NULL`,
-        ),
-      )
-      .returning({ id: changeAllowances.id });
-
-    if (raised.length === 0) {
-      // No row for that month yet. Create one already credited, so the purchase
-      // is not lost between paying and submitting.
-      const plan = await db
-        .select({
-          included: servicePlans.includedChangesPerMonth,
-          subscriptionId: subscriptions.id,
-          periodEnd: paymentRequests.coversPeriodEnd,
-        })
-        .from(paymentRequests)
-        .innerJoin(clients, eq(clients.id, paymentRequests.clientId))
-        .leftJoin(
-          subscriptions,
-          and(
-            eq(subscriptions.clientId, clients.id),
-            eq(subscriptions.status, "active"),
-          ),
-        )
-        .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
-        .where(eq(paymentRequests.publicId, request.publicId))
-        .limit(1);
-
-      const detail = plan[0];
-      if (detail?.included !== null && detail?.included !== undefined) {
-        await db
-          .insert(changeAllowances)
-          .values({
-            clientId: request.clientId,
-            subscriptionId: detail.subscriptionId,
-            periodStart: request.coversPeriodStart,
-            periodEnd: detail.periodEnd ?? request.coversPeriodStart,
-            included: detail.included + 1,
-            used: 0,
-          })
-          .onConflictDoUpdate({
-            target: [changeAllowances.clientId, changeAllowances.periodStart],
-            set: { included: sql`${changeAllowances.included} + 1` },
-          });
-      }
-    }
-
-    await db.insert(auditLog).values({
-      actorUserId: actor.userId,
-      action: "allowance.extra_change_purchased",
-      entityType: "payment_request",
-      entityId: request.publicId,
-      metadata: { period: request.coversPeriodStart, source: "square_webhook" },
-    });
-  }
+  // Extra-change allowance top-up, dunning-pause release, and the audit trail
+  // for both all now live inside `confirmPaymentReceived` itself — it's the
+  // single choke point every payment confirmation passes through (this
+  // webhook included), so duplicating that logic here risked it drifting
+  // out of sync with the manual-confirm path. See billing.ts.
 
   // Payment settles the account, so any dunning pause lifts. `confirmPaymentReceived`
   // already does this; repeated here only for clients whose row predates it.

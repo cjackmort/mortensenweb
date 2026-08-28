@@ -77,6 +77,8 @@ export async function raiseRequestAction(
   });
 
   revalidatePath(`/admin/clients/${clientPublicId}`);
+  // This action is also used from the payments page's monthly billing list.
+  revalidatePath("/admin/payments");
   return {
     ok: true,
     message: `Raised ${created.reference}. The client can now see and pay it.`,

@@ -10,7 +10,16 @@ import {
 } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import { listClientPaymentRequests } from "@/db/repositories/admin/billing";
-import { isUmamiConfigured } from "@/lib/analytics/umami";
+import { StatRow } from "@/components/analytics-summary";
+import { TimeSeriesChart } from "@/components/charts";
+import { demoAnalytics } from "@/lib/analytics/demo";
+import { demoReason } from "@/lib/analytics/resolve";
+import {
+  fetchAnalytics,
+  isUmamiConfigured,
+  type AnalyticsState,
+  type AnalyticsSummary,
+} from "@/lib/analytics/umami";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { listBriefs } from "@/db/repositories/admin/briefs";
 import { ActivateForm, ReissueForm } from "./credential-forms";
@@ -88,7 +97,33 @@ export default async function ClientDetailPage({
 
   const { client, organization, subscription, requests } = detail;
   const activated = portalUsers.length > 0;
+
+  // One snapshot per site with analytics attached, fetched here rather than
+  // through `resolveClientAnalytics` — that helper re-derives "the site" from
+  // a `TenantContext`, which this page doesn't have one of (there's no
+  // client session here to scope it to, by design: viewing this page is the
+  // whole point, not a stand-in for logging in as the client). This page
+  // already has the site rows directly from `listSitesWithAnalytics`, so it
+  // fetches per site instead of re-deriving them.
+  const analyticsBySite = new Map<
+    string,
+    { state: AnalyticsState; data: AnalyticsSummary; showingDemo: boolean }
+  >();
   const umamiReady = isUmamiConfigured();
+  await Promise.all(
+    siteRows.map(async (site) => {
+      const state: AnalyticsState = site.umamiWebsiteId
+        ? await fetchAnalytics(site.umamiWebsiteId, 30)
+        : umamiReady
+          ? { kind: "not_connected" }
+          : { kind: "not_configured" };
+      analyticsBySite.set(site.publicId, {
+        state,
+        data: state.kind === "ok" ? state.data : demoAnalytics(site.publicId, 30),
+        showingDemo: state.kind !== "ok",
+      });
+    }),
+  );
 
   return (
     <AppShell user={user}>
@@ -282,6 +317,34 @@ export default async function ClientDetailPage({
                   automationEnabled={site.automationEnabled ?? false}
                   hasRepository={Boolean(site.repoOwner)}
                 />
+              </div>
+
+              {/* Same figures the client sees on their own dashboard, read
+                  here directly — an operator's own site (or their own agency
+                  site) has no reason to need a separate client login just to
+                  check whether anyone's visiting. Shown even before a Umami
+                  ID is set, same as the client dashboard: sample data with an
+                  honest label, not a blank section that looks unbuilt. */}
+              <div style={{ marginTop: "1.5rem" }}>
+                <h3 style={{ fontSize: "0.95rem" }}>Analytics — last 30 days</h3>
+                {(() => {
+                  const snapshot = analyticsBySite.get(site.publicId);
+                  if (!snapshot) return null;
+                  const reason = demoReason(snapshot.state);
+                  return (
+                    <>
+                      {reason && (
+                        <p className="notice" style={{ marginBottom: "1rem" }}>
+                          <span className="badge">Sample data</span> {reason}
+                        </p>
+                      )}
+                      <StatRow data={snapshot.data} comparedTo="previous 30 days" />
+                      <div style={{ marginTop: "1rem" }}>
+                        <TimeSeriesChart series={snapshot.data.series} />
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ))

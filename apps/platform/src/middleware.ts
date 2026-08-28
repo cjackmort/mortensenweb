@@ -56,6 +56,13 @@ const PUBLIC_PATHS = [
   // verification is one of them, so a client is never shown a preview that was
   // built, deployed and serving correctly the whole time.
   "/api/cron",
+  // The auth screens' background photo, served from public/. The matcher
+  // below only excludes _next/static and _next/image, not arbitrary files
+  // under public/ — so without this entry, every visitor without a session
+  // cookie (i.e. everyone the login page exists for) has this request
+  // redirected to /login instead of served, and the background silently
+  // never loads for the one audience it's for.
+  "/auth-backdrop.jpg",
 ];
 
 export function middleware(request: NextRequest) {

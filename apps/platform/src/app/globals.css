@@ -19,39 +19,55 @@
 /* ---------------------------------------------------------------- tokens */
 
 :root {
-  /* Warm neutrals — the agency's register is craft, not SaaS. */
-  --bg: #fbfaf8;
+  /*
+   * Three colours: white, black, and one blue.
+   *
+   * The page is a hair off white so that a white panel sitting on it reads as
+   * a separate sheet without needing a heavy border to say so — the borders
+   * are hairlines precisely because the surfaces already separate themselves.
+   * Text is near-black rather than pure, which stops the contrast ringing on a
+   * bright screen. Blue is the only hue in the interface: every accent, link,
+   * bar and primary action is the same one, so colour always means "this is
+   * the thing to act on" and never merely decorates.
+   */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-sunk: #f5f2ed;
-  --border: #e3ded6;
-  --border-strong: #cfc7bb;
+  --surface-sunk: #f2f4f7;
+  --border: #e6e8ec;
+  --border-strong: #d2d6dd;
 
-  --text: #1c1917;
-  --text-soft: #4a443d;
-  --muted: #6b6660;
+  --text: #0b0d10;
+  --text-soft: #3d434d;
+  --muted: #6b727e;
 
-  --accent: #8a4b2a;
-  --accent-hover: #6f3b20;
-  --accent-wash: #f7ede7;
+  /* 6.5:1 on white — passes AA as body text, not only as a large heading. */
+  --accent: #1552d6;
+  --accent-hover: #0f3fa8;
+  --accent-wash: #eef3fe;
   --on-accent: #ffffff;
 
-  --danger: #9b2c2c;
-  --danger-wash: #fbeaea;
-  --success: #2f6b46;
-  --success-wash: #e9f3ed;
-  --warning: #8a6d1f;
-  --warning-wash: #f9f1da;
-  --info: #2c5a8a;
-  --info-wash: #e8f0f8;
+  --danger: #b42318;
+  --danger-wash: #fef3f2;
+  --success: #067647;
+  --success-wash: #ecfdf3;
+  --warning: #b54708;
+  --warning-wash: #fffaeb;
+  --info: #175cd3;
+  --info-wash: #eff8ff;
 
-  --demo: #8a6d1f;
+  --demo: #b54708;
 
-  --radius: 10px;
+  --radius: 8px;
   --radius-sm: 6px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
 
-  --shadow-sm: 0 1px 2px rgb(28 25 23 / 6%);
-  --shadow: 0 2px 8px rgb(28 25 23 / 8%);
+  /*
+   * Shadow does the separating that borders used to. The large one is a wide,
+   * low-opacity spread rather than a tight dark edge: a tight shadow draws the
+   * rectangle, which is the thing we are trying to stop the eye seeing.
+   */
+  --shadow-sm: 0 1px 2px rgb(11 13 16 / 5%);
+  --shadow: 0 1px 3px rgb(11 13 16 / 6%), 0 10px 28px -14px rgb(11 13 16 / 12%);
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -62,34 +78,36 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17150f;
-    --surface: #201d16;
-    --surface-sunk: #1a1812;
-    --border: #35302a;
-    --border-strong: #4a443b;
+    /* The same three colours, inverted: near-black page, raised panels, and
+       a lighter step of the one blue so it still carries 7:1 on the panel. */
+    --bg: #0b0c0e;
+    --surface: #131519;
+    --surface-sunk: #1b1e23;
+    --border: #24282f;
+    --border-strong: #363c45;
 
-    --text: #f2ede4;
-    --text-soft: #ddd5c8;
-    --muted: #a39b90;
+    --text: #f4f6f8;
+    --text-soft: #cbd1da;
+    --muted: #8e96a3;
 
-    --accent: #d69063;
-    --accent-hover: #e5a67e;
-    --accent-wash: #2c2119;
-    --on-accent: #1c1917;
+    --accent: #6f9dff;
+    --accent-hover: #93b6ff;
+    --accent-wash: #141c2c;
+    --on-accent: #0b0c0e;
 
-    --danger: #e07a7a;
-    --danger-wash: #2e1c1c;
-    --success: #7fbf9a;
-    --success-wash: #17251d;
-    --warning: #d4b45c;
-    --warning-wash: #2a2415;
-    --info: #8ab4dd;
-    --info-wash: #172230;
+    --danger: #f97066;
+    --danger-wash: #2c1414;
+    --success: #47cd89;
+    --success-wash: #0c1f16;
+    --warning: #f7b27a;
+    --warning-wash: #2a1c0d;
+    --info: #84caff;
+    --info-wash: #101d2e;
 
-    --demo: #d4b45c;
+    --demo: #f7b27a;
 
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
-    --shadow: 0 2px 8px rgb(0 0 0 / 35%);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow: 0 1px 3px rgb(0 0 0 / 45%), 0 10px 28px -14px rgb(0 0 0 / 60%);
   }
 }
 
@@ -302,8 +320,8 @@ code {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
-  margin-bottom: 1.1rem;
+  padding: 1.35rem;
+  margin-bottom: 1rem;
   box-shadow: var(--shadow-sm);
 }
 
@@ -371,31 +389,32 @@ code {
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.1rem;
+  border-radius: var(--radius-lg);
+  padding: 1.1rem 1.25rem;
   box-shadow: var(--shadow-sm);
 }
 
+/*
+ * Sentence case, not uppercase micro-tracking. A row of tracked-out capitals
+ * over every number is what makes a page of figures read as a control panel
+ * rather than a report, and it is harder to read at 0.72rem than the thing it
+ * labels. Weight and colour separate it from the value perfectly well.
+ */
 .stat-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.82rem;
   color: var(--muted);
-  font-weight: 650;
-  margin: 0 0 0.3rem;
+  font-weight: 500;
+  margin: 0 0 0.35rem;
 }
 
 .stat-value {
   /* "Is anyone looking at my site" is the question this page exists to answer,
      so the answer is the largest thing on it. Tabular figures stop the row
      jittering as numbers change between loads. */
-  font-size: 2.5rem;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  line-height: 1.1;
+  font-size: 2rem;
+  line-height: 1.15;
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -793,6 +812,110 @@ label.checkbox input[type="checkbox"] {
   accent-color: var(--accent);
 }
 
+/* ------------------------------------------------------- auth backdrop */
+
+/*
+ * Every auth screen shares one full-bleed photo backdrop with a single
+ * frosted card centered on it. Fixed dark/photo surface rather than a
+ * themed one, on purpose — it is decorative chrome, not content, so it does
+ * not follow the light/dark tokens above the way a real page does.
+ *
+ * The gradient in the background-image stack (not a separate element) is a
+ * deliberate legibility margin: the photo alone can be bright enough at the
+ * card's position to fight the glass card's own contrast, on any crop or
+ * viewport size.
+ */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+  background-image: linear-gradient(
+      180deg,
+      rgba(6, 9, 14, 0.35) 0%,
+      rgba(6, 9, 14, 0.55) 100%
+    ),
+    url("/auth-backdrop.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.auth-card {
+  position: relative;
+  width: 100%;
+  max-width: 24rem;
+  padding: 2rem;
+  border-radius: var(--radius-lg);
+  background: rgba(12, 16, 24, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.55);
+  color: #f4f6f8;
+}
+
+/* Browsers without backdrop-filter support fall back to a more opaque card
+   so text still reads clearly against the photo. */
+@supports not
+  ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .auth-card {
+    background: rgba(10, 13, 20, 0.86);
+  }
+}
+
+.auth-card h1 {
+  color: #fff;
+}
+
+.auth-card label {
+  color: rgba(244, 246, 248, 0.85);
+}
+
+.auth-card input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+.auth-card input::placeholder {
+  color: rgba(244, 246, 248, 0.45);
+}
+.auth-card input:focus {
+  border-color: var(--accent);
+  outline-color: var(--accent);
+}
+
+.auth-card .muted {
+  color: rgba(244, 246, 248, 0.68);
+}
+
+.auth-card a {
+  color: #bcd4ff;
+}
+.auth-card a:hover {
+  color: #fff;
+}
+
+.auth-card .error {
+  background: rgba(180, 35, 24, 0.28);
+  border-color: rgba(249, 112, 102, 0.6);
+  color: #ffd9d4;
+}
+
+.auth-mark {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
 /* ------------------------------------------------- definition lists */
 
 .detail-grid,
@@ -863,28 +986,40 @@ label.checkbox input[type="checkbox"] {
 /*
  * Chart series colours.
  *
- * These are NOT the UI accent. They were validated with the dataviz palette
- * checker against each mode's own surface — lightness band, chroma floor,
- * colour-vision separation, and contrast — and the dark steps are separately
- * chosen rather than a lightened flip of the light ones, because a flip fails
- * the lightness band. Changing either pair means re-running that check.
+ * The *pair* is unchanged from the validated set — blue and rust, checked with
+ * the dataviz palette checker for lightness band, chroma floor, colour-vision
+ * separation and contrast against each mode's own surface, with the dark steps
+ * separately chosen rather than a lightened flip of the light ones:
  *
- *   light  #b04a12 / #1160a8   worst-case CVD ΔE 21.7, normal ΔE 27.9
- *   dark   #cf7f3a / #559ad6   worst-case CVD ΔE 21.3, normal ΔE 24.2
+ *   light  #1160a8 / #b04a12   worst-case CVD ΔE 21.7, normal ΔE 27.9
+ *   dark   #559ad6 / #cf7f3a   worst-case CVD ΔE 21.3, normal ΔE 24.2
+ *
+ * What changed is which member leads. Blue is now series 1, so the line the
+ * eye lands on first is the same hue as the rest of the interface and the page
+ * reads as one palette instead of two. Rust stays as the second series and is
+ * the only place another hue appears. Swapping roles inside a checked pair
+ * preserves the separation between them; substituting a colour would not, and
+ * means re-running the check.
+ *
+ * `--bar` is deliberately the UI accent rather than a series colour: a ranked
+ * bar list is one measure sorted, not a set of categories, so its colour is
+ * the interface's own and carries no categorical meaning.
  */
 :root {
-  --series-1: #b04a12;
-  --series-2: #1160a8;
-  --chart-grid: #e3ded6;
-  --chart-ink: #6b6660;
+  --series-1: #1160a8;
+  --series-2: #b04a12;
+  --bar: #1552d6;
+  --chart-grid: #eceef2;
+  --chart-ink: #6b727e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --series-1: #cf7f3a;
-    --series-2: #559ad6;
-    --chart-grid: #35302a;
-    --chart-ink: #a39b90;
+    --series-1: #559ad6;
+    --series-2: #cf7f3a;
+    --bar: #6f9dff;
+    --chart-grid: #22262d;
+    --chart-ink: #8e96a3;
   }
 }
 
@@ -917,10 +1052,25 @@ label.checkbox input[type="checkbox"] {
   stroke-linejoin: round;
 }
 
+/*
+ * The area under the line fades out rather than sitting as a flat 10% slab.
+ * A constant wash reads as a second, solid shape competing with the line; a
+ * fade reads as shading under it. Stop colours live here rather than on the
+ * SVG element so they follow the theme like everything else — `stop-color` is
+ * a presentation attribute and takes a custom property fine.
+ */
 .chart-area {
-  fill: var(--series-1);
-  opacity: 0.1;
   stroke: none;
+}
+
+.chart-grad-from {
+  stop-color: var(--series-1);
+  stop-opacity: 0.22;
+}
+
+.chart-grad-to {
+  stop-color: var(--series-1);
+  stop-opacity: 0;
 }
 
 .chart-dot {
@@ -983,34 +1133,36 @@ circle.chart-series-1 {
   align-items: center;
 }
 
-/* Ranked breakdown: one hue, because length already encodes rank. */
+/*
+ * Ranked breakdown: one hue, because length already encodes rank.
+ *
+ * The label sits *above* its bar rather than in a fixed-width column beside
+ * it. Side-by-side forces a column wide enough for the longest label, which on
+ * a phone leaves the bars a stub of the row and truncates every label anyway.
+ * Stacked, the bar always spans the full width, so lengths stay comparable and
+ * the label gets the room it needs.
+ */
 .barlist {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.85rem;
 }
 
 .barlist li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "label value" "track track";
-  gap: 0.25rem 0.75rem;
-  align-items: center;
-}
-
-@media (min-width: 34rem) {
-  .barlist li {
-    grid-template-columns: minmax(6rem, 11rem) 1fr auto;
-    grid-template-areas: "label track value";
-  }
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
 }
 
 .barlist-label {
   grid-area: label;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
+  color: var(--text-soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1019,25 +1171,36 @@ circle.chart-series-1 {
 .barlist-track {
   grid-area: track;
   background: var(--surface-sunk);
-  border-radius: 4px;
-  height: 0.55rem;
+  border-radius: 999px;
+  height: 0.4rem;
   overflow: hidden;
 }
 
 .barlist-fill {
   display: block;
   height: 100%;
-  background: var(--series-1);
-  /* 4px rounded data-end, anchored flat against the baseline. */
-  border-radius: 0 4px 4px 0;
+  background: var(--bar);
+  border-radius: 999px;
 }
 
 .barlist-value {
   grid-area: value;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-soft);
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+/* Share of the total, next to the count. Free — it comes out of the same
+   numbers — and it is usually the more useful of the two: "29" means nothing
+   until you know whether that is most of the traffic or a rounding error. */
+.barlist-share {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .sr-only {
@@ -1052,32 +1215,53 @@ circle.chart-series-1 {
   border: 0;
 }
 
-/* Time-range filter: one row above the charts. */
-.rangebar {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.rangebar a {
-  min-height: var(--tap);
+/*
+ * Time-range filter, as a segmented control rather than three buttons.
+ *
+ * Three separate bordered buttons, one of them filled solid with the accent,
+ * put a loud row of chrome above the figures and made the filter compete with
+ * the numbers it filters. A segmented control is read as one control with a
+ * position, the selected segment is a raised white chip rather than a block of
+ * colour, and it sits inside the panel header where it belongs.
+ */
+.segmented {
   display: inline-flex;
   align-items: center;
-  padding: 0 0.9rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 0.88rem;
-  text-decoration: none;
-  color: var(--text-soft);
-  background: var(--surface);
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: 999px;
 }
 
-.rangebar a[aria-current="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-  font-weight: 650;
+.segmented a {
+  display: inline-flex;
+  align-items: center;
+  /* Full tap target on touch; tightened only where there is a real pointer. */
+  min-height: var(--tap);
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (pointer: fine) {
+  .segmented a {
+    min-height: 2.1rem;
+  }
+}
+
+.segmented a:hover {
+  color: var(--text);
+}
+
+.segmented a[aria-current="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ------------------------------------------------------ request progress */
@@ -1293,4 +1477,365 @@ input[type="file"] {
   margin: 0 0 0.3rem;
   padding: 0.35rem 0.45rem;
   font-size: 0.8rem;
+}
+
+/* ======================================================================== */
+/* Insights                                                                 */
+/* ======================================================================== */
+
+/*
+ * Why this section exists.
+ *
+ * The dashboard used to give every single figure its own card: border, radius,
+ * shadow, margin. Eight numbers meant eight competing rectangles stacked down
+ * the page, all the same weight, with the gaps between them louder than the
+ * figures inside them. Nothing was first and nothing was grouped, so the page
+ * read as a wall of boxes rather than as an answer.
+ *
+ * A panel is a *section* — one question, one sheet. Inside it, the parts are
+ * separated by hairlines, the way a printed report uses rules instead of
+ * frames. One border around the group instead of six around the members is the
+ * whole idea, and it is what stops the layout feeling blocky.
+ */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
+  /* Hairline children run edge to edge; this trims them at the rounded corner
+     instead of letting them poke out of it. */
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* The title's own subtitle, on the same line — "Last 30 days", a domain. */
+.panel-head .panel-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.panel-body {
+  padding: 1.25rem;
+}
+
+/* A body that follows the metric strip needs the rule that separates them.
+   Expressed as a sibling selector rather than a second class on the div, so
+   the panel cannot be assembled wrongly: the rule appears exactly when there
+   is something above it to be ruled off from. */
+.metrics + .panel-body,
+.panel-split + .panel-body {
+  border-top: 1px solid var(--border);
+}
+
+.panel-body > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Two or three questions side by side, divided by a rule rather than by giving
+ * each one its own card. Stacked below the breakpoint, where side-by-side would
+ * leave each column too narrow to plot anything in — so the divider moves from
+ * the left edge to the top edge rather than disappearing.
+ */
+.panel-split {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.panel-split > * {
+  padding: 1.25rem;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.panel-split > :first-child {
+  border-top: none;
+}
+
+@media (min-width: 60rem) {
+  .panel-split-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* The chart earns the wider column; the two lists beside it are short. */
+  .panel-split-3 {
+    grid-template-columns: 1.5fr 1fr 1fr;
+  }
+
+  .panel-split-2 > *,
+  .panel-split-3 > * {
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+
+  .panel-split-2 > :first-child,
+  .panel-split-3 > :first-child {
+    border-left: none;
+  }
+}
+
+/* A cell's own heading. Quieter than the panel title above it: this is the
+   third level of a three-level page, and it should read that way. */
+.panel-split h3,
+.panel-cell-title {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+/* The line of explanation under a chart — what "direct" means, what to do with
+   the number. Set small and muted so it never competes with the data. */
+.panel-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.85rem 0 0;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------- metric strip */
+
+/*
+ * The headline figures, as one strip divided by hairlines.
+ *
+ * Two columns on a phone, four on a desktop. The border logic below is doing
+ * one thing: draw a rule *between* cells and never around the outside, because
+ * the panel already supplies the outside. Everything else is a consequence of
+ * the column count changing at the breakpoint.
+ */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.metric {
+  padding: 1.1rem 1.25rem;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+}
+
+/* First in its row — nothing to its left to separate from. */
+.metric:nth-child(2n + 1) {
+  border-left: none;
+}
+
+/* Second row onward gets a rule above it. */
+.metric:nth-child(n + 3) {
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 60rem) {
+  .metrics {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* One row now, so every cell has a neighbour to its left and none above. */
+  .metric,
+  .metric:nth-child(2n + 1),
+  .metric:nth-child(n + 3) {
+    border-left: 1px solid var(--border);
+    border-top: none;
+  }
+
+  .metric:first-child {
+    border-left: none;
+  }
+}
+
+.metric-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 0.4rem;
+}
+
+/* Value and delta on the left, sparkline on the right, baselines aligned. */
+.metric-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.metric-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.metric-value {
+  font-size: 1.85rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.metric-spark {
+  width: 5.25rem;
+  flex-shrink: 0;
+  /* Optically level with the digits rather than with their descender box. */
+  margin-bottom: 0.15rem;
+}
+
+.metric-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+}
+
+/* ---------------------------------------------------------------- deltas */
+
+/*
+ * Change against the previous window of the same length.
+ *
+ * Colour is not the only signal: an arrow glyph carries the direction for
+ * anyone who cannot separate the two hues, and the visually-hidden text spells
+ * out both the direction and what it is being compared against, because "12%"
+ * on its own is not a fact — 12% of what, since when.
+ *
+ * Direction is not the same as good. A rise in "left straight away" is a worse
+ * result, so the component decides which class to apply; this file only knows
+ * how to paint better, worse and unchanged.
+ */
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.delta-better {
+  color: var(--success);
+}
+
+.delta-worse {
+  color: var(--danger);
+}
+
+.delta-flat {
+  color: var(--muted);
+}
+
+.delta-arrow {
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------ sparklines */
+
+/*
+ * Thirty days at a glance, with no axes at all.
+ *
+ * A sparkline is shape, not measurement — it answers "climbing or falling"
+ * beside a number that already answers "how many". Ticks and gridlines would
+ * make it a small chart that is too small to read, so it deliberately has
+ * neither, and the real chart with real axes is directly below it.
+ */
+.spark {
+  display: block;
+  width: 100%;
+  height: 1.9rem;
+  overflow: visible;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spark-area {
+  stroke: none;
+}
+
+.spark-dot {
+  fill: var(--series-1);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+/* ------------------------------------------------------------- stat lines */
+
+/*
+ * A labelled figure per row, for measures that have no useful bar: a duration,
+ * a rate, a count with nothing to compare its length against. Ranking them by
+ * bar length would invent a comparison between quantities that share no unit.
+ */
+.statline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.statline li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.statline li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.statline li:last-child {
+  padding-bottom: 0;
+}
+
+.statline-label {
+  font-size: 0.875rem;
+  color: var(--text-soft);
+  min-width: 0;
+}
+
+.statline-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  font-size: 0.95rem;
+  color: var(--text);
 }

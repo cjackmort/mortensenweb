@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidRange, statValue } from "@/lib/analytics/umami";
+import { isValidRange, percentChange, statValue } from "@/lib/analytics/umami";
 import { isValidUmamiWebsiteId, normaliseDomain } from "@/db/repositories/admin/sites";
 import { demoAnalytics } from "@/lib/analytics/demo";
 
@@ -100,5 +100,78 @@ describe("demo analytics", () => {
   it("produces one point per day in the range", () => {
     expect(demoAnalytics("site-abc", 7).series).toHaveLength(7);
     expect(demoAnalytics("site-abc", 90).series).toHaveLength(90);
+  });
+});
+
+/**
+ * Period-over-period change.
+ *
+ * The arrows on the dashboard are the one thing on it that is *derived* rather
+ * than reported, so they are the one thing that can be wrong while every figure
+ * around them is right. Two failure modes matter, and both produce something
+ * that renders perfectly:
+ *
+ *   - a zero baseline divides to `Infinity`, which formats as a number;
+ *   - a guarded zero baseline usually returns 100%, which tells a client their
+ *     traffic doubled when it actually appeared out of nothing.
+ *
+ * Both must come back null so the component draws no arrow at all. "We cannot
+ * say" and "no change" are different claims, and only one of them is true.
+ */
+describe("period-over-period change", () => {
+  it("reports growth and decline as a signed fraction", () => {
+    expect(percentChange(120, 100)).toBeCloseTo(0.2);
+    expect(percentChange(80, 100)).toBeCloseTo(-0.2);
+    expect(percentChange(100, 100)).toBe(0);
+  });
+
+  it("refuses to divide by a zero baseline", () => {
+    // The regression: growth from nothing is not a percentage.
+    expect(percentChange(50, 0)).toBeNull();
+    expect(percentChange(0, 0)).toBeNull();
+    expect(percentChange(-3, 0)).toBeNull();
+  });
+
+  it("refuses a negative baseline, which no count can have", () => {
+    expect(percentChange(10, -5)).toBeNull();
+  });
+
+  it("never returns a non-finite number the UI would format", () => {
+    for (const [now, before] of [
+      [1, 0],
+      [Number.POSITIVE_INFINITY, 10],
+      [10, Number.NaN],
+      [Number.NaN, 10],
+    ] as const) {
+      const result = percentChange(now, before);
+      expect(result === null || Number.isFinite(result)).toBe(true);
+    }
+  });
+
+  it("survives a drop to zero, which is real and must still be shown", () => {
+    // Traffic falling to nothing is a fact worth an arrow, unlike growth from
+    // nothing. -100% is the correct answer here, not null.
+    expect(percentChange(0, 40)).toBe(-1);
+  });
+});
+
+describe("demo analytics comparison window", () => {
+  it("includes a previous period, so the arrows have something to point at", () => {
+    const demo = demoAnalytics("site-abc", 30);
+    expect(demo.previous).not.toBeNull();
+    expect(demo.previous!.visitors).toBeGreaterThan(0);
+  });
+
+  it("keeps the comparison deterministic along with everything else", () => {
+    expect(demoAnalytics("site-abc", 30).previous).toEqual(
+      demoAnalytics("site-abc", 30).previous,
+    );
+  });
+
+  it("still shows only the requested range, not the run-up used to compare", () => {
+    // The generator produces twice the range and discards the first half. A
+    // regression here would leak 60 days of history onto a 30-day chart.
+    expect(demoAnalytics("site-abc", 30).series).toHaveLength(30);
+    expect(demoAnalytics("site-abc", 7).series).toHaveLength(7);
   });
 });
