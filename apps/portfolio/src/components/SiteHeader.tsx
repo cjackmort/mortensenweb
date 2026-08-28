@@ -20,18 +20,27 @@ export function SiteHeader() {
         </Link>
 
         <nav className="nav" aria-label="Main">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="nav__link"
-              // `startsWith` rather than equality so a future nested route
-              // like /work/some-project still lights up its section.
-              aria-current={pathname.startsWith(link.href) ? "page" : undefined}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            // "/" needs exact match — startsWith("/") would light up Home
+            // on every route, since every path starts with it. Other links
+            // use startsWith so a future nested route like /work/some-project
+            // still lights up its section.
+            const isActive =
+              link.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(link.href);
+
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="nav__link"
+                aria-current={isActive ? "page" : undefined}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
 
           {/*
             Leaves the site, so it is a plain anchor rather than a Link — the

@@ -1,15 +1,10 @@
 /*
  * Public site design system.
  *
- * Shares the portal's palette deliberately — a client who sees the marketing
- * site and then logs in should not feel handed off to a different company.
- * The tokens below are the same warm neutrals and terracotta accent defined in
- * `apps/platform/src/app/globals.css`; when one moves, move the other.
- *
- * Where this diverges from the portal is register rather than colour. The
- * portal is a tool, so it is dense and sans-serif throughout. This is a shop
- * window, so it leans editorial: a serif display face, wide measure, and a lot
- * more air. Both are "craft, not SaaS" — they just sit at different distances.
+ * Warm neutrals and a terracotta accent — a shop window that leans
+ * editorial: a serif display face, wide measure, and a lot more air. The
+ * portal is exploring a cooler blue/nature look for itself; this site
+ * stays on its own warm palette rather than chase a moving target.
  *
  * Type is system-only. No web font is loaded: a marketing site whose headline
  * arrives 400 ms late to a rural connection has already lost the argument it
@@ -36,6 +31,12 @@
 
   --success: #2f6b46;
   --success-wash: #e9f3ed;
+
+  /* Ember/gold: a second accent so the palette is not one hue stretched
+     thin — the featured-plan glow and the process line gradient, never a
+     substitute for --accent, which stays the one colour every button and
+     link agrees on. */
+  --accent-2: #c8862f;
 
   --radius-sm: 6px;
   --radius: 10px;
@@ -241,6 +242,30 @@ img {
   margin-bottom: var(--sp-12);
 }
 
+/* --------------------------------------------------------- scroll reveal */
+
+.reveal {
+  height: 100%;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--d, 0ms);
+}
+
+.reveal[data-in="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* --------------------------------------------------------------- header */
 
 .masthead {
@@ -403,7 +428,22 @@ img {
 /* ----------------------------------------------------------------- hero */
 
 .hero {
-  padding-block: clamp(var(--sp-16), 10vw, var(--sp-24)) var(--sp-24);
+  padding-block: clamp(var(--sp-24), 14vw, 7.5rem) clamp(var(--sp-16), 8vw,
+    var(--sp-24));
+}
+
+.hero__grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+  gap: var(--sp-16);
+}
+
+@media (max-width: 900px) {
+  .hero__grid {
+    grid-template-columns: 1fr;
+    gap: var(--sp-12);
+  }
 }
 
 .hero__title {
@@ -415,6 +455,47 @@ img {
   font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
   max-width: 56ch;
   color: var(--text-soft);
+}
+
+/* The hero's photographic proof: a real client site, not a stock image or
+   an abstract graphic — "welcoming" here means showing an actual person's
+   work rather than an effect. */
+.hero__visual {
+  position: relative;
+}
+
+.hero__frame {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.hero__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Placeholder panel for when there is no photo to show yet — a gradient,
+   not a stock image pulled from the web with unknown licensing. Swap this
+   back for a real <img> the moment there is a photo worth showing. */
+.hero__frame--fill {
+  background: linear-gradient(
+    165deg,
+    var(--accent) 0%,
+    var(--accent-hover) 45%,
+    var(--surface-sunk) 100%
+  );
+}
+
+@media (max-width: 900px) {
+  .hero__frame {
+    aspect-ratio: 16 / 10;
+    max-width: 420px;
+  }
 }
 
 /* Small proof strip under the hero. Facts only — anything here has to be
@@ -445,26 +526,28 @@ img {
 
 .work-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: var(--sp-8);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--sp-6);
 }
 
 .work {
   display: flex;
   flex-direction: column;
+  height: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease, transform 0.2s ease,
-    border-color 0.2s ease;
+  transition: box-shadow 0.25s ease, transform 0.25s ease,
+    border-color 0.25s ease;
 }
 
 .work:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
-  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg), 0 0 0 1px
+    color-mix(in srgb, var(--accent-2) 45%, transparent);
+  transform: translateY(-4px);
+  border-color: var(--accent-2);
 }
 
 .work__media {
@@ -486,7 +569,7 @@ img {
 }
 
 .work__body {
-  padding: var(--sp-6);
+  padding: var(--sp-4);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -569,10 +652,22 @@ img {
 }
 
 .card {
+  height: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--sp-8);
+  transition: border-color 0.25s ease, transform 0.25s ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.card__icon {
+  color: var(--accent);
+  margin-bottom: var(--sp-4);
 }
 
 .card h3 {
@@ -604,7 +699,27 @@ img {
   counter-increment: step;
   position: relative;
   padding-top: var(--sp-8);
-  border-top: 2px solid var(--border);
+}
+
+/* The top border draws in left-to-right on scroll instead of sitting there
+   pre-drawn — a static line reads as a divider, a drawn one reads as a
+   sequence, which is what "step" is claiming. */
+.step::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--d, 0ms);
+}
+
+.reveal[data-in="true"].step::after {
+  transform: scaleX(1);
 }
 
 .step::before {
@@ -649,8 +764,43 @@ img {
 }
 
 .plan--featured {
-  border-color: var(--accent);
+  position: relative;
+  border-color: transparent;
   box-shadow: var(--shadow);
+}
+
+/* A soft pulsing ring instead of a flat border — drawn as a padded
+   background rather than `border` so it can be a gradient. */
+.plan--featured::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.55;
+  animation: glow-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan--featured::before {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 .plan__badge {

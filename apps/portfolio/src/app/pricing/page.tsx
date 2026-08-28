@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Reveal } from "@/components/Reveal";
 import { PLANS } from "@/data/plans";
 import { SITE } from "@/lib/site";
 
@@ -26,32 +27,35 @@ export default function PricingPage() {
         </div>
 
         <div className="plans">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.key}
-              className={`plan${plan.featured ? " plan--featured" : ""}`}
-            >
-              {plan.featured && <span className="plan__badge">Most chosen</span>}
-              <h2 className="plan__name">{plan.name}</h2>
-              <div className="plan__price">
-                ${plan.monthly}
-                <span className="plan__cadence">/month</span>
-              </div>
-              <p className="plan__desc">{plan.description}</p>
-
-              <ul className="plan__features">
-                {plan.features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-
-              <Link
-                className={`btn ${plan.featured ? "btn--primary" : "btn--ghost"}`}
-                href="/contact/"
+          {PLANS.map((plan, i) => (
+            <Reveal key={plan.key} index={i}>
+              <div
+                className={`plan${plan.featured ? " plan--featured" : ""}`}
               >
-                Get started
-              </Link>
-            </div>
+                {plan.featured && (
+                  <span className="plan__badge">Most chosen</span>
+                )}
+                <h2 className="plan__name">{plan.name}</h2>
+                <div className="plan__price">
+                  ${plan.monthly}
+                  <span className="plan__cadence">/month</span>
+                </div>
+                <p className="plan__desc">{plan.description}</p>
+
+                <ul className="plan__features">
+                  {plan.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+
+                <Link
+                  className={`btn ${plan.featured ? "btn--primary" : "btn--ghost"}`}
+                  href="/contact/"
+                >
+                  Get started
+                </Link>
+              </div>
+            </Reveal>
           ))}
         </div>
 
@@ -65,10 +69,12 @@ export default function PricingPage() {
       {/* ------------------------------------------------------ comparison */}
       <section className="section section--sunk">
         <div className="wrap">
-          <div className="section-head">
-            <p className="eyebrow">Side by side</p>
-            <h2>What differs between plans.</h2>
-          </div>
+          <Reveal>
+            <div className="section-head">
+              <p className="eyebrow">Side by side</p>
+              <h2>What differs between plans.</h2>
+            </div>
+          </Reveal>
 
           <div className="table-scroll">
             <table>
@@ -135,10 +141,12 @@ export default function PricingPage() {
 
       {/* ------------------------------------------------------------- faq */}
       <section className="wrap section">
-        <div className="section-head">
-          <p className="eyebrow">Questions</p>
-          <h2>The ones we get asked.</h2>
-        </div>
+        <Reveal>
+          <div className="section-head">
+            <p className="eyebrow">Questions</p>
+            <h2>The ones we get asked.</h2>
+          </div>
+        </Reveal>
 
         <div className="faq">
           <details>
@@ -194,21 +202,23 @@ export default function PricingPage() {
       </section>
 
       <section className="wrap section section--tight">
-        <div className="cta">
-          <h2>Want a number for your project?</h2>
-          <p className="lede center">
-            Tell us what the site needs to do. We will come back with a fixed
-            build quote and the plan that fits.
-          </p>
-          <div className="btn-row">
-            <Link className="btn btn--primary" href="/contact/">
-              Request a quote
-            </Link>
-            <a className="btn btn--ghost" href={`mailto:${SITE.email}`}>
-              {SITE.email}
-            </a>
+        <Reveal>
+          <div className="cta">
+            <h2>Want a number for your project?</h2>
+            <p className="lede center">
+              Tell us what the site needs to do. We will come back with a
+              fixed build quote and the plan that fits.
+            </p>
+            <div className="btn-row">
+              <Link className="btn btn--primary" href="/contact/">
+                Request a quote
+              </Link>
+              <a className="btn btn--ghost" href={`mailto:${SITE.email}`}>
+                {SITE.email}
+              </a>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
     </>
   );

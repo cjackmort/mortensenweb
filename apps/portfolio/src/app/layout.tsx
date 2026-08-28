@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SITE } from "@/lib/site";
@@ -39,6 +40,13 @@ export default function RootLayout({
         <SiteHeader />
         <main id="main">{children}</main>
         <SiteFooter />
+        {/* Umami Cloud — website e71828c7-4b0e-4e06-8049-bd108a3b6fab.
+            `afterInteractive` so it never delays first paint. */}
+        <Script
+          src="https://cloud.umami.is/script.js"
+          data-website-id="e71828c7-4b0e-4e06-8049-bd108a3b6fab"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

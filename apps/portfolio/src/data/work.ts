@@ -1,9 +1,9 @@
 /**
- * The public portfolio.
+ * The public portfolio, shown in full on `/work` — the homepage no longer
+ * excerpts it.
  *
  * Adding a site is meant to be one entry in this array plus an image in
- * `public/work/` — no component changes. Keep the newest first; the homepage
- * shows `FEATURED_COUNT` of them and `/work` shows all.
+ * `public/work/` — no component changes. Keep the newest first.
  *
  * Two rules apply to anything added here, and both exist because this page
  * makes a claim about a real business that the business itself did not write:
@@ -16,6 +16,8 @@
  *    proposal, or an internal demo is interesting work and worth showing —
  *    but presenting one as a shipped client engagement is a claim that is not
  *    true, and it is the kind that gets noticed by the business in question.
+ *    Demo/pitch builds go in as `"concept"`, never `"live"`, until the
+ *    business itself has actually agreed to be shown.
  */
 
 export type WorkStatus = "live" | "concept" | "internal";
@@ -42,9 +44,6 @@ export type Work = {
   year: number;
 };
 
-/** How many entries the homepage shows before "View all work". */
-export const FEATURED_COUNT = 3;
-
 export const WORK: Work[] = [
   {
     slug: "scott-mortensen-fine-arts",
@@ -59,6 +58,34 @@ export const WORK: Work[] = [
     image: "/work/scott-mortensen-fine-arts.jpg",
     imageAlt:
       "A bronze mountain lion sculpture by Scott Mortensen, shown mid-stride.",
+    year: 2026,
+  },
+  {
+    slug: "matts-seasonal-sales",
+    name: "Matt's Seasonal Sales",
+    sector: "Seasonal retail — pumpkin patch and tree lot",
+    description:
+      "A pitch build for a seasonal retail lot: patch hours, the games and photo spots on site, and a tree-lot section that swaps in once pumpkin season ends. Built to work from a phone in a gravel parking lot with one bar of signal.",
+    domain: "matts-seasonal-sales-demo.netlify.app",
+    href: "https://matts-seasonal-sales-demo.netlify.app",
+    status: "concept",
+    tags: ["Seasonal retail", "Mobile-first", "Pitch build"],
+    image: "/work/matts-seasonal-sales.webp",
+    imageAlt: "A pumpkin display tower at Matt's Seasonal Sales.",
+    year: 2026,
+  },
+  {
+    slug: "mitch-bedke-art",
+    name: "Mitch Bedke Glass Art",
+    sector: "Glass art studio",
+    description:
+      "A gallery pitch for a glass artist — full-bleed shots of fused and blown work, a studio story, and a commission path. Built to make the glass itself carry the page rather than a template layout.",
+    domain: "mitch-bedke-art-demo.netlify.app",
+    href: "https://mitch-bedke-art-demo.netlify.app",
+    status: "concept",
+    tags: ["Gallery site", "Photography-led", "Commission enquiries"],
+    image: "/work/mitch-bedke-art.webp",
+    imageAlt: "A fused glass panel by Mitch Bedke, lit from behind.",
     year: 2026,
   },
 ];

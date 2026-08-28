@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Reveal } from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -130,19 +131,21 @@ export default function ContactPage() {
       </section>
 
       <section className="wrap section section--tight">
-        <div className="cta">
-          <p className="eyebrow">Already a client?</p>
-          <h2>Change requests go through the portal.</h2>
-          <p className="lede center">
-            It keeps your requests, previews, and invoices in one place — and
-            means nothing gets lost in an inbox.
-          </p>
-          <div className="btn-row">
-            <a className="btn btn--primary" href={SITE.portalUrl}>
-              Go to the client portal
-            </a>
+        <Reveal>
+          <div className="cta">
+            <p className="eyebrow">Already a client?</p>
+            <h2>Change requests go through the portal.</h2>
+            <p className="lede center">
+              It keeps your requests, previews, and invoices in one place —
+              and means nothing gets lost in an inbox.
+            </p>
+            <div className="btn-row">
+              <a className="btn btn--primary" href={SITE.portalUrl}>
+                Go to the client portal
+              </a>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
     </>
   );
