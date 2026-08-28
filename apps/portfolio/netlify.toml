@@ -41,11 +41,11 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
-    # Tighter than the portal's, because this site has no inline event
-    # handlers and loads nothing cross-origin. 'unsafe-inline' remains for
-    # script-src only because Next's hydration bootstrap is an inline script;
-    # everything else is locked to 'self'.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    # 'unsafe-inline' on script-src is for Next's hydration bootstrap, which
+    # is an inline script. cloud.umami.is is allowed on script-src (loads the
+    # tracker) and connect-src (the tracker's own beacon) — everything else
+    # stays locked to 'self'.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 # Content-hashed build output can be cached indefinitely; nothing else can.
 [[headers]]
