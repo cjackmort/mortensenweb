@@ -1,4 +1,4 @@
-import { BarList } from "@/components/charts";
+import { BarList, StatLines } from "@/components/charts";
 import type { Breakdown } from "@/lib/analytics/umami";
 
 /**
@@ -14,10 +14,19 @@ import type { Breakdown } from "@/lib/analytics/umami";
  * and precious. Ranking them together buries every call under a gallery, and a
  * client scanning the page would conclude nobody ever rang.
  *
+ * Because the scales differ, so does the form. Photos get bars — they are one
+ * measure sorted, and length is exactly the comparison worth making. Contact
+ * actions get plain figures: there are usually two of them, and a bar chart of
+ * two rows is a chart pretending to have something to compare.
+ *
  * The convention is a `name: detail` event label — `photo: Chief in Waiting`.
  * Encoding the subject in the name rather than in Umami's event *properties*
  * keeps this to one API call and works identically on Umami Cloud and
  * self-hosted, whose property endpoints differ.
+ *
+ * Renders as a *cell*, not as a card of its own: it sits inside the "What they
+ * looked at" panel next to the page list, and a bordered box nested inside a
+ * bordered panel is the doubled chrome this layout exists to remove.
  */
 
 const PHOTO_PREFIX = "photo:";
@@ -25,6 +34,11 @@ const PHOTO_PREFIX = "photo:";
 function stripPrefix(label: string): string {
   const colon = label.indexOf(":");
   return colon === -1 ? label : label.slice(colon + 1).trim();
+}
+
+/** `called` reads as a log line; `Called` reads as a label. */
+function sentenceCase(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 export function ClickSummary({ events }: { events: Breakdown[] }) {
@@ -42,10 +56,8 @@ export function ClickSummary({ events }: { events: Breakdown[] }) {
   // were a fact about their business.
   if (events.length === 0) {
     return (
-      <section className="card">
-        <div className="card-head">
-          <h2>What people clicked</h2>
-        </div>
+      <div>
+        <h3>What people clicked</h3>
         <div className="empty">
           <p className="empty-title">Not measured on this site yet.</p>
           <p>
@@ -53,24 +65,18 @@ export function ClickSummary({ events }: { events: Breakdown[] }) {
             work people open most, and how many go on to get in touch.
           </p>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="card">
-      <div className="card-head">
-        <h2>What people clicked</h2>
-        <span className="muted">last 30 days</span>
-      </div>
+    <div>
+      <h3>What people clicked</h3>
 
       {photos.length > 0 && (
         <>
-          <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>
-            Most-opened photos
-          </h3>
           <BarList rows={photos} unit="opens" />
-          <p className="muted" style={{ fontSize: "0.8rem", margin: "0.6rem 0 1.25rem" }}>
+          <p className="panel-note">
             What people stop on. Worth knowing before you decide what to make
             next, or what belongs at the top of the page.
           </p>
@@ -79,12 +85,21 @@ export function ClickSummary({ events }: { events: Breakdown[] }) {
 
       {actions.length > 0 && (
         <>
-          <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>
+          <h3
+            style={{
+              margin: photos.length > 0 ? "1.5rem 0 0.75rem" : "0 0 0.75rem",
+            }}
+          >
             Getting in touch
           </h3>
-          <BarList rows={actions} unit="times" />
+          <StatLines
+            rows={actions.map((a) => ({
+              label: sentenceCase(a.label),
+              value: a.value.toLocaleString("en-US"),
+            }))}
+          />
         </>
       )}
-    </section>
+    </div>
   );
 }
