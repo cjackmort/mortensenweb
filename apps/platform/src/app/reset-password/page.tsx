@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
+import { AuthShell } from "@/components/auth-shell";
 import { getDb } from "@/db/client";
 import {
   inspectResetToken,
@@ -60,9 +61,12 @@ export default async function ResetPasswordPage({
   if (!state.ok || (errorKey && DEAD_LINK.has(errorKey))) {
     const reason = state.ok ? (errorKey as string) : state.reason;
     return (
-      <main className="shell">
-        <div className="form">
-          <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+      <AuthShell>
+        <div>
+          <div className="auth-mark" aria-hidden="true">
+            M
+          </div>
+          <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
             This link no longer works
           </h1>
           <p className="muted" style={{ marginTop: 0 }}>
@@ -75,7 +79,7 @@ export default async function ResetPasswordPage({
             <Link href="/login">Back to sign in</Link>
           </p>
         </div>
-      </main>
+      </AuthShell>
     );
   }
 
@@ -117,11 +121,14 @@ export default async function ResetPasswordPage({
   }
 
   return (
-    <main className="shell">
-      <form className="form" action={submit}>
+    <AuthShell>
+      <form action={submit}>
         <input type="hidden" name="token" value={token} />
 
-        <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+        <div className="auth-mark" aria-hidden="true">
+          M
+        </div>
+        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
           Choose a new password
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
@@ -158,6 +165,6 @@ export default async function ResetPasswordPage({
 
         <button type="submit">Save password and sign in</button>
       </form>
-    </main>
+    </AuthShell>
   );
 }

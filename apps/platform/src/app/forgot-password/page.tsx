@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AuthShell } from "@/components/auth-shell";
 import { getDb } from "@/db/client";
 import { clientIpAddress } from "@/lib/auth/client-ip";
 import {
@@ -59,9 +60,12 @@ export default async function ForgotPasswordPage({
 
   if (sent) {
     return (
-      <main className="shell">
-        <div className="form">
-          <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+      <AuthShell>
+        <div>
+          <div className="auth-mark" aria-hidden="true">
+            M
+          </div>
+          <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
             Check your email
           </h1>
           <p className="muted" style={{ marginTop: 0 }}>
@@ -77,14 +81,17 @@ export default async function ForgotPasswordPage({
             <Link href="/login">Back to sign in</Link>
           </p>
         </div>
-      </main>
+      </AuthShell>
     );
   }
 
   return (
-    <main className="shell">
-      <form className="form" action={submit}>
-        <h1 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>
+    <AuthShell>
+      <form action={submit}>
+        <div className="auth-mark" aria-hidden="true">
+          M
+        </div>
+        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
           Reset your password
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
@@ -113,6 +120,6 @@ export default async function ForgotPasswordPage({
           Remembered it? <Link href="/login">Back to sign in</Link>
         </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }
