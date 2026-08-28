@@ -4,9 +4,13 @@ import { currentUser } from "@/auth";
 import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
-import { listOverduePaymentRequests } from "@/db/repositories/admin/billing";
+import {
+  listClientBillingStatus,
+  listOverduePaymentRequests,
+} from "@/db/repositories/admin/billing";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { DEFAULT_DUNNING_CONFIG } from "@/lib/billing/dunning";
+import { MonthlyBillingTable } from "./monthly-billing";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +32,10 @@ export default async function AdminPaymentsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const rows = await listOverduePaymentRequests(ctx, db);
+  const [rows, billingStatus] = await Promise.all([
+    listOverduePaymentRequests(ctx, db),
+    listClientBillingStatus(ctx, db),
+  ]);
 
   const awaiting = rows.filter((r) => r.awaitingConfirmation);
   const overdue = rows
@@ -67,6 +74,19 @@ export default async function AdminPaymentsPage() {
             <p className="stat-note">hosting is never affected</p>
           </div>
         </div>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Monthly billing</h2>
+            <span className="muted">{billingStatus.length} active clients</span>
+          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Set a due date to raise this month&rsquo;s invoice for a client who
+            doesn&rsquo;t have one open yet. Everyone else already has one open,
+            awaiting confirmation, or settled — shown as their status instead.
+          </p>
+          <MonthlyBillingTable rows={billingStatus} />
+        </section>
 
         <section className="card">
           <div className="card-head">

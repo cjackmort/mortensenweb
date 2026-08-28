@@ -7,7 +7,6 @@ import { adminContextFrom } from "@/db/repositories/context";
 import {
   listAllChangeRequests,
   listClients,
-  listProspects,
 } from "@/db/repositories/admin/clients";
 import { listOverduePaymentRequests } from "@/db/repositories/admin/billing";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
@@ -35,9 +34,8 @@ export default async function AdminOverview() {
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const [clients, prospects, requests, moneyQueue] = await Promise.all([
+  const [clients, requests, moneyQueue] = await Promise.all([
     listClients(ctx, db),
-    listProspects(ctx, db),
     listAllChangeRequests(ctx, db, { limit: 100 }),
     listOverduePaymentRequests(ctx, db),
   ]);
@@ -49,12 +47,6 @@ export default async function AdminOverview() {
 
   const needsAttention = awaiting.length + overdue.length + openRequests.length;
 
-  // Prospects still in play. Converted and declined ones are history, and
-  // counting them would make the pipeline look permanently busy.
-  const liveProspects = prospects.filter(
-    (p) => p.status !== "converted" && p.status !== "declined",
-  ).length;
-
   return (
     <AppShell user={user}>
       <main className="shell">
@@ -62,18 +54,6 @@ export default async function AdminOverview() {
           <h1>Overview</h1>
           <span className="muted">
             {clients.length} client{clients.length === 1 ? "" : "s"}
-            {/* The prospect count was already being queried here and thrown
-                away. Showing it is what the query was clearly fetched for, and
-                it is the number that answers "is there anything in the top of
-                the funnel" without a second page load. */}
-            {liveProspects > 0 && (
-              <>
-                {" · "}
-                <Link href="/admin/prospects">
-                  {liveProspects} in the pipeline
-                </Link>
-              </>
-            )}
           </span>
         </div>
 

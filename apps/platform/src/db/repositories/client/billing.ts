@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   clients,
@@ -77,6 +77,14 @@ export async function getBillingOverview(
 
   // The invoice that matters is the oldest unsettled one, so a client with two
   // outstanding sees the one they should deal with first.
+  //
+  // Extra-change purchases are excluded here on purpose: they're a separate,
+  // client-initiated top-up with their own card (`ExtraChangePanel`), not the
+  // "what do I owe" invoice this section exists to answer. Without this
+  // filter, an extra-change request with no due date — the only kind of open
+  // request some clients have at a given moment — would surface here
+  // mislabelled as the amount due, duplicating what the extra-change panel
+  // already shows.
   const openRows = await db
     .select({
       publicId: paymentRequests.publicId,
@@ -98,6 +106,7 @@ export async function getBillingOverview(
           "overdue",
           "awaiting_confirmation",
         ]),
+        ne(paymentRequests.purpose, "extra_change"),
       ),
     )
     .orderBy(paymentRequests.dueOn)

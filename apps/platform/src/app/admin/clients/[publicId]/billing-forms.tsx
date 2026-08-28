@@ -6,6 +6,7 @@ import {
   raiseRequestAction,
   type BillingResult,
 } from "./billing-actions";
+import { currentPeriod } from "@/lib/billing/period";
 
 /**
  * Operator billing forms.
@@ -37,10 +38,10 @@ export function RaiseRequestForm({
   );
 
   // Default to the end of the current month — the usual billing rhythm.
-  const due = new Date();
-  due.setMonth(due.getMonth() + 1, 1);
-  due.setDate(0);
-  const defaultDue = due.toISOString().slice(0, 10);
+  // `currentPeriod()` rather than raw local-time Date math: the latter reads
+  // back through toISOString(), which silently jumps to the 1st of next
+  // month once local evening time crosses UTC midnight.
+  const defaultDue = currentPeriod().end;
 
   return (
     <form action={formAction}>

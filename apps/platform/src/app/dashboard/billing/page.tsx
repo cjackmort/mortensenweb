@@ -12,6 +12,7 @@ import {
   formatCurrency,
 } from "@/lib/payments/venmo";
 import { isSquareConfigured } from "@/lib/payments/square";
+import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
 import { UnlockPanel } from "./unlock-panel";
 
@@ -144,6 +145,12 @@ export default async function BillingPage() {
               )}
             </div>
           </section>
+        )}
+
+        {!locked && entitlements?.overagePerChangeCents != null && (
+          <ExtraChangePanel
+            amountLabel={formatCurrency(entitlements.overagePerChangeCents)}
+          />
         )}
 
         <section className="card">

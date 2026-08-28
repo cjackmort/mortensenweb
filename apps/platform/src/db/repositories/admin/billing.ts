@@ -2,14 +2,17 @@ import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   auditLog,
+  changeAllowances,
   clients,
   organizations,
   paymentRequests,
   payments,
+  servicePlans,
+  subscriptions,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { generatePaymentReference } from "@/lib/payments/venmo";
-import { daysOverdue } from "@/lib/billing/dunning";
+import { daysOverdue, paymentStanding, type PaymentStanding } from "@/lib/billing/dunning";
 import { unlockClientFeatures } from "./entitlements";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
@@ -154,6 +157,7 @@ export async function confirmPaymentReceived(
       currency: paymentRequests.currency,
       status: paymentRequests.status,
       subscriptionId: paymentRequests.subscriptionId,
+      purpose: paymentRequests.purpose,
       coversPeriodStart: paymentRequests.coversPeriodStart,
       coversPeriodEnd: paymentRequests.coversPeriodEnd,
       paymentId: paymentRequests.paymentId,
@@ -285,6 +289,79 @@ export async function confirmPaymentReceived(
     },
   });
 
+  // An extra change becomes available only now, on confirmed money — never
+  // when the client pressed pay. This is the single place a payment request
+  // is ever marked paid (the Square webhook and this manual-confirm path
+  // both end up here), so it's the one place this increment needs to live —
+  // it used to be duplicated into the webhook handler only, which meant a
+  // Venmo- or cash-confirmed extra change silently never raised the
+  // allowance. The increment is conditional on the row existing, so a client
+  // who buys capacity before submitting anything that month simply gets a
+  // fresh allowance created at their first submission with the plan's
+  // figure; the guard below avoids silently losing what they bought.
+  if (request.purpose === "extra_change" && request.coversPeriodStart) {
+    const raised = await db
+      .update(changeAllowances)
+      .set({ included: sql`${changeAllowances.included} + 1` })
+      .where(
+        and(
+          eq(changeAllowances.clientId, request.clientId),
+          eq(changeAllowances.periodStart, request.coversPeriodStart),
+          // Unlimited plans have a null included and need no top-up.
+          sql`${changeAllowances.included} IS NOT NULL`,
+        ),
+      )
+      .returning({ id: changeAllowances.id });
+
+    if (raised.length === 0) {
+      // No row for that month yet. Create one already credited, so the
+      // purchase is not lost between paying and submitting.
+      const plan = await db
+        .select({
+          included: servicePlans.includedChangesPerMonth,
+          subscriptionId: subscriptions.id,
+        })
+        .from(clients)
+        .leftJoin(
+          subscriptions,
+          and(
+            eq(subscriptions.clientId, clients.id),
+            eq(subscriptions.status, "active"),
+          ),
+        )
+        .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+        .where(eq(clients.id, request.clientId))
+        .limit(1);
+
+      const detail = plan[0];
+      if (detail?.included !== null && detail?.included !== undefined) {
+        await db
+          .insert(changeAllowances)
+          .values({
+            clientId: request.clientId,
+            subscriptionId: detail.subscriptionId,
+            periodStart: request.coversPeriodStart,
+            periodEnd: request.coversPeriodEnd ?? request.coversPeriodStart,
+            included: detail.included + 1,
+            used: 0,
+          })
+          .onConflictDoUpdate({
+            target: [changeAllowances.clientId, changeAllowances.periodStart],
+            set: { included: sql`${changeAllowances.included} + 1` },
+          });
+      }
+    }
+
+    await db.insert(auditLog).values({
+      actorUserId: ctx.userId,
+      organizationId: request.organizationId,
+      action: "allowance.extra_change_purchased",
+      entityType: "payment_request",
+      entityId: requestPublicId,
+      metadata: { period: request.coversPeriodStart, source: input.method },
+    });
+  }
+
   return {
     ok: true,
     alreadyConfirmed: claimed.length === 0,
@@ -383,4 +460,132 @@ export async function listOverduePaymentRequests(
     daysOverdue: r.dueOn ? daysOverdue(new Date(`${r.dueOn}T00:00:00Z`), now) : 0,
     awaitingConfirmation: r.status === "awaiting_confirmation",
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Monthly billing at a glance
+// ---------------------------------------------------------------------------
+
+export interface ClientBillingStatus {
+  clientPublicId: string;
+  organizationName: string;
+  monthlyPriceCents: number | null;
+  /** No subscription invoice has ever been raised for this client. */
+  neverBilled: boolean;
+  latestRequest: {
+    publicId: string;
+    reference: string;
+    amountCents: number;
+    dueOn: string | null;
+  } | null;
+  standing: PaymentStanding;
+  /**
+   * Whether an operator can raise a new invoice right now. False while one is
+   * already open — the same "no second invoice on top of an unsettled one"
+   * rule `beginCheckout` enforces for a client raising their own, so the
+   * reference an operator is tracking can't be orphaned by a second one.
+   */
+  canRaise: boolean;
+}
+
+const UNSETTLED: ReadonlySet<string> = new Set([
+  "open",
+  "overdue",
+  "awaiting_confirmation",
+]);
+
+/**
+ * Every active client's subscription billing, one row each, for the "who
+ * needs a bill this month" view.
+ *
+ * Deliberately keyed off "their most recent subscription invoice" rather
+ * than a strict calendar-month filter: `raisePaymentRequest` doesn't stamp a
+ * period onto a subscription invoice (only extra-change purchases carry
+ * one — see checkout.ts), so "this month's bill" is, operationally, whichever
+ * one hasn't been settled yet. A client with nothing raised since a
+ * confirmed payment reads as `neverBilled: false` with `standing: paid_up`
+ * and `canRaise: true` — ready for the next one.
+ *
+ * Done as two plain queries reduced in JS rather than a SQL window function:
+ * this is an operator dashboard for a handful of clients, not a hot path,
+ * and a `DISTINCT ON` here would cost more in readability than it would ever
+ * save in query time.
+ */
+export async function listClientBillingStatus(
+  _ctx: AdminContext,
+  db: Database,
+  now: Date = new Date(),
+): Promise<ClientBillingStatus[]> {
+  const clientRows = await db
+    .select({
+      clientId: clients.id,
+      clientPublicId: clients.publicId,
+      organizationName: organizations.name,
+      dunningExemptUntil: clients.dunningExemptUntil,
+      monthlyPriceCents: subscriptions.monthlyPriceCents,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .leftJoin(
+      subscriptions,
+      and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .where(isNull(clients.archivedAt))
+    .orderBy(organizations.name);
+
+  const requestRows = await db
+    .select({
+      clientId: paymentRequests.clientId,
+      publicId: paymentRequests.publicId,
+      reference: paymentRequests.reference,
+      amountCents: paymentRequests.amountCents,
+      dueOn: paymentRequests.dueOn,
+      status: paymentRequests.status,
+      dunningStage: paymentRequests.dunningStage,
+      createdAt: paymentRequests.createdAt,
+    })
+    .from(paymentRequests)
+    .where(eq(paymentRequests.purpose, "subscription"));
+
+  const latestByClient = new Map<string, (typeof requestRows)[number]>();
+  for (const row of requestRows) {
+    const existing = latestByClient.get(row.clientId);
+    if (!existing || row.createdAt > existing.createdAt) {
+      latestByClient.set(row.clientId, row);
+    }
+  }
+
+  return clientRows.map((c) => {
+    const latest = latestByClient.get(c.clientId) ?? null;
+
+    const standing = paymentStanding(
+      {
+        status: (latest?.status ?? "paid") as never,
+        dueOn: latest?.dueOn ? new Date(`${latest.dueOn}T00:00:00Z`) : null,
+        dunningStage: (latest?.dunningStage ?? "none") as never,
+        exemptUntil: c.dunningExemptUntil,
+      },
+      now,
+    );
+
+    return {
+      clientPublicId: c.clientPublicId,
+      organizationName: c.organizationName,
+      monthlyPriceCents: c.monthlyPriceCents,
+      neverBilled: latest === null,
+      latestRequest: latest
+        ? {
+            publicId: latest.publicId,
+            reference: latest.reference,
+            amountCents: latest.amountCents,
+            dueOn: latest.dueOn,
+          }
+        : null,
+      standing,
+      canRaise: !latest || !UNSETTLED.has(latest.status),
+    };
+  });
 }
