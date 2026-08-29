@@ -19,6 +19,16 @@
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
+  # Belt-and-suspenders alongside "Deliberately no [[plugins]] block" below:
+  # this repo holds two Next.js apps, and Netlify's zero-config Next.js
+  # Runtime auto-attaches based on framework detection, not on this file's
+  # absence of a [[plugins]] block. On 2026-08-29 a cache-cleared build of
+  # this site published apps/platform's server output instead of this app's
+  # static export, under a domain that has never had a login page. Setting
+  # this explicitly, checked into git rather than left as a dashboard-only
+  # env var, forces the Runtime off regardless of what Netlify's detection
+  # decides in a repo with more than one Next.js project in it.
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 # Deliberately no [[plugins]] block.
 #
