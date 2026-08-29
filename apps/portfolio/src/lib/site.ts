@@ -11,7 +11,7 @@ export const SITE = {
   shortName: "MortensenWeb",
   url: "https://mortensenweb.com",
   portalUrl: "https://portal.mortensenweb.com",
-  email: "hello@mortensenweb.com",
+  email: "mortensenwebco@gmail.com",
   tagline: "Websites for small businesses, built and looked after.",
 } as const;
 
