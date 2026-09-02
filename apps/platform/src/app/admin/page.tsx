@@ -6,11 +6,25 @@ import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import {
   listAllChangeRequests,
-  listClients,
+  listClientsWithPrimarySite,
 } from "@/db/repositories/admin/clients";
 import { listOverduePaymentRequests } from "@/db/repositories/admin/billing";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
 import { formatCurrency } from "@/lib/payments/venmo";
+
+const SITE_STATUS_PILL: Record<string, string> = {
+  draft: "pill-neutral",
+  preview: "pill-warning",
+  live: "pill-success",
+  archived: "pill-neutral",
+};
+
+const SITE_STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  preview: "Demo",
+  live: "Live",
+  archived: "Archived",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +49,7 @@ export default async function AdminOverview() {
   const db = await getDb();
 
   const [clients, requests, moneyQueue] = await Promise.all([
-    listClients(ctx, db),
+    listClientsWithPrimarySite(ctx, db),
     listAllChangeRequests(ctx, db, { limit: 100 }),
     listOverduePaymentRequests(ctx, db),
   ]);
@@ -89,64 +103,13 @@ export default async function AdminOverview() {
 
         <section className="card">
           <div className="card-head">
-            <h2>Clients</h2>
-            <Link href="/admin/clients">All clients</Link>
-          </div>
-
-          {clients.length === 0 ? (
-            <div className="empty">
-              <p className="empty-title">No clients yet.</p>
-              <p style={{ marginTop: "1rem" }}>
-                <Link className="button" href="/admin/clients/new">
-                  Add your first client
-                </Link>
-              </p>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="stack">
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Contact</th>
-                    <th>Industry</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.slice(0, 8).map((c) => (
-                    <tr key={c.clientPublicId}>
-                      <td data-label="Client">
-                        <Link href={`/admin/clients/${c.clientPublicId}`}>
-                          {c.name}
-                        </Link>
-                        {c.isDemo && (
-                          <>
-                            {" "}
-                            <span className="badge">demo</span>
-                          </>
-                        )}
-                      </td>
-                      <td data-label="Contact">
-                        {c.primaryContactName ?? "—"}
-                      </td>
-                      <td data-label="Industry">{c.industry ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="card">
-          <div className="card-head">
-            <h2>Recent requests</h2>
+            <h2>Pending requests</h2>
             <Link href="/admin/requests">All requests</Link>
           </div>
 
-          {requests.length === 0 ? (
+          {openRequests.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>
-              No change requests yet.
+              Nothing waiting on you. Every change request is settled.
             </p>
           ) : (
             <div className="table-wrap">
@@ -159,7 +122,7 @@ export default async function AdminOverview() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.slice(0, 5).map((r) => (
+                  {openRequests.slice(0, 8).map((r) => (
                     <tr key={r.publicId}>
                       <td data-label="Request">{r.title}</td>
                       <td data-label="Client">{r.organizationName}</td>
@@ -178,28 +141,60 @@ export default async function AdminOverview() {
 
         <section className="card">
           <div className="card-head">
-            <h2>Not built yet</h2>
+            <h2>Clients</h2>
+            <Link href="/admin/clients">All clients</Link>
           </div>
-          <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.9rem" }}>
-            <li>
-              <strong>Prospect site audits.</strong> Concept building works;
-              crawling a prospect&rsquo;s existing site to extract facts does
-              not. Briefs are typed by hand until it does.
-            </li>
-            <li>
-              <strong>Square payments.</strong> Checkout links and signature
-              verification are built and tested; the webhook route that receives
-              them is not, so Square payments still need confirming by hand.
-            </li>
-            <li>
-              <strong>Theme library.</strong> Stage 4. A scaffolded site is
-              whatever the template repository contains.
-            </li>
-          </ul>
-          <p className="muted" style={{ fontSize: "0.85rem", margin: "0.75rem 0 0" }}>
-            Migration is gated: no client repository is read without written
-            authorization naming one exact repository.
-          </p>
+
+          {clients.length === 0 ? (
+            <div className="empty">
+              <p className="empty-title">No clients yet.</p>
+              <p style={{ marginTop: "1rem" }}>
+                <Link className="button" href="/admin/clients/new">
+                  Add your first client
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <div className="site-grid">
+              {clients.map((c) => (
+                <Link
+                  key={c.clientPublicId}
+                  href={`/admin/clients/${c.clientPublicId}`}
+                  className="site-card"
+                >
+                  <div className="site-card-media">
+                    <span className="site-card-initial">
+                      {(c.site?.name ?? c.name).charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="site-card-body">
+                    <div className="site-card-eyebrow">
+                      <span>{c.industry ?? "Client"}</span>
+                      <span
+                        className={`pill ${c.site ? SITE_STATUS_PILL[c.site.status] : "pill-neutral"}`}
+                      >
+                        {c.site
+                          ? SITE_STATUS_LABEL[c.site.status]
+                          : "No site"}
+                      </span>
+                    </div>
+                    <p className="site-card-title">
+                      {c.site?.name ?? c.name}
+                    </p>
+                    <p className="site-card-meta">
+                      {c.name}
+                      {c.isDemo && (
+                        <>
+                          {" "}
+                          <span className="badge">demo</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
       </main>
     </AppShell>
