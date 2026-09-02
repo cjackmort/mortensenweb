@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   servicePlans,
@@ -33,6 +33,7 @@ export async function listClients(_ctx: AdminContext, db: Database) {
   return db
     .select({
       clientPublicId: clients.publicId,
+      organizationId: organizations.id,
       organizationPublicId: organizations.publicId,
       name: organizations.name,
       primaryContactName: clients.primaryContactName,
@@ -45,6 +46,47 @@ export async function listClients(_ctx: AdminContext, db: Database) {
     .innerJoin(organizations, eq(clients.organizationId, organizations.id))
     .where(isNull(clients.archivedAt))
     .orderBy(organizations.name);
+}
+
+/**
+ * The client list with each one's first site attached — name and status only,
+ * not analytics. The overview grid needs enough to render a card (what stage
+ * the site is at) without paying for a Umami round trip per client on a page
+ * that isn't asking "how is this site doing," only "which sites exist."
+ *
+ * A client with more than one site shows the oldest — the same one
+ * `getClientDetail` treats as primary elsewhere on admin surfaces.
+ */
+export async function listClientsWithPrimarySite(_ctx: AdminContext, db: Database) {
+  const rows = await listClients(_ctx, db);
+  if (rows.length === 0) return [];
+
+  const siteRows = await db
+    .select({
+      organizationId: sites.organizationId,
+      name: sites.name,
+      status: sites.status,
+      primaryDomain: sites.primaryDomain,
+      createdAt: sites.createdAt,
+    })
+    .from(sites)
+    .where(
+      inArray(
+        sites.organizationId,
+        rows.map((r) => r.organizationId),
+      ),
+    )
+    .orderBy(sites.createdAt);
+
+  const siteByOrgId = new Map<string, (typeof siteRows)[number]>();
+  for (const s of siteRows) {
+    if (!siteByOrgId.has(s.organizationId)) siteByOrgId.set(s.organizationId, s);
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    site: siteByOrgId.get(r.organizationId) ?? null,
+  }));
 }
 
 /**
