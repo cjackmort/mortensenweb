@@ -1,0 +1,69 @@
+# Netlify configuration for the public agency site.
+#
+# This is the SECOND Netlify site fed by this repository. The portal is
+# configured by the netlify.toml at the repository root, which pins
+# `base = "apps/platform"`. Netlify resolves configuration relative to a site's
+# configured base directory, so this file is read only when a site sets its
+# base to `apps/portfolio` — which the `mortensenweb-site` project does.
+#
+# Consequence worth stating plainly: the root netlify.toml does NOT apply here,
+# and this file does NOT apply to the portal. Changing a header or a redirect
+# in one place changes it for one site only. Two sites, two files, on purpose.
+
+[build]
+  # Relative to this file's directory, which is already the base.
+  command = "npm run build"
+  # `output: "export"` in next.config.ts writes here rather than to `.next`.
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Belt-and-suspenders alongside "Deliberately no [[plugins]] block" below:
+  # this repo holds two Next.js apps, and Netlify's zero-config Next.js
+  # Runtime auto-attaches based on framework detection, not on this file's
+  # absence of a [[plugins]] block. On 2026-08-29 a cache-cleared build of
+  # this site published apps/platform's server output instead of this app's
+  # static export, under a domain that has never had a login page. Setting
+  # this explicitly, checked into git rather than left as a dashboard-only
+  # env var, forces the Runtime off regardless of what Netlify's detection
+  # decides in a repo with more than one Next.js project in it.
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
+
+# Deliberately no [[plugins]] block.
+#
+# The portal needs @netlify/plugin-nextjs because it server-renders. This site
+# is a static export — a directory of HTML — so the adapter has nothing to do,
+# and including it would wrap plain files in a serverless function for no
+# reason. If this site ever stops being `output: "export"`, that plugin comes
+# back at the same time.
+
+# Security headers.
+#
+# Set here rather than in next.config.ts, because a static export drops the
+# `headers()` function entirely — Next only applies it when something is
+# serving the response, and here nothing is. Netlify's edge adds them instead.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # 'unsafe-inline' on script-src is for Next's hydration bootstrap, which
+    # is an inline script. cloud.umami.is is allowed on script-src (loads the
+    # tracker) and connect-src (the tracker's own beacon) — everything else
+    # stays locked to 'self'.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
+# Content-hashed build output can be cached indefinitely; nothing else can.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/work/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
