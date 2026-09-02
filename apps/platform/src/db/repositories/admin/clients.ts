@@ -371,6 +371,11 @@ export async function listAllChangeRequests(
       organizations,
       eq(changeRequests.organizationId, organizations.id),
     )
+    // The MortensenWeb tab is a separate queue on purpose — mixing the
+    // operator's own site work into the client queue is exactly what that
+    // tab exists to avoid, so this join+filter keeps it out here too.
+    .innerJoin(clients, eq(clients.organizationId, organizations.id))
+    .where(eq(clients.isInternal, false))
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 100);
 }

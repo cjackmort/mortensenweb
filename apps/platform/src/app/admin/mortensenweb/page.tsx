@@ -89,7 +89,6 @@ export default async function MortensenWebPage({
       ? { kind: "not_connected" as const }
       : { kind: "not_configured" as const };
   const data = state.kind === "ok" ? state.data : demoAnalytics(site?.publicId ?? "mortensenweb", days);
-  const showingDemo = state.kind !== "ok";
   const reason = demoReason(state);
 
   const updatedAt = new Date().toLocaleTimeString("en-US", {
