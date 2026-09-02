@@ -35,16 +35,18 @@ const KEY_BITS = 256;
  * validation and then throw at the hashing step, which is a 500, not a
  * validation error.
  *
- * Set to 5 by explicit product decision, against the usual advice. Be clear
- * about what that trades away: online guessing is still covered — five failures
- * lock the account for fifteen minutes and the login endpoint is throttled per
- * account and per IP — but a five-character password does not survive an
- * *offline* attack. If the user table is ever disclosed, 600,000 PBKDF2
- * iterations buy minutes, not years, against a five-character keyspace. The
- * mitigation that matters at this floor is therefore keeping the database from
- * leaking, not the KDF.
+ * Raised from 5 to 10 on 2026-09-02. Five was a deliberate product decision
+ * that leaned entirely on online-attack throttling (five failures locks an
+ * account for fifteen minutes, and the login endpoint is throttled per
+ * account and per IP) rather than keyspace — the trade being that a
+ * five-character password does not survive an *offline* attack: if the user
+ * table were ever disclosed, 600,000 PBKDF2 iterations buy minutes against
+ * that keyspace, not years. Ten characters, still with no composition rules,
+ * meaningfully widens that keyspace while staying a short memorable phrase
+ * rather than a password-manager string — the online throttling above still
+ * applies on top of it, not instead of it.
  */
-export const MIN_PASSWORD_LENGTH = 5;
+export const MIN_PASSWORD_LENGTH = 10;
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
