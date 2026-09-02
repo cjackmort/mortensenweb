@@ -384,6 +384,262 @@ code {
   }
 }
 
+/* ------------------------------------------------------- site panes */
+
+/*
+ * A card per site rather than a row per site: the operator scans logos and
+ * status at a glance the way the Clients tab's collapsible detail scans
+ * numbers. No screenshot pipeline exists yet, so the media block is a flat
+ * initial on a wash tint — an honest placeholder, not a broken image icon.
+ */
+.site-grid {
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: 1fr;
+  margin-bottom: 0.25rem;
+}
+
+@media (min-width: 34rem) {
+  .site-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 60rem) {
+  .site-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.site-card {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+@media (pointer: fine) {
+  .site-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: var(--border-strong);
+  }
+}
+
+.site-card-media {
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-wash), var(--surface-sunk));
+  overflow: hidden;
+}
+
+.site-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.site-card-initial {
+  font-size: 2.75rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.site-card-body {
+  padding: 0.95rem 1.1rem 1.1rem;
+}
+
+.site-card-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.site-card-title {
+  margin: 0 0 0.15rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.site-card-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------- client tiles */
+
+/*
+ * A tile per client, matching the Overview page's site cards — same media
+ * block, eyebrow, title and status pill — but each one is a native <details>
+ * so clicking it expands analytics in place rather than navigating away.
+ * Server-rendered either way, so a toggle only ever hides markup, never
+ * fetches it.
+ */
+.client-tile-grid {
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: 1fr;
+  margin-bottom: 0.25rem;
+}
+
+@media (min-width: 34rem) {
+  .client-tile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 60rem) {
+  .client-tile-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.client-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  align-self: start;
+}
+
+/*
+ * The analytics stat row lays out in columns keyed to viewport width, not to
+ * whatever container it happens to sit in — it has no way to know it has been
+ * squeezed into one grid cell. Expanding the tile to span every column, not
+ * just growing its own row, is what actually gives that row the width it's
+ * already assuming it has.
+ */
+@media (min-width: 34rem) {
+  .client-tile[open] {
+    grid-column: 1 / -1;
+  }
+}
+
+.client-tile summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.client-tile summary::-webkit-details-marker {
+  display: none;
+}
+
+.client-tile-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-wash), var(--surface-sunk));
+  overflow: hidden;
+}
+
+.client-tile-initial {
+  font-size: 2.75rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.client-tile-chevron {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.client-tile-chevron::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  margin-top: -0.15rem;
+  transition: transform 0.15s ease;
+}
+
+.client-tile[open] .client-tile-chevron::after {
+  transform: rotate(-135deg);
+  margin-top: 0.15rem;
+}
+
+.client-tile-body {
+  padding: 0.95rem 1.1rem 1.1rem;
+}
+
+.client-tile-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.client-tile-title {
+  margin: 0 0 0.15rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.client-tile-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-tile-analytics {
+  padding: 0 1.1rem 1.1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.1rem;
+}
+
+.client-tile-actions {
+  margin-top: 1rem;
+}
+
 /* ---------------------------------------------------------- stat tiles */
 
 .stat {

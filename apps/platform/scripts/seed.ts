@@ -70,29 +70,31 @@ async function main() {
   console.log("Seeding demo data...");
 
   // ---- Service plans (reference data, not demo-only) ---------------------
+  //
+  // Real pricing, decided 2026-09-02 — see 0016_care_plan_pricing.sql, which
+  // is the authoritative version for a database this seed runs against after
+  // migrations. Kept in sync here so a fresh read of this file isn't stale.
   const planRows = await db
     .insert(servicePlans)
     .values([
       {
         key: "care-lite",
         name: "Care — Lite",
-        description: "Hosting, security updates, and one content change a month.",
-        defaultMonthlyCents: 4900,
+        description: "Hosting, security updates, analytics, and one change a month.",
+        defaultMonthlyCents: 5000,
         includedChangesPerMonth: 1,
-        overagePerChangeCents: 4900,
-        // Deliberately no analytics: the plan a client upgrades *from* has to
-        // be missing something they want, or the upgrade prompt is dishonest.
-        includesAnalytics: false,
+        overagePerChangeCents: 2500,
+        includesAnalytics: true,
         sortOrder: 10,
       },
       {
         key: "care-basic",
         name: "Care — Basic",
         description:
-          "Hosting, security updates, analytics, and three changes a month.",
-        defaultMonthlyCents: 9900,
-        includedChangesPerMonth: 3,
-        overagePerChangeCents: 3900,
+          "Hosting, security updates, analytics, and five changes a month.",
+        defaultMonthlyCents: 10000,
+        includedChangesPerMonth: 5,
+        overagePerChangeCents: 2500,
         includesAnalytics: true,
         sortOrder: 20,
       },
@@ -100,12 +102,22 @@ async function main() {
         key: "care-plus",
         name: "Care — Plus",
         description:
-          "Basic plus priority turnaround and ten changes a month.",
-        defaultMonthlyCents: 19900,
-        includedChangesPerMonth: 10,
-        overagePerChangeCents: 2900,
+          "Hosting, security updates, analytics, and fifteen changes a month.",
+        defaultMonthlyCents: 20000,
+        includedChangesPerMonth: 15,
+        overagePerChangeCents: 2500,
         includesAnalytics: true,
         sortOrder: 30,
+      },
+      {
+        key: "care-unlimited",
+        name: "Care — Unlimited",
+        description: "Hosting, security updates, analytics, and unlimited changes.",
+        defaultMonthlyCents: 30000,
+        includedChangesPerMonth: null,
+        overagePerChangeCents: null,
+        includesAnalytics: true,
+        sortOrder: 40,
       },
       {
         // Exists to be granted, not sold. The plan override needs something
@@ -256,7 +268,7 @@ async function main() {
         publicId: newPublicId(),
         clientId: clientRecord.id,
         planId: basicPlan?.id ?? null,
-        monthlyPriceCents: 9900,
+        monthlyPriceCents: 10000,
         billingDay: 1,
         status: "active",
         startedOn: "2026-01-01",
@@ -269,7 +281,7 @@ async function main() {
       publicId: newPublicId(),
       clientId: clientRecord.id,
       subscriptionId: subscription.id,
-      amountCents: 9900,
+      amountCents: 10000,
       method: "venmo",
       coversPeriodStart: "2026-06-01",
       coversPeriodEnd: "2026-06-30",
@@ -282,7 +294,7 @@ async function main() {
       publicId: newPublicId(),
       clientId: clientRecord.id,
       subscriptionId: subscription.id,
-      amountCents: 9900,
+      amountCents: 10000,
       method: "cash",
       coversPeriodStart: "2026-07-01",
       coversPeriodEnd: "2026-07-31",

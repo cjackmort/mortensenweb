@@ -17,6 +17,7 @@ import { sites } from "./sites";
 import {
   adjustmentKindEnum,
   dunningStageEnum,
+  ledgerCategoryEnum,
   managementStateEnum,
   migrationScopeEnum,
   migrationStatusEnum,
@@ -110,6 +111,16 @@ export const clients = pgTable(
       withTimezone: true,
     }),
     isDemo: boolean("is_demo").notNull().default(false),
+    /**
+     * The agency's own site, running through this same pipeline. Not a
+     * client in the commercial sense — nobody pays, and there is no
+     * subscription — so every client-facing list, and every billing and
+     * revenue rollup, must filter this out at the query. It exists as a
+     * `client` row rather than a special case because the alternative is a
+     * second, parallel request/preview/approve pipeline built and
+     * maintained twice.
+     */
+    isInternal: boolean("is_internal").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -433,6 +444,50 @@ export const paymentRequests = pgTable(
       "payment_requests_period_order",
       sql`${t.coversPeriodEnd} IS NULL OR ${t.coversPeriodStart} IS NULL OR ${t.coversPeriodEnd} >= ${t.coversPeriodStart}`,
     ),
+  ],
+);
+
+/**
+ * The agency's own operating expenses — software, hosting, contractors,
+ * equipment. Deliberately not called anything with "payment" in it: those
+ * tables above are money moving between a client and the agency, and this is
+ * money moving out of the agency, to nobody the schema otherwise knows about.
+ * Confusing the two would make "money received this month" impossible to
+ * compute without filtering, so they stay two tables.
+ *
+ * Not client-scoped — there is nothing here to authorize against per-tenant,
+ * because only the operator ever sees it.
+ */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicId: text("public_id").notNull(),
+    description: text("description").notNull(),
+    category: ledgerCategoryEnum("category").notNull().default("other"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    occurredOn: date("occurred_on").notNull(),
+    /**
+     * A tag for display and filtering, not a scheduler — it does not create
+     * next month's row automatically. Automating that is a real feature
+     * (what happens to the tally when a subscription is cancelled?) and
+     * nothing has asked for it yet.
+     */
+    isRecurring: boolean("is_recurring").notNull().default(false),
+    note: text("note"),
+    recordedBy: uuid("recorded_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("expenses_public_id_key").on(t.publicId),
+    index("expenses_occurred_idx").on(t.occurredOn),
+    index("expenses_category_idx").on(t.category),
+    check("expenses_amount_positive", sql`${t.amountCents} > 0`),
   ],
 );
 

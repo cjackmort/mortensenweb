@@ -533,7 +533,10 @@ export async function listClientBillingStatus(
         eq(subscriptions.status, "active"),
       ),
     )
-    .where(isNull(clients.archivedAt))
+    // The agency's own site is a `clients` row so it can share this pipeline,
+    // but nobody bills it — same exclusion `listClients` applies, needed
+    // again here because this query doesn't go through that function.
+    .where(and(isNull(clients.archivedAt), eq(clients.isInternal, false)))
     .orderBy(organizations.name);
 
   const requestRows = await db

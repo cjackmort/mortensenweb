@@ -23,6 +23,7 @@ import {
   getBillingOverview,
 } from "@/db/repositories/client/billing";
 import { getOrCreateExtraChangeRequest } from "@/db/repositories/client/checkout";
+import { currentPeriod } from "@/lib/billing/period";
 import { newPublicId } from "@/lib/ids";
 import { createTestDb } from "./helpers/db";
 
@@ -264,10 +265,11 @@ describe("confirming a purchase credits the allowance", () => {
   it("tops up an existing allowance row rather than overwriting it", async () => {
     // The client has already used two of their three included changes this
     // month before buying a fourth.
+    const period = currentPeriod();
     await db.insert(changeAllowances).values({
       clientId: acme.clientId,
-      periodStart: "2026-08-01",
-      periodEnd: "2026-08-31",
+      periodStart: period.start,
+      periodEnd: period.end,
       included: 3,
       used: 2,
     });

@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   servicePlans,
@@ -33,6 +33,7 @@ export async function listClients(_ctx: AdminContext, db: Database) {
   return db
     .select({
       clientPublicId: clients.publicId,
+      organizationId: organizations.id,
       organizationPublicId: organizations.publicId,
       name: organizations.name,
       primaryContactName: clients.primaryContactName,
@@ -43,8 +44,67 @@ export async function listClients(_ctx: AdminContext, db: Database) {
     })
     .from(clients)
     .innerJoin(organizations, eq(clients.organizationId, organizations.id))
-    .where(isNull(clients.archivedAt))
+    // The agency's own site rides the same `clients` row so it can use the
+    // same pipeline, but it is not a commercial client — every client-facing
+    // list excludes it here, once, rather than in each caller.
+    .where(and(isNull(clients.archivedAt), eq(clients.isInternal, false)))
     .orderBy(organizations.name);
+}
+
+/** The agency's own internal client row — the one `listClients` excludes. */
+export async function getInternalClient(_ctx: AdminContext, db: Database) {
+  const [row] = await db
+    .select({
+      clientPublicId: clients.publicId,
+      organizationId: organizations.id,
+      organizationPublicId: organizations.publicId,
+      name: organizations.name,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .where(and(isNull(clients.archivedAt), eq(clients.isInternal, true)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * The client list with each one's first site attached — name and status only,
+ * not analytics. Cards and tiles that only need "what stage is this site at"
+ * render from this without paying for a Umami round trip per client.
+ *
+ * A client with more than one site shows the oldest — the same one
+ * `getClientDetail` treats as primary elsewhere on admin surfaces.
+ */
+export async function listClientsWithPrimarySite(_ctx: AdminContext, db: Database) {
+  const rows = await listClients(_ctx, db);
+  if (rows.length === 0) return [];
+
+  const siteRows = await db
+    .select({
+      organizationId: sites.organizationId,
+      name: sites.name,
+      status: sites.status,
+      primaryDomain: sites.primaryDomain,
+      createdAt: sites.createdAt,
+    })
+    .from(sites)
+    .where(
+      inArray(
+        sites.organizationId,
+        rows.map((r) => r.organizationId),
+      ),
+    )
+    .orderBy(sites.createdAt);
+
+  const siteByOrgId = new Map<string, (typeof siteRows)[number]>();
+  for (const s of siteRows) {
+    if (!siteByOrgId.has(s.organizationId)) siteByOrgId.set(s.organizationId, s);
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    site: siteByOrgId.get(r.organizationId) ?? null,
+  }));
 }
 
 /**
@@ -186,6 +246,7 @@ export async function getClientDetail(
         title: changeRequests.title,
         status: changeRequests.status,
         priority: changeRequests.priority,
+        createdAt: changeRequests.createdAt,
       })
       .from(changeRequests)
       .where(eq(changeRequests.organizationId, row.organization.id))
@@ -310,6 +371,11 @@ export async function listAllChangeRequests(
       organizations,
       eq(changeRequests.organizationId, organizations.id),
     )
+    // The MortensenWeb tab is a separate queue on purpose — mixing the
+    // operator's own site work into the client queue is exactly what that
+    // tab exists to avoid, so this join+filter keeps it out here too.
+    .innerJoin(clients, eq(clients.organizationId, organizations.id))
+    .where(eq(clients.isInternal, false))
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 100);
 }

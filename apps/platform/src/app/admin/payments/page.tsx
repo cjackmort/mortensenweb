@@ -8,11 +8,45 @@ import {
   listClientBillingStatus,
   listOverduePaymentRequests,
 } from "@/db/repositories/admin/billing";
+import {
+  expenseTotals,
+  listActiveSubscriptions,
+  listExpenses,
+  sumPaymentsReceivedInMonth,
+  type LedgerCategory,
+} from "@/db/repositories/admin/finance";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { DEFAULT_DUNNING_CONFIG } from "@/lib/billing/dunning";
 import { MonthlyBillingTable } from "./monthly-billing";
+import { AddExpenseForm, DeleteExpenseButton } from "./finance-forms";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * A `date` column comes back as a bare "YYYY-MM-DD" with no time component.
+ * `new Date(that string)` parses it as UTC midnight, so `toLocaleDateString`
+ * in any timezone behind UTC prints the day before — the same trap
+ * `currentPeriod()` exists to avoid on the billing forms. Reading the parts
+ * straight out of the string sidesteps the parse entirely.
+ */
+function formatDateOnly(isoDate: string): string {
+  const parts = isoDate.split("-").map(Number);
+  const [year = 1970, month = 1, day = 1] = parts;
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+const LEDGER_CATEGORY_LABEL: Record<LedgerCategory, string> = {
+  software: "Software",
+  hosting: "Hosting",
+  contractor: "Contractor",
+  marketing: "Marketing",
+  equipment: "Equipment",
+  fees: "Fees",
+  other: "Other",
+};
 
 /**
  * The money queue.
@@ -32,10 +66,15 @@ export default async function AdminPaymentsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [rows, billingStatus] = await Promise.all([
-    listOverduePaymentRequests(ctx, db),
-    listClientBillingStatus(ctx, db),
-  ]);
+  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, expenseRows, ledgerTotals] =
+    await Promise.all([
+      listOverduePaymentRequests(ctx, db),
+      listClientBillingStatus(ctx, db),
+      listActiveSubscriptions(ctx, db),
+      sumPaymentsReceivedInMonth(ctx, db),
+      listExpenses(ctx, db),
+      expenseTotals(ctx, db),
+    ]);
 
   const awaiting = rows.filter((r) => r.awaitingConfirmation);
   const overdue = rows
@@ -52,7 +91,12 @@ export default async function AdminPaymentsPage() {
           <h1>Payments</h1>
         </div>
 
-        <div className="grid grid-3">
+        <div className="grid grid-4">
+          <div className="stat">
+            <p className="stat-label">Received this month</p>
+            <p className="stat-value">{formatCurrency(receivedThisMonth)}</p>
+            <p className="stat-note">confirmed payments only</p>
+          </div>
           <div className="stat">
             <p className="stat-label">Awaiting your confirmation</p>
             <p className="stat-value">{formatCurrency(pending)}</p>
@@ -74,6 +118,59 @@ export default async function AdminPaymentsPage() {
             <p className="stat-note">hosting is never affected</p>
           </div>
         </div>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Active subscriptions</h2>
+            <span className="muted">{activeSubscriptions.length}</span>
+          </div>
+
+          {activeSubscriptions.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              No active subscriptions yet.
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table className="stack">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Plan</th>
+                    <th>Billing day</th>
+                    <th>Charged via</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeSubscriptions.map((s) => (
+                    <tr key={s.publicId}>
+                      <td data-label="Client">
+                        <Link href={`/admin/clients/${s.clientPublicId}`}>
+                          {s.organizationName}
+                        </Link>
+                      </td>
+                      <td data-label="Plan">
+                        {formatCurrency(s.monthlyPriceCents, s.currency)}/mo
+                      </td>
+                      <td data-label="Billing day">day {s.billingDay}</td>
+                      <td data-label="Charged via">
+                        {s.provider ? (
+                          <span className="pill pill-accent">{s.provider}</span>
+                        ) : (
+                          <span className="muted">manual</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted" style={{ fontSize: "0.82rem", margin: "0.9rem 0 0" }}>
+            No processor is connected yet, so every plan here is charged and
+            collected by hand. Once Stripe is attached, charged-via will show
+            it instead of &ldquo;manual&rdquo; for whichever clients move over.
+          </p>
+        </section>
 
         <section className="card">
           <div className="card-head">
@@ -131,6 +228,83 @@ export default async function AdminPaymentsPage() {
           written and tested, but nothing runs it on a schedule. Until that
           exists, this page is the queue and chasing is manual.
         </p>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Ledger</h2>
+            <span className="muted">
+              {formatCurrency(ledgerTotals.monthCents)} this month
+            </span>
+          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            What the agency itself has paid for — software, hosting,
+            contractors, equipment. Kept separate from client payments above,
+            so this total is what you hand an accountant at tax time, not
+            mixed with money that was never yours to begin with.
+          </p>
+
+          <div className="grid grid-2" style={{ marginBottom: "1.25rem" }}>
+            <div className="stat">
+              <p className="stat-label">This month</p>
+              <p className="stat-value">{formatCurrency(ledgerTotals.monthCents)}</p>
+              <p className="stat-note">expenses recorded</p>
+            </div>
+            <div className="stat">
+              <p className="stat-label">{ledgerTotals.taxYear} so far</p>
+              <p className="stat-value">{formatCurrency(ledgerTotals.yearCents)}</p>
+              <p className="stat-note">year to date</p>
+            </div>
+          </div>
+
+          <div className="action-block" style={{ marginTop: 0 }}>
+            <AddExpenseForm />
+          </div>
+
+          {expenseRows.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Nothing recorded yet.
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table className="stack">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenseRows.map((e) => (
+                    <tr key={e.publicId}>
+                      <td data-label="Date">{formatDateOnly(e.occurredOn)}</td>
+                      <td data-label="Description">
+                        {e.description}
+                        {e.isRecurring && (
+                          <>
+                            {" "}
+                            <span className="badge">monthly</span>
+                          </>
+                        )}
+                      </td>
+                      <td data-label="Category">
+                        <span className="pill pill-neutral">
+                          {LEDGER_CATEGORY_LABEL[e.category]}
+                        </span>
+                      </td>
+                      <td data-label="Amount">{formatCurrency(e.amountCents)}</td>
+                      <td data-label="">
+                        <DeleteExpenseButton publicId={e.publicId} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </main>
     </AppShell>
   );

@@ -419,3 +419,18 @@ export const previewDecisionEnum = pgEnum("preview_decision", [
   "approved",
   "changes_requested",
 ]);
+
+/**
+ * What an agency expense was for, for tax-time grouping. Not the same list as
+ * a client-facing category anywhere else in the schema — this one only has to
+ * make sense on a Schedule C.
+ */
+export const ledgerCategoryEnum = pgEnum("ledger_category", [
+  "software",
+  "hosting",
+  "contractor",
+  "marketing",
+  "equipment",
+  "fees",
+  "other",
+]);
