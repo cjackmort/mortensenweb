@@ -110,6 +110,16 @@ export const clients = pgTable(
       withTimezone: true,
     }),
     isDemo: boolean("is_demo").notNull().default(false),
+    /**
+     * The agency's own site, running through this same pipeline. Not a
+     * client in the commercial sense — nobody pays, and there is no
+     * subscription — so every client-facing list, and every billing and
+     * revenue rollup, must filter this out at the query. It exists as a
+     * `client` row rather than a special case because the alternative is a
+     * second, parallel request/preview/approve pipeline built and
+     * maintained twice.
+     */
+    isInternal: boolean("is_internal").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

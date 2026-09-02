@@ -43,8 +43,27 @@ export async function listClients(_ctx: AdminContext, db: Database) {
     })
     .from(clients)
     .innerJoin(organizations, eq(clients.organizationId, organizations.id))
-    .where(isNull(clients.archivedAt))
+    // The agency's own site rides the same `clients` row so it can use the
+    // same pipeline, but it is not a commercial client — every client-facing
+    // list excludes it here, once, rather than in each caller.
+    .where(and(isNull(clients.archivedAt), eq(clients.isInternal, false)))
     .orderBy(organizations.name);
+}
+
+/** The agency's own internal client row — the one `listClients` excludes. */
+export async function getInternalClient(_ctx: AdminContext, db: Database) {
+  const [row] = await db
+    .select({
+      clientPublicId: clients.publicId,
+      organizationId: organizations.id,
+      organizationPublicId: organizations.publicId,
+      name: organizations.name,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .where(and(isNull(clients.archivedAt), eq(clients.isInternal, true)))
+    .limit(1);
+  return row ?? null;
 }
 
 /**
@@ -186,6 +205,7 @@ export async function getClientDetail(
         title: changeRequests.title,
         status: changeRequests.status,
         priority: changeRequests.priority,
+        createdAt: changeRequests.createdAt,
       })
       .from(changeRequests)
       .where(eq(changeRequests.organizationId, row.organization.id))
