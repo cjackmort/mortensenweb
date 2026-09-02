@@ -99,6 +99,13 @@
       "when": 1787794110744,
       "tag": "0013_cooing_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788407400000,
+      "tag": "0016_care_plan_pricing",
+      "breakpoints": true
     }
   ]
 }
