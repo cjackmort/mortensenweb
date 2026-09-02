@@ -21,6 +21,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/clients", label: "Clients" },
   { href: "/admin/requests", label: "Requests" },
   { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/mortensenweb", label: "MortensenWeb" },
   // Prospects is hidden, not removed. Finding and pitching businesses moved out
   // of the portal to the `/pitch` command in the agency repo, which researches
   // keywords, rebuilds the site and previews it locally — so this tab duplicates
