@@ -50,9 +50,8 @@ export async function listClients(_ctx: AdminContext, db: Database) {
 
 /**
  * The client list with each one's first site attached — name and status only,
- * not analytics. The overview grid needs enough to render a card (what stage
- * the site is at) without paying for a Umami round trip per client on a page
- * that isn't asking "how is this site doing," only "which sites exist."
+ * not analytics. Cards and tiles that only need "what stage is this site at"
+ * render from this without paying for a Umami round trip per client.
  *
  * A client with more than one site shows the oldest — the same one
  * `getClientDetail` treats as primary elsewhere on admin surfaces.
