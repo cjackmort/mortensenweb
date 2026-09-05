@@ -1,0 +1,195 @@
+---
+import "../styles/global.css";
+import { SITE, NAV } from "../data/site";
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Path for the canonical URL, e.g. "/pricing/". Defaults to the current one. */
+  path?: string;
+  /** JSON-LD objects to emit in the head. */
+  schema?: object[];
+  /** A page nobody should be sent to from a search — the form's thank-you. */
+  noindex?: boolean;
+}
+
+const { title, description = SITE.description, path, schema = [], noindex = false } = Astro.props;
+const fullTitle = title ? `${title} — ${SITE.name}` : `${SITE.name} — ${SITE.tagline}`;
+const canonical = new URL(path ?? Astro.url.pathname, SITE.url).toString();
+const current = Astro.url.pathname;
+
+const organization = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE.url}/#organization`,
+      name: SITE.name,
+      url: SITE.url,
+      email: SITE.email,
+      description: SITE.description,
+      logo: `${SITE.url}/icon.svg`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE.url}/#website`,
+      url: SITE.url,
+      name: SITE.name,
+      publisher: { "@id": `${SITE.url}/#organization` },
+    },
+    ...schema,
+  ],
+};
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content={noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large"} />
+    <meta name="theme-color" content="#f4f5f2" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={`${SITE.url}/og.png`} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {/* Two families, four files. Preconnected so the headline face is on its
+        way before the stylesheet has finished parsing. */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+
+    <script type="application/ld+json" set:html={JSON.stringify(organization)} />
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap masthead__inner">
+        <a href="/" class="brand" aria-label="Mortensen Web Co. home">
+          Mortensen<span class="brand__mark">Web</span>
+          <span class="brand__co">Co.</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          {
+            NAV.map((link) => (
+              <a
+                class="nav__link"
+                href={link.href}
+                aria-current={current.startsWith(link.href) ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            ))
+          }
+          {/* Leaves the site: a plain link, and styled as the one action that
+              is for existing clients rather than prospects. */}
+          <a class="nav__link nav__portal" href={SITE.portalUrl}>Client login</a>
+        </nav>
+      </div>
+      <nav class="wrap subnav" aria-label="Pages">
+        <a href="/" aria-current={current === "/" ? "page" : undefined}>Home</a>
+        {
+          NAV.map((link) => (
+            <a href={link.href} aria-current={current.startsWith(link.href) ? "page" : undefined}>
+              {link.label}
+            </a>
+          ))
+        }
+      </nav>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="footer">
+      <div class="wrap">
+        <div class="footer__grid">
+          <div>
+            <a href="/" class="brand">Mortensen<span class="brand__mark">Web</span></a>
+            <p class="measure" style="margin-top: 0.75rem; color: var(--ink-2); font-size: var(--text-sm); max-width: 32ch;">
+              {SITE.tagline}
+            </p>
+          </div>
+          <div>
+            <p class="footer__h">Company</p>
+            <ul>
+              {NAV.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+            </ul>
+          </div>
+          <div>
+            <p class="footer__h">Clients</p>
+            <ul>
+              <li><a href={SITE.portalUrl}>Client portal</a></li>
+              <li><a href={`${SITE.portalUrl}/get-started`}>First-time sign in</a></li>
+              <li><a href={`${SITE.portalUrl}/forgot-password`}>Forgotten password</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="footer__h">Contact</p>
+            <ul>
+              <li><a href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></li>
+              <li><a href="/contact/">Start a project</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer__wordmark" aria-hidden="true">MortensenWeb</div>
+        <div class="footer__bottom">
+          <span>© {new Date().getFullYear()} Mortensen Web Co.</span>
+          <span>Built and hosted in-house. No trackers beyond a visitor count.</span>
+        </div>
+      </div>
+    </footer>
+
+    {/* Pointer effects: the hero's dot-grid spotlight and a magnetic pull on
+        primary buttons. A few hundred bytes, mouse only, and the page is
+        complete without them. */}
+    <script is:inline>
+      (() => {
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const hero = document.querySelector(".hero");
+        if (hero) {
+          hero.addEventListener(
+            "pointermove",
+            (e) => {
+              if (e.pointerType !== "mouse") return;
+              const r = hero.getBoundingClientRect();
+              hero.style.setProperty("--mx", `${e.clientX - r.left}px`);
+              hero.style.setProperty("--my", `${e.clientY - r.top}px`);
+            },
+            { passive: true },
+          );
+        }
+        for (const b of document.querySelectorAll(".btn--primary")) {
+          b.addEventListener(
+            "pointermove",
+            (e) => {
+              if (e.pointerType !== "mouse") return;
+              const r = b.getBoundingClientRect();
+              b.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.18}px, ${(e.clientY - r.top - r.height / 2) * 0.3}px)`;
+            },
+            { passive: true },
+          );
+          b.addEventListener("pointerleave", () => (b.style.transform = ""));
+        }
+      })();
+    </script>
+
+    {/* Umami Cloud — the visitor count. `defer`, so it never delays paint. */}
+    <script defer src="https://cloud.umami.is/script.js" data-website-id={SITE.umamiWebsiteId}></script>
+  </body>
+</html>

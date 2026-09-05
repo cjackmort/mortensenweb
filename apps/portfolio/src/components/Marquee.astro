@@ -1,0 +1,25 @@
+---
+import { REQUESTS } from "../data/site";
+// Duplicated once so the -50% translate loops without a seam.
+const items = [...REQUESTS, ...REQUESTS];
+---
+
+<div class="marquee" aria-hidden="true">
+  <div class="marquee__track">
+    {items.map((r) => <span>{r}</span>)}
+  </div>
+</div>
+<p class="sr-only">
+  Examples of what clients ask for: {REQUESTS.join("; ")}.
+</p>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>

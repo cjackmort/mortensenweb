@@ -1,0 +1,94 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../data/site";
+/**
+ * Netlify Forms, not a route handler. The form must exist in the built HTML
+ * for Netlify's build step to detect it; `form-name` identifies the
+ * submission; `action` must be a real built page; the honeypot is a field a
+ * human never fills, positioned off-screen and hidden from assistive tech.
+ */
+---
+
+<Base
+  title="Contact"
+  description="Tell us about your business and what you need from a website. We reply to every enquiry."
+  path="/contact/"
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Contact</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">Tell us about the business.</h1>
+          <p class="lede" style="margin-top: 1rem">
+            The more concrete you are about what is wrong with the current site
+            — or what the new one has to do — the more useful our first reply
+            will be. Every enquiry gets an answer, including the ones where we
+            are not the right fit.
+          </p>
+        </div>
+      </div>
+
+      <div class="section-head section-head--top" style="border-top: 0; margin-bottom: 0; padding-top: 0">
+        <div>
+          <p class="eyebrow" style="margin-bottom: .75rem">Or just email</p>
+          <p><a class="link" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></p>
+          <p class="hint" style="margin-top: 1.5rem; color: var(--muted); font-size: var(--text-sm); max-width: 28ch">
+            We usually reply the same working day.
+          </p>
+        </div>
+
+        <form class="form" name="contact" method="POST" action="/thanks/" data-netlify="true" netlify-honeypot="company-website">
+          <input type="hidden" name="form-name" value="contact" />
+          <p class="hp" aria-hidden="true">
+            <label>Leave this field empty <input name="company-website" tabindex="-1" autocomplete="off" /></label>
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <label for="name">Your name</label>
+              <input id="name" name="name" type="text" autocomplete="name" required />
+            </div>
+            <div>
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required />
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="business">Business name</label>
+              <input id="business" name="business" type="text" autocomplete="organization" required />
+            </div>
+            <div>
+              <label for="current-site">Current website</label>
+              <input id="current-site" name="current-site" type="url" inputmode="url" placeholder="https://" />
+              <p class="hint">If there is one. It is fine if there is not.</p>
+            </div>
+          </div>
+
+          <div>
+            <label for="budget">Rough budget for the build</label>
+            <select id="budget" name="budget">
+              <option value="">Not sure yet</option>
+              <option value="under-1500">Under $1,500</option>
+              <option value="1500-3000">$1,500 – $3,000</option>
+              <option value="3000-6000">$3,000 – $6,000</option>
+              <option value="over-6000">Over $6,000</option>
+            </select>
+            <p class="hint">Helps us suggest the right size of site. Not a commitment.</p>
+          </div>
+
+          <div>
+            <label for="message">What do you need?</label>
+            <textarea id="message" name="message" required placeholder="What the business does, who buys from you, and what is wrong with the site you have now."></textarea>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn--primary" type="submit" data-umami-event="enquiry sent">Send it <span class="arrow">→</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,44 @@
+---
+import Base from "../layouts/Base.astro";
+import WorkCard from "../components/WorkCard.astro";
+import { WORK } from "../data/work";
+---
+
+<Base
+  title="Work"
+  description="Websites and pitch builds by Mortensen Web Co. — each one linked so you can visit it yourself, and labelled by whether it is a live client site or a concept build."
+  path="/work/"
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Work</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">Sites we have built. Judge them yourself.</h1>
+          <p class="lede" style="margin-top: 1rem">
+            A short list, deliberately. Every entry is linked, and each one
+            says whether it is a live client site or a concept build — we do
+            not blur the two.
+          </p>
+        </div>
+      </div>
+      <div class="work-grid">
+        {WORK.map((work, i) => <WorkCard work={work} index={i} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--dark">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>Yours could be next.</h2>
+          <p class="lede" style="margin-top: 1rem">Tell us what the business does and what the current site gets wrong.</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/">Start a project <span class="arrow">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

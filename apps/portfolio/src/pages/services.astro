@@ -1,0 +1,80 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../data/site";
+
+const included = [
+  ["Design and build", "A custom site, structured around what a visitor actually came to find. Written with you, using your photographs — or we will tell you honestly when the photography is the thing holding the site back."],
+  ["Mobile first, genuinely", "Most visitors arrive on a phone. Every layout is built at the narrow width first and given more structure as the screen grows, rather than a desktop design left to reflow."],
+  ["Hosting and security", "Hosting, SSL certificates, domain and DNS configuration, and ongoing dependency updates. Included in every care plan rather than billed separately."],
+  ["Content changes", "Request a change in the portal and we make it. You see a preview — and a picture of it — before it goes live, and nothing publishes until you approve it."],
+  ["Analytics without the creep", "Visitor numbers, popular pages, where people came from, and how many got in touch — using privacy-respecting analytics rather than an ad network. On every plan."],
+  ["Search basics", "Clean markup, real page titles and descriptions, fast loads, structured data and a sitemap. The groundwork that lets you be found by people and by the AI assistants they ask — not a monthly SEO retainer."],
+];
+
+const notIncluded = [
+  ["Online stores", "Inventory, payments, tax, and shipping are a different kind of project. If you need to sell online, we will say so and point you at the right platform."],
+  ["Paid advertising", "We do not run ad campaigns or manage ad spend. The site is built so that traffic you send to it converts; getting the traffic is someone else's speciality."],
+  ["Social media management", "We will link your accounts and match the site to how you already present yourself. We will not post on your behalf."],
+];
+---
+
+<Base
+  title="Services"
+  description="Design and build, hosting and care, and changes on request — what Mortensen Web Co. does for a small business website, and what is deliberately not included."
+  path="/services/"
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Services</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">What you get, and what it does not include.</h1>
+          <p class="lede" style="margin-top: 1rem">Being specific about the second part saves everyone a difficult conversation later.</p>
+        </div>
+      </div>
+      <ul class="rows">
+        {included.map(([title, body], i) => (
+          <li class="reveal">
+            <h2 class="h3"><span class="n">{String(i + 1).padStart(2, "0")}</span> {title}</h2>
+            <p>{body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Scope</p></div>
+        <div>
+          <h2>What we do not do.</h2>
+          <p class="lede" style="margin-top: 1rem">These are not failures of the plan — they are outside it, and pretending otherwise would just mean a bad version of each.</p>
+        </div>
+      </div>
+      <ul class="rows">
+        {notIncluded.map(([title, body]) => (
+          <li class="reveal">
+            <h3>{title}</h3>
+            <p>{body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>Not sure which of these you need?</h2>
+          <p class="lede" style="margin-top: 1rem">Describe the business and the problem. We will tell you what would actually help, including when the answer is that your current site is fine.</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/">Start a project <span class="arrow">→</span></a>
+          <a class="btn btn--ghost" href={`mailto:${SITE.email}`} data-umami-event="emailed">Email us</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

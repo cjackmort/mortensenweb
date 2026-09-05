@@ -37,7 +37,7 @@ export type Work = {
   status: WorkStatus;
   /** Short capability labels. Three or four reads best; more wraps badly. */
   tags: string[];
-  /** Path under `public/`. 16:10 or wider, already web-sized. */
+  /** Path under `public/`. 1120×700 WebP, with a `-640` variant beside it. */
   image: string;
   /** Describes the image for anyone who cannot see it — not the project. */
   imageAlt: string;
@@ -55,7 +55,7 @@ export const WORK: Work[] = [
     href: "https://scottmortensenfinearts.com",
     status: "live",
     tags: ["Gallery site", "Photography-led", "Commission enquiries"],
-    image: "/work/scott-mortensen-fine-arts.jpg",
+    image: "/work/scott-mortensen-fine-arts.webp",
     imageAlt:
       "A bronze mountain lion sculpture by Scott Mortensen, shown mid-stride.",
     year: 2026,

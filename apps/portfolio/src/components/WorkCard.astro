@@ -1,0 +1,31 @@
+---
+import type { Work } from "../data/work";
+import { STATUS_LABEL } from "../data/work";
+interface Props { work: Work; index: number }
+const { work, index } = Astro.props;
+const small = work.image.replace(/\.webp$/, "-640.webp");
+---
+
+<a class="work reveal" href={work.href} target="_blank" rel="noopener noreferrer" data-umami-event={`work: ${work.name}`}>
+  <div class="work__meta">
+    <span class="eyebrow">{work.sector}</span>
+    <span class={`status status--${work.status}`}>{STATUS_LABEL[work.status]}</span>
+  </div>
+  <figure>
+    <img
+      src={work.image}
+      srcset={`${small} 640w, ${work.image} 1120w`}
+      sizes="(max-width: 40rem) 100vw, (max-width: 70rem) 50vw, 33vw"
+      width="1120"
+      height="700"
+      alt={work.imageAlt}
+      loading={index === 0 ? "eager" : "lazy"}
+      fetchpriority={index === 0 ? "high" : "auto"}
+      decoding="async"
+    />
+  </figure>
+  <h2 class="h3">{work.name}</h2>
+  <p>{work.description}</p>
+  <div class="tags">{work.tags.map((t) => <span>{t}</span>)}</div>
+  <p class="work__domain">{work.domain} ↗</p>
+</a>
