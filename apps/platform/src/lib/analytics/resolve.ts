@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import type { TenantContext } from "@/db/repositories/context";
-import { listSites } from "@/db/repositories/client/change-requests";
 import { analyticsConnections, sites } from "@/db/schema";
 import { demoAnalytics } from "./demo";
 import {
@@ -21,7 +20,7 @@ import {
  * the detail page, and a client comparing the two would rightly stop trusting
  * both.
  *
- * The site is always resolved through `listSites`, which is tenant-scoped, so
+ * The site is always resolved by the session's own `organizationId`, so
  * no caller can pass in a site id and read another organization's figures.
  */
 
@@ -41,25 +40,28 @@ export async function resolveClientAnalytics(
   ctx: TenantContext,
   days: RangeDays,
 ): Promise<ResolvedAnalytics> {
-  const ownSites = await listSites(db, ctx);
-  const site = ownSites[0] ?? null;
+  // The site and its analytics connection in one round trip. This used to be
+  // `listSites` followed by a second query for the connection — two HTTPS
+  // calls to Neon in sequence, on the page every client lands on. The join is
+  // tenant-scoped exactly as `listSites` is: by `organizationId` from the
+  // session context, never from a request.
+  const rows = await db
+    .select({
+      publicId: sites.publicId,
+      name: sites.name,
+      primaryDomain: sites.primaryDomain,
+      isDemo: sites.isDemo,
+      umamiWebsiteId: analyticsConnections.umamiWebsiteId,
+    })
+    .from(sites)
+    .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))
+    .where(eq(sites.organizationId, ctx.organizationId))
+    .orderBy(sites.name)
+    .limit(1);
 
-  let websiteId: string | null = null;
-  let isDemoSite = false;
-
-  if (site) {
-    const rows = await db
-      .select({
-        umamiWebsiteId: analyticsConnections.umamiWebsiteId,
-        isDemo: sites.isDemo,
-      })
-      .from(sites)
-      .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))
-      .where(eq(sites.publicId, site.publicId))
-      .limit(1);
-    websiteId = rows[0]?.umamiWebsiteId ?? null;
-    isDemoSite = rows[0]?.isDemo ?? false;
-  }
+  const site = rows[0] ?? null;
+  const websiteId = site?.umamiWebsiteId ?? null;
+  const isDemoSite = site?.isDemo ?? false;
 
   let state: AnalyticsState;
   if (websiteId) {

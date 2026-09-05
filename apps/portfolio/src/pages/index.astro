@@ -1,0 +1,259 @@
+---
+import Base from "../layouts/Base.astro";
+import Marquee from "../components/Marquee.astro";
+import Loop from "../components/Loop.astro";
+import PlanCard from "../components/PlanCard.astro";
+import { PLANS, CHEAPEST_PLAN, dollars } from "@mortensenweb/plans";
+import { SITE, LOOP } from "../data/site";
+
+const soldPlans = PLANS.filter((p) => p.key !== "care-unlimited");
+
+const faq = [
+  {
+    q: "How fast does a change actually happen?",
+    a: "Most changes — a photo, a price, a line of text — are built and waiting for your approval within the hour. Bigger ones, like a new section, can take a day. You are emailed the moment a preview is ready, and again when it is live.",
+  },
+  {
+    q: "What if the change is not what I wanted?",
+    a: "Say so on the preview. Asking for changes on a preview does not use up another of your monthly changes; it is part of the same request until you are happy with it.",
+  },
+  {
+    q: "Do I have to sign a contract?",
+    a: "No. The build is a fixed quote. Care plans are monthly and you can change plan or stop any time. Your domain stays yours.",
+  },
+  {
+    q: "What does the build cost?",
+    a: "It depends on the site, and we quote it after a conversation rather than from a menu. Most small-business sites land in the low thousands. After that, the monthly plan is the only recurring cost.",
+  },
+];
+
+const schema = [
+  {
+    "@type": "FAQPage",
+    mainEntity: faq.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  },
+];
+---
+
+<Base path="/" schema={schema}>
+  {/* ------------------------------------------------------------ hero */}
+  <section class="hero">
+    <div class="hero__dots" aria-hidden="true"></div>
+    <div class="hero__dots-lit" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="hero__status">
+        <span class="eyebrow">Small-business websites</span>
+        <span class="eyebrow">Built, hosted, looked after</span>
+        <span class="eyebrow">From {dollars(CHEAPEST_PLAN.monthlyCents)}/mo after the build</span>
+      </div>
+
+      <div class="hero__grid">
+        <div>
+          <h1 class="hero__title">
+            <span class="line"><span style="--i:0">A website that</span></span>
+            <span class="line"><span style="--i:1">stays <em>current</em></span></span>
+            <span class="line"><span style="--i:2">after it launches.</span></span>
+          </h1>
+          <p class="lede hero__lede">
+            Most small businesses do not need a bigger website. They need one
+            that loads fast, says the right thing, and does not quietly go
+            stale the month after it goes live. We design it around what you
+            sell — then you ask for changes in a portal, approve a preview on
+            your phone, and it's live.
+          </p>
+          <div class="btn-row hero__actions">
+            <a class="btn btn--primary" href="/contact/" data-umami-event="cta: start a project">
+              Start a project <span class="arrow">→</span>
+            </a>
+            <a class="btn btn--ghost" href="/work/">See the work</a>
+          </div>
+        </div>
+
+        <div class="hero__index">
+          <p class="eyebrow" style="margin-bottom: .75rem">How a change happens</p>
+          <ol>
+            {
+              LOOP.map((step) => (
+                <li>
+                  <span class="n">{step.n}</span>
+                  <a href="#how">{step.title}</a>
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <Marquee />
+
+  {/* ------------------------------------------------------- what we do */}
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">What we do</p></div>
+        <h2>Three things, done properly. Nothing you will not use.</h2>
+      </div>
+
+      <ul class="rows">
+        <li class="reveal">
+          <h3><span class="n">A</span> Design and build</h3>
+          <p>
+            A site structured around the handful of things a visitor actually
+            came to find — what you make, what it costs, how to reach you.
+            Written with you, using your photographs, laid out for a phone
+            first. Not a template with your name typed in.
+          </p>
+        </li>
+        <li class="reveal">
+          <h3><span class="n">B</span> Hosting and care</h3>
+          <p>
+            Hosting, SSL, domain configuration, and security updates are part
+            of the plan, not a separate bill. We check your site is up and
+            serving; if something breaks, fixing it is our problem, not a
+            ticket you have to chase.
+          </p>
+        </li>
+        <li class="reveal">
+          <h3><span class="n">C</span> Changes on request</h3>
+          <p>
+            New photos, a changed price, a seasonal note at the top of the
+            page. You ask in the portal, we make the change and show you a
+            preview before it goes live. Every plan includes a monthly
+            allowance; extras are a flat $25.
+          </p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------ the loop */}
+  <Loop />
+
+  {/* ------------------------------------------------------- numbers */}
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">What you get every month</p></div>
+        <h2>You see the numbers. We see the problems first.</h2>
+      </div>
+      <ul class="rows">
+        <li class="reveal">
+          <h3>Who came, and from where</h3>
+          <p>
+            Visitors, the pages they opened, how they found you, and which
+            photos people stop on — in plain words, in your portal, on every
+            plan. Privacy-respecting analytics, not an ad network.
+          </p>
+        </li>
+        <li class="reveal">
+          <h3>Who got in touch</h3>
+          <p>
+            Calls and emails from the site are counted beside the visitors,
+            so you know whether the website is bringing work in — not only
+            whether people looked at it.
+          </p>
+        </li>
+        <li class="reveal">
+          <h3>Every change, on the record</h3>
+          <p>
+            Each request has its own timeline in the portal — sent, built,
+            what we changed in plain words, approved, live — so you never
+            have to ask where something got to.
+          </p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------- pricing */}
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Care plans</p></div>
+        <div>
+          <h2>Priced so you can plan for it.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            The build is quoted per project. After launch, one monthly plan
+            covers hosting, security, analytics and an allowance of changes —
+            so keeping the site current is a fixed cost, not a decision every
+            time.
+          </p>
+        </div>
+      </div>
+      <div class="plans">
+        {soldPlans.map((plan) => <PlanCard plan={plan} compact />)}
+      </div>
+      <p class="eyebrow" style="margin-top: 1rem">
+        Unlimited changes: {dollars(PLANS[3]!.monthlyCents)}/month · <a class="link" href="/pricing/">compare every plan</a>
+      </p>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------- faq */}
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Straight answers</p></div>
+        <h2>The questions people ask before they get in touch.</h2>
+      </div>
+      <ul class="rows">
+        {
+          faq.map((f) => (
+            <li class="reveal">
+              <h3>{f.q}</h3>
+              <p>{f.a}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  {/* --------------------------------------------- existing clients */}
+  <section class="section">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <p class="eyebrow" style="margin-bottom: 1rem">Already a client?</p>
+          <h2>Your portal is here.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Request a change, see a preview before it goes live, check your
+            visitor numbers, and view invoices. First time? Use the username
+            and temporary password from your welcome email.
+          </p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href={SITE.portalUrl}>Go to the client portal <span class="arrow">→</span></a>
+          <a class="btn btn--ghost" href={`${SITE.portalUrl}/get-started`}>First time signing in</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------- cta */}
+  <section class="section section--dark">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>Let's talk about your site.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Tell us about the business and what you need. We will come back
+            with a straight answer about whether we are a good fit and what
+            it would cost — including when the answer is that your current
+            site is fine.
+          </p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/" data-umami-event="cta: start a project">Start a project <span class="arrow">→</span></a>
+          <a class="btn btn--ghost" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

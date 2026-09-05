@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { createClient } from "@/db/repositories/admin/clients";
@@ -54,7 +53,7 @@ export default async function NewClientPage({
   }
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Add a client</h1>
@@ -124,6 +123,6 @@ export default async function NewClientPage({
           </p>
         </form>
       </main>
-    </AppShell>
+    </>
   );
 }

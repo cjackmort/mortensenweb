@@ -70,7 +70,7 @@ long list of nothing teaches the client to stop reading the panel.
 
 ## What never to touch
 
-- `.github/` — workflows, including the one running you
+- `.github/` and `.claude/` — the workflows and the skills you were given
 - `netlify.toml`, `package.json`, `package-lock.json`, any deploy config
 - Anything under an environment file
 - Dependencies: do not add, remove, or upgrade

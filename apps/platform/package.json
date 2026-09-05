@@ -28,7 +28,8 @@
     "next-auth": "5.0.0-beta.32",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@mortensenweb/plans": "*"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",

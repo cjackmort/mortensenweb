@@ -1,69 +1,32 @@
-# apps/portfolio
+# mortensenweb.com
 
-The public agency site — **mortensenweb.com**. Next.js App Router, exported to
-static HTML, deployed to Netlify as the `mortensenweb-site` project.
-
-Not to be confused with `apps/platform`, which is the client portal at
-`portal.mortensenweb.com` and is a different Netlify site fed by the same
-repository.
-
-## Running it
+The public agency site. Astro, static output, no client-side framework.
 
 ```bash
-npm run dev --workspace @mortensenweb/portfolio
+npm run dev --workspace apps/portfolio      # http://localhost:4321
+npm run build --workspace apps/portfolio    # dist/
+npm run check --workspace apps/portfolio    # astro check (types + templates)
 ```
 
-```bash
-npm run build --workspace @mortensenweb/portfolio
-```
+## Where things are
 
-The build writes static files to `out/`. There is no server: `output: "export"`
-in `next.config.ts` means no route handlers, no middleware, and no
-request-time rendering. That is a deliberate constraint, not an oversight — see
-the comment in that file before working around it.
+| | |
+| --- | --- |
+| Pages | `src/pages/*.astro`, plus `robots.txt.ts` and `llms.txt.ts` |
+| Layout | `src/layouts/Base.astro` — head, fonts, header, footer, JSON-LD, the one inline script |
+| Design system | `src/styles/global.css` — tokens, type, the pinned story, every component |
+| Copy that repeats | `src/data/site.ts` (the four steps, the marquee, contact details) |
+| Work | `src/data/work.ts` + `public/work/*.webp` (1120×700 and a `-640` variant) |
+| Plans | `@mortensenweb/plans` (`packages/plans`) — shared with the portal's seed |
 
-## Adding a site to the portfolio
+## Decisions worth knowing
 
-One entry in [`src/data/work.ts`](src/data/work.ts), one image in
-`public/work/`. No component changes.
+**Zero JavaScript by design.** The previous site shipped 457 KB of framework to render five pages and hid every section until it had run. Motion here is CSS: headline lines rise with keyframes, sections reveal with `animation-timeline: view()` inside `@supports`, and the pinned story runs on a named view timeline. Browsers without those features, and readers who prefer reduced motion, see everything at rest. The only script is a few hundred bytes for the hero spotlight and magnetic buttons, mouse-only, and the analytics tag.
 
-The image should be **1120×700** (16:10) and already web-sized — the export has
-no image optimiser, so whatever is committed is what visitors download. To
-produce one from a source photograph:
+**Design direction: Swiss / International** with a monospace label system. One grotesk (Schibsted Grotesk), one mono (JetBrains Mono), one blue — the portal's, so a client who reads this site and then signs in sees the same colour meaning the same thing. Hairline rules instead of cards. Asymmetry on a strict grid.
 
-```powershell
-powershell -File tools/crop-card-image.ps1 -Source path\to\photo.jpg -Slug my-client
-```
+**Prices come from `packages/plans`.** Do not type a price into a page. Change the package and the portal seed and this site change together.
 
-Two rules govern what may be added, and both are written out in the file's
-header comment:
+**The contact form is Netlify Forms.** It must exist in the built HTML (`data-netlify`, hidden `form-name`, honeypot, `action="/thanks/"`). Netlify detects it at build time.
 
-1. **Live client work needs the client's agreement.** The portal models this as
-   a stored `publicDisplayApproved` decision; this file is the same decision
-   made by hand. If you cannot point at when they agreed, it does not go here.
-2. **Anything not live declares itself** through `status`. A concept or an
-   unadopted redesign is worth showing — presenting one as a shipped client
-   engagement is not true, and it is the kind of untruth the business in
-   question notices.
-
-## Pricing is duplicated, and that is a liability
-
-[`src/data/plans.ts`](src/data/plans.ts) mirrors the `service_plans` rows seeded
-in `apps/platform/scripts/seed.ts`. A static export cannot query the database,
-so the numbers are copied — which means they can drift. **Change both in the
-same commit.**
-
-`comp-unlimited` is deliberately not listed. It is granted by an operator
-rather than sold, and the seed file sorts it last precisely so it is never
-pitched.
-
-## The contact form
-
-Netlify Forms, which works by scanning the built HTML for
-`data-netlify="true"`. Three details are load-bearing and easy to lose in a
-tidy-up — the hidden `form-name` input, the `action="/thanks/"` redirect, and
-the off-screen honeypot. They are documented in the comment at the top of
-[`src/app/contact/page.tsx`](src/app/contact/page.tsx).
-
-Submissions land in the Netlify UI under **Forms**. Email notification is
-configured there, not in this repository.
+**Verification.** `node ../../agent/verify/check.mjs dist` runs the same structural checks the client-site pipeline runs: every link and image resolves, alt text, no external images, a title per page.

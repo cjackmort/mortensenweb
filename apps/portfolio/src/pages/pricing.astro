@@ -1,0 +1,106 @@
+---
+import Base from "../layouts/Base.astro";
+import PlanCard from "../components/PlanCard.astro";
+import { PLANS, OVERAGE_CENTS, dollars, CHEAPEST_PLAN } from "@mortensenweb/plans";
+
+const faq = [
+  ["What counts as a change?", "One request in the portal — a new photo, a price, a paragraph, a seasonal notice. If a request is really several unrelated things, we will say so and count it fairly rather than surprise you."],
+  ["What if I need more than my plan includes?", `Any change beyond the allowance is a flat ${dollars(OVERAGE_CENTS)}, on every plan. If that keeps happening, the next plan up is usually cheaper — and you can move at any time.`],
+  ["Is there a minimum term?", "No. Plans are monthly. You can change plan or stop whenever you like, and your domain stays yours."],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately. Online stores, advertising and social media are outside what we do — see Services."],
+];
+---
+
+<Base
+  title="Pricing"
+  description={`Care plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month — hosting, SSL, security updates, analytics, and an allowance of content changes at a flat ${dollars(OVERAGE_CENTS)} each beyond it. The build is quoted per project.`}
+  path="/pricing/"
+  schema={[
+    {
+      "@type": "FAQPage",
+      mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+    },
+  ]}
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Pricing</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">The build is quoted. Everything after it is a monthly plan.</h1>
+          <p class="lede" style="margin-top: 1rem">
+            Every plan includes hosting, SSL, security updates and visitor
+            analytics. They differ in how many changes are included each
+            month. A change beyond that is a flat {dollars(OVERAGE_CENTS)}.
+            Prices in US dollars, monthly, no minimum term.
+          </p>
+        </div>
+      </div>
+
+      <div class="plans">
+        {PLANS.map((plan) => <PlanCard plan={plan} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Side by side</p></div>
+        <h2>The same numbers, as a table.</h2>
+      </div>
+      <div class="table-wrap reveal">
+        <table class="compare">
+          <caption class="sr-only">Care plan comparison by monthly price, included changes, and extras.</caption>
+          <thead>
+            <tr>
+              <th scope="col"></th>
+              {PLANS.map((p) => <th scope="col">{p.short}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Per month</th>{PLANS.map((p) => <td>{dollars(p.monthlyCents)}</td>)}</tr>
+            <tr><th scope="row">Changes included</th>{PLANS.map((p) => <td>{p.includedChangesPerMonth ?? "Unlimited"}</td>)}</tr>
+            <tr><th scope="row">Extra change</th>{PLANS.map((p) => <td>{p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"}</td>)}</tr>
+            <tr><th scope="row">Hosting, SSL, security</th>{PLANS.map(() => <td>Included</td>)}</tr>
+            <tr><th scope="row">Visitor analytics</th>{PLANS.map((p) => <td>{p.includesAnalytics ? "Included" : "—"}</td>)}</tr>
+            <tr><th scope="row">Preview before it goes live</th>{PLANS.map(() => <td>Always</td>)}</tr>
+          </tbody>
+        </table>
+        <p class="eyebrow table-hint">Swipe sideways for the Unlimited column →</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Questions</p></div>
+        <h2>Before you pick one.</h2>
+      </div>
+      <ul class="rows">
+        {faq.map(([q, a]) => (
+          <li class="reveal"><h3>{q}</h3><p>{a}</p></li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--dark">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>Want a quote for the build?</h2>
+          <p class="lede" style="margin-top: 1rem">Tell us about the business. We reply to every enquiry, including the ones where we are not the right fit.</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/">Start a project <span class="arrow">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

@@ -50,13 +50,16 @@ export function NavLinks({ items }: { items: NavItem[] }) {
             <Link
               key={item.href}
               href={item.href}
-              // Every page here is `force-dynamic`, so a click is a server
-              // round trip and the tab sits dead until it returns. Prefetching
-              // on hover and viewport entry means the payload is usually
-              // already there by the time the click lands. There are four
-              // tabs, all of them ones an operator uses constantly, so the
-              // cost of fetching ahead is small and paid while idle.
-              prefetch
+              // Deliberately NOT `prefetch`. Every page here is
+              // `force-dynamic`, so prefetching a tab means the server renders
+              // that whole page — its database queries and, for the
+              // dashboard, its analytics calls — the moment the link scrolls
+              // into view, whether or not it is ever tapped. With three tabs
+              // that was three full page renders per page view. The default
+              // (fetch on hover, and on touch-start on a phone) still gets
+              // the payload moving before the tap lands, and every route now
+              // has a `loading.tsx`, so a tab lights up and shows its skeleton
+              // instantly rather than sitting dead.
               aria-current={active ? "page" : undefined}
             >
               {item.label}

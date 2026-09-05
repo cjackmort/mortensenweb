@@ -3,25 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "description": "The public agency site — mortensenweb.com. Astro, static, zero client JavaScript by default.",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "astro check",
+    "typecheck": "astro check"
   },
   "dependencies": {
-    "next": "16.3.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@astrojs/sitemap": "^3.4.1",
+    "@mortensenweb/plans": "*",
+    "astro": "^5.13.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "eslint": "^9.17.0",
-    "eslint-config-next": "16.3.1",
+    "@astrojs/check": "^0.9.4",
+    "sharp": "^0.34.3",
     "typescript": "^5.7.0"
   }
 }

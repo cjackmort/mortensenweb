@@ -1,0 +1,10 @@
+{
+  "name": "@mortensenweb/plans",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The care plans — one definition, imported by the public site and by the portal's seed so the two can never disagree.",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": { ".": "./index.ts" }
+}

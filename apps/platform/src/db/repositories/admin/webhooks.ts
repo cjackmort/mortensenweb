@@ -13,6 +13,7 @@ import {
 import { newPublicId } from "@/lib/ids";
 import { parseAgentJobMarker, parseEscalationMarker } from "@/lib/github/issue";
 import { previewUrlFor, verifyUrlServes } from "@/lib/netlify/api";
+import { notifyClientOfRequest } from "@/lib/notify/request";
 
 /**
  * Processing a GitHub webhook.
@@ -250,6 +251,8 @@ async function handlePullRequest(
       },
     ]);
 
+    await notifyClientOfRequest(db, job.requestId, "person_handling");
+
     return { status: "processed", note: "Escalated to the operator." };
   }
 
@@ -362,6 +365,12 @@ async function handlePullRequest(
       .set({ status: "pr_open", updatedAt: now })
       .where(eq(changeRequests.id, job.requestId));
 
+    // The agent's own account of what it changed, written for the client
+    // (the workflow prompt asks for exactly that after the marker line). It
+    // was always in the pull request; now it reaches the person approving
+    // the change, on the request's timeline and in the preview panel.
+    const summary = clientSummaryFromPullRequest(pr.body);
+
     await db.insert(requestEvents).values([
       {
         requestId: job.requestId,
@@ -370,6 +379,18 @@ async function handlePullRequest(
         body: "We've made the change and we're building a preview for you.",
         visibility: "client_visible",
       },
+      ...(summary
+        ? [
+            {
+              requestId: job.requestId,
+              actorType: "agent" as const,
+              kind: "agent_summary",
+              body: summary,
+              visibility: "client_visible" as const,
+              metadata: { prNumber: pr.number },
+            },
+          ]
+        : []),
       {
         requestId: job.requestId,
         actorType: "system",
@@ -506,6 +527,10 @@ async function handleBuildCompletion(
       visibility: "client_visible",
       metadata: { previewUrl: job.previewUrl },
     });
+    // The email is what turns a verified preview into an approved one. Sent
+    // after the event is recorded, and idempotent, so the scheduled re-check
+    // that can verify the same preview a minute later sends nothing twice.
+    await notifyClientOfRequest(db, job.requestId, "preview_ready");
   }
 
   return { status: "processed", note: "Preview verified." };
@@ -638,10 +663,37 @@ export async function reverifyPendingPreviews(db: Database): Promise<number> {
         visibility: "client_visible",
         metadata: { previewUrl: job.previewUrl },
       });
+      await notifyClientOfRequest(db, job.requestId, "preview_ready");
     }
 
     verified += 1;
   }
 
   return verified;
+}
+
+
+/**
+ * The part of a pull request description meant for the client.
+ *
+ * Everything the portal needs from the body — the job marker, an escalation
+ * marker — is an HTML comment, and everything after those is the agent's
+ * write-up "for a non-technical reader". Comments are stripped, markdown
+ * headings are flattened to plain lines, and the result is capped so a
+ * verbose run cannot push the approval buttons off a phone screen. Empty
+ * when the agent wrote nothing beyond the marker, so the timeline shows no
+ * blank entry.
+ */
+export function clientSummaryFromPullRequest(
+  body: string | null | undefined,
+): string | null {
+  if (!body) return null;
+  const text = body
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!text) return null;
+  return text.length > 1500 ? `${text.slice(0, 1497).trimEnd()}…` : text;
 }

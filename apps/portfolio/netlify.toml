@@ -13,30 +13,21 @@
 [build]
   # Relative to this file's directory, which is already the base.
   command = "npm run build"
-  # `output: "export"` in next.config.ts writes here rather than to `.next`.
-  publish = "out"
+  # Astro's static output.
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
-  # Belt-and-suspenders alongside "Deliberately no [[plugins]] block" below:
-  # this repo holds two Next.js apps, and Netlify's zero-config Next.js
-  # Runtime auto-attaches based on framework detection, not on this file's
-  # absence of a [[plugins]] block. On 2026-08-29 a cache-cleared build of
-  # this site published apps/platform's server output instead of this app's
-  # static export, under a domain that has never had a login page. Setting
-  # this explicitly, checked into git rather than left as a dashboard-only
-  # env var, forces the Runtime off regardless of what Netlify's detection
-  # decides in a repo with more than one Next.js project in it.
+  # This site is Astro now, but the repository still holds a Next.js app
+  # (the portal), and Netlify's zero-config Next.js Runtime auto-attaches on
+  # framework detection rather than on this file. On 2026-08-29 a
+  # cache-cleared build of this site published apps/platform's server output
+  # under this domain. Kept, checked into git, so the Runtime stays off here
+  # whatever detection decides.
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
-# Deliberately no [[plugins]] block.
-#
-# The portal needs @netlify/plugin-nextjs because it server-renders. This site
-# is a static export — a directory of HTML — so the adapter has nothing to do,
-# and including it would wrap plain files in a serverless function for no
-# reason. If this site ever stops being `output: "export"`, that plugin comes
-# back at the same time.
+# Deliberately no [[plugins]] block: a directory of HTML needs no adapter.
 
 # Security headers.
 #
@@ -51,15 +42,15 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
-    # 'unsafe-inline' on script-src is for Next's hydration bootstrap, which
-    # is an inline script. cloud.umami.is is allowed on script-src (loads the
-    # tracker) and connect-src (the tracker's own beacon) — everything else
-    # stays locked to 'self'.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    # 'unsafe-inline' on script-src covers the one inline script (pointer
+    # effects) and the JSON-LD block; on style-src it covers Astro's inlined
+    # stylesheet. cloud.umami.is loads the tracker and receives its beacon;
+    # Google Fonts serves the two typefaces. Everything else is 'self'.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 # Content-hashed build output can be cached indefinitely; nothing else can.
 [[headers]]
-  for = "/_next/static/*"
+  for = "/_astro/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
@@ -67,3 +58,12 @@
   for = "/work/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+# Google Search Console holds the old Next.js export's /sitemap.xml and keeps
+# re-fetching it. Astro's sitemap integration emits /sitemap-index.xml instead, so
+# without this the submitted sitemap turns into a standing 404 in Search Console
+# and the site stops reporting its pages.
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/sitemap-index.xml"
+  status = 301

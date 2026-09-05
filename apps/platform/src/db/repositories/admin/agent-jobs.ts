@@ -11,6 +11,8 @@ import {
   sites,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { notifyClientOfRequest } from "@/lib/notify/request";
+import { refundChange } from "@/db/repositories/client/entitlements";
 import {
   createIssue,
   type Repo,
@@ -19,6 +21,7 @@ import {
   renderIssueBody,
   renderIssueTitle,
   scanForInjection,
+  sizeLabel,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
 import { attachmentUrl } from "@/lib/storage/signed-links";
@@ -374,6 +377,23 @@ async function runDispatch(
   const attachmentUrls =
     input.attachmentUrls ?? (await attachmentLinksFor(db, request.id));
 
+  // Anything the client added since sending. Empty on a first dispatch;
+  // on a re-dispatch after "ask for changes" it is often the whole point.
+  const clientNotes = (
+    await db
+      .select({ body: requestEvents.body })
+      .from(requestEvents)
+      .where(
+        and(
+          eq(requestEvents.requestId, request.id),
+          eq(requestEvents.kind, "client_note"),
+        ),
+      )
+      .orderBy(requestEvents.createdAt)
+  )
+    .map((e) => e.body?.trim() ?? "")
+    .filter(Boolean);
+
   let issue: { number: number; html_url: string };
   try {
     issue = await createIssue(target, {
@@ -388,8 +408,17 @@ async function runDispatch(
         desiredTiming: request.desiredTiming,
         attachmentUrls,
         allowedPaths: input.allowedPaths,
+        clientNotes,
       }),
-      labels: ["portal-request", "claude"],
+      labels: [
+        "portal-request",
+        "claude",
+        sizeLabel({
+          title: request.title,
+          description: request.description,
+          attachmentCount: attachmentUrls?.length ?? 0,
+        }),
+      ],
     });
   } catch (error) {
     await db
@@ -545,8 +574,13 @@ export async function expireStalledJobs(db: Database): Promise<number> {
   const now = new Date();
 
   const stalled = await db
-    .select({ id: agentJobs.id, requestId: agentJobs.requestId })
+    .select({
+      id: agentJobs.id,
+      requestId: agentJobs.requestId,
+      allowanceId: changeRequests.allowanceId,
+    })
     .from(agentJobs)
+    .leftJoin(changeRequests, eq(changeRequests.id, agentJobs.requestId))
     .where(
       and(
         sql`${agentJobs.status} IN ('queued', 'dispatched', 'running')`,
@@ -578,6 +612,19 @@ export async function expireStalledJobs(db: Database): Promise<number> {
       body: "Automation did not finish in time; this needs a look.",
       visibility: "internal",
     });
+
+    // A failure on our side is not a change the client received, so it is not
+    // one they used. Cancelling already refunds by policy; a timeout is the
+    // same situation without the client having asked for it.
+    if (job.allowanceId) {
+      await refundChange(db, job.allowanceId);
+      await db
+        .update(changeRequests)
+        .set({ allowanceId: null })
+        .where(eq(changeRequests.id, job.requestId));
+    }
+
+    await notifyClientOfRequest(db, job.requestId, "snag");
   }
 
   return stalled.length;

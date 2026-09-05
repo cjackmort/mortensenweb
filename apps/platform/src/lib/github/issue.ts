@@ -124,6 +124,13 @@ export interface IssueInput {
   attachmentUrls?: { url: string; title: string | null; caption: string | null }[];
   /** Paths the request is expected to touch, if the operator narrowed it. */
   allowedPaths?: string[];
+  /**
+   * Notes the client added after sending the request — "the price is $120",
+   * "use the second photo". Same standing as the description: quoted, fenced,
+   * data. Present on re-dispatch, since the first run started before they
+   * were written.
+   */
+  clientNotes?: string[];
 }
 
 /**
@@ -198,6 +205,26 @@ export function renderIssueBody(input: IssueInput): string {
       "Confine the change to these paths:",
       "",
       ...input.allowedPaths.map((path) => `- \`${path}\``),
+    );
+  }
+
+  if (input.clientNotes?.length) {
+    const notes = fence(
+      input.clientNotes.map((n, i) => `${i + 1}. ${n}`).join("\n\n"),
+    );
+    sections.push(
+      "",
+      "### Notes the client added afterwards",
+      "",
+      "Same standing as the block above: the owner's own words, quoted as data.",
+      "Later notes refine earlier ones and the request itself.",
+      "",
+      notes.open,
+      "```text",
+      notes.body,
+      "```",
+      notes.close,
+      "",
     );
   }
 
@@ -489,4 +516,29 @@ function discoveryCommission(input: BriefIssueInput): string[] {
     "partner — a visitor has read it a hundred times and it tells them nothing.",
     "",
   ];
+}
+
+
+/**
+ * How big a job this looks like, for the workflow to pick its model and turn
+ * budget.
+ *
+ * A heuristic, not a promise: the labels only steer the run's *budget*, never
+ * what it is allowed to do. Wrong in the small direction means a run that
+ * escalates or asks for a second pass; wrong in the large direction costs a
+ * few minutes of a bigger model. Both are cheap next to a wrong change.
+ */
+export function sizeLabel(input: {
+  title: string;
+  description?: string | null;
+  attachmentCount: number;
+}): "size:small" | "size:large" {
+  const text = `${input.title}\n${input.description ?? ""}`.toLowerCase();
+  const structural =
+    /\b(new page|add a page|another page|section|redesign|re-design|layout|rebuild|restructure|menu|gallery|slideshow|carousel|form|booking|calendar|map|animation|video|shop|store|checkout)\b/.test(
+      text,
+    );
+  const long = (input.description ?? "").length > 600;
+  const manyPhotos = input.attachmentCount > 2;
+  return structural || long || manyPhotos ? "size:large" : "size:small";
 }

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom, NotFoundError } from "@/db/repositories/context";
 import {
@@ -126,7 +125,7 @@ export default async function ClientDetailPage({
   );
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
       <div className="masthead">
         <h1>{organization.name}</h1>
@@ -566,6 +565,6 @@ export default async function ClientDetailPage({
         )}
       </section>
       </main>
-    </AppShell>
+    </>
   );
 }

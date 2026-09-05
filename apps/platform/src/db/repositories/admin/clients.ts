@@ -1,11 +1,13 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   servicePlans,
+  agentJobs,
   auditLog,
   changeRequests,
   clients,
+  requestEvents,
   organizationMemberships,
   organizations,
   prospects,
@@ -85,6 +87,8 @@ export async function listClientsWithPrimarySite(_ctx: AdminContext, db: Databas
       name: sites.name,
       status: sites.status,
       primaryDomain: sites.primaryDomain,
+      productionUrl: sites.productionUrl,
+      netlifySiteName: sites.netlifySiteName,
       createdAt: sites.createdAt,
     })
     .from(sites)
@@ -365,6 +369,29 @@ export async function listAllChangeRequests(
       priority: changeRequests.priority,
       organizationName: organizations.name,
       createdAt: changeRequests.createdAt,
+      // How the automation is doing on this one, in numbers the operator can
+      // scan: when the run started, when it produced a pull request or gave
+      // up, and the pull request itself. Latest job only (see the subquery),
+      // so a re-dispatched request shows its current attempt.
+      agentDispatchedAt: sql<Date | null>`(
+        select ${agentJobs.dispatchedAt} from ${agentJobs}
+        where ${agentJobs.requestId} = ${changeRequests.id}
+        order by ${agentJobs.createdAt} desc limit 1)`,
+      agentFinishedAt: sql<Date | null>`(
+        select coalesce(${agentJobs.finishedAt}, ${agentJobs.previewVerifiedAt}) from ${agentJobs}
+        where ${agentJobs.requestId} = ${changeRequests.id}
+        order by ${agentJobs.createdAt} desc limit 1)`,
+      agentPrUrl: sql<string | null>`(
+        select ${agentJobs.prUrl} from ${agentJobs}
+        where ${agentJobs.requestId} = ${changeRequests.id}
+        order by ${agentJobs.createdAt} desc limit 1)`,
+      // The client's latest note, if they added one after sending — the
+      // thing most likely to change what the operator does next.
+      latestNote: sql<string | null>`(
+        select ${requestEvents.body} from ${requestEvents}
+        where ${requestEvents.requestId} = ${changeRequests.id}
+          and ${requestEvents.kind} = 'client_note'
+        order by ${requestEvents.createdAt} desc limit 1)`,
     })
     .from(changeRequests)
     .innerJoin(

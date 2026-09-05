@@ -1,0 +1,90 @@
+---
+/**
+ * "How a change happens" — the pinned story.
+ *
+ * Four steps scroll past on the left; the phone on the right stays put and
+ * its screen changes as each step reaches the middle of the viewport. The
+ * screens are the portal drawn in CSS, so they stay true as the portal's
+ * design does, and they weigh nothing.
+ *
+ * All of it is CSS scroll-timeline (see global.css). No script.
+ */
+import { LOOP } from "../data/site";
+---
+
+<section class="section section--dark" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">How a change happens</p>
+      </div>
+      <h2>Ask on your phone. Approve on your phone. Never chase an email.</h2>
+    </div>
+
+    <div class="story">
+      <div class="story__grid">
+        <ol class="story__steps">
+          {
+            LOOP.map((step) => (
+              <li class="story__step">
+                <p class="n">{step.n}</p>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </li>
+            ))
+          }
+        </ol>
+
+        <div class="story__phone-wrap">
+          <div class="phone" role="img" aria-label="The client portal on a phone: a change request form, a preview waiting for approval, and the change confirmed live.">
+            {/* 01 — the request form */}
+            <div class="screen">
+              <div class="screen__bar"><span>Portal</span><span>Requests</span></div>
+              <div class="screen__title">Request a change</div>
+              <div class="screen__field">New photo on the services page</div>
+              <div class="screen__field screen__field--tall">The one from Saturday, with the truck in it. Put it where the old one is.</div>
+              <div class="screen__thumbs"><span></span><span></span><span></span></div>
+              <div class="screen__btn">Send request</div>
+            </div>
+
+            {/* 02 — building */}
+            <div class="screen">
+              <div class="screen__bar"><span>Portal</span><span>Your site</span></div>
+              <div class="screen__title">New photo on the services page</div>
+              <div class="screen__track"><span class="on"></span><span class="on"></span><span></span><span></span><span></span></div>
+              <p class="screen__note">Making a preview. We'll email you the moment it's ready.</p>
+              <div class="screen__mini"><b>What happened</b><i></i><i></i><i></i></div>
+              <div class="screen__mini"><b>Your visitors · 7 days</b><i></i><i></i></div>
+              <div class="screen__btn screen__btn--ghost">Add a note</div>
+            </div>
+
+            {/* 03 — approve */}
+            <div class="screen">
+              <div class="screen__bar"><span>Portal</span><span>Ready for you</span></div>
+              <div class="screen__title">Ready to look at</div>
+              <div class="screen__mini"><b>What we changed</b><i></i><i></i></div>
+              <div class="screen__thumbs"><span></span><span></span><span></span></div>
+              <div class="screen__btn">Looks good — put it live</div>
+              <div class="screen__btn screen__btn--ghost">Ask for changes</div>
+            </div>
+
+            {/* 04 — live */}
+            <div class="screen">
+              <div class="screen__bar"><span>Portal</span><span>Your site</span></div>
+              <div class="screen__title">New photo on the services page</div>
+              <div class="screen__track"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="live"></span></div>
+              <p class="screen__live">Confirmed live</p>
+              <div class="screen__stat">
+                <div><b>212</b><small>visitors · 7 days</small></div>
+                <div><b>9</b><small>got in touch</small></div>
+              </div>
+              <p class="screen__note" style="margin-top:.7rem">Sample figures.</p>
+              <div class="screen__mini" style="margin-top:.9rem"><b>What happened</b><i></i><i></i><i></i></div>
+              <div class="screen__btn screen__btn--ghost">Request another change</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

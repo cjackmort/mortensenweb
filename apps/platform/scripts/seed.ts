@@ -26,6 +26,7 @@ import {
 } from "../src/db/schema";
 import { hashPassword } from "../src/lib/auth/password";
 import { newPublicId } from "../src/lib/ids";
+import { PLANS } from "@mortensenweb/plans";
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "cjackmort@gmail.com")
   .trim()
@@ -70,55 +71,24 @@ async function main() {
   console.log("Seeding demo data...");
 
   // ---- Service plans (reference data, not demo-only) ---------------------
-  //
-  // Real pricing, decided 2026-09-02 — see 0016_care_plan_pricing.sql, which
-  // is the authoritative version for a database this seed runs against after
-  // migrations. Kept in sync here so a fresh read of this file isn't stale.
   const planRows = await db
     .insert(servicePlans)
     .values([
-      {
-        key: "care-lite",
-        name: "Care — Lite",
-        description: "Hosting, security updates, analytics, and one change a month.",
-        defaultMonthlyCents: 5000,
-        includedChangesPerMonth: 1,
-        overagePerChangeCents: 2500,
-        includesAnalytics: true,
-        sortOrder: 10,
-      },
-      {
-        key: "care-basic",
-        name: "Care — Basic",
-        description:
-          "Hosting, security updates, analytics, and five changes a month.",
-        defaultMonthlyCents: 10000,
-        includedChangesPerMonth: 5,
-        overagePerChangeCents: 2500,
-        includesAnalytics: true,
-        sortOrder: 20,
-      },
-      {
-        key: "care-plus",
-        name: "Care — Plus",
-        description:
-          "Hosting, security updates, analytics, and fifteen changes a month.",
-        defaultMonthlyCents: 20000,
-        includedChangesPerMonth: 15,
-        overagePerChangeCents: 2500,
-        includesAnalytics: true,
-        sortOrder: 30,
-      },
-      {
-        key: "care-unlimited",
-        name: "Care — Unlimited",
-        description: "Hosting, security updates, analytics, and unlimited changes.",
-        defaultMonthlyCents: 30000,
-        includedChangesPerMonth: null,
-        overagePerChangeCents: null,
-        includesAnalytics: true,
-        sortOrder: 40,
-      },
+      // The sold plans come from packages/plans, the same module the public
+      // site's pricing page renders — so the two cannot quote different
+      // numbers. 0016_care_plan_pricing.sql is the authoritative version for
+      // a database this seed runs against after migrations; the package is
+      // what both it and the site are written from.
+      ...PLANS.map((plan) => ({
+        key: plan.key,
+        name: plan.name,
+        description: plan.description,
+        defaultMonthlyCents: plan.monthlyCents,
+        includedChangesPerMonth: plan.includedChangesPerMonth,
+        overagePerChangeCents: plan.overagePerChangeCents,
+        includesAnalytics: plan.includesAnalytics,
+        sortOrder: plan.sortOrder,
+      })),
       {
         // Exists to be granted, not sold. The plan override needs something
         // meaning "unlimited" to point at, and inventing one at the moment an

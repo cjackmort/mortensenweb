@@ -32,6 +32,8 @@ export interface PreviewItem {
   requestPublicId: string;
   requestTitle: string;
   previewUrl: string;
+  /** The agent's description of the change, for a non-technical reader. */
+  summary?: string | null;
 }
 
 function PreviewCard({ item }: { item: PreviewItem }) {
@@ -74,6 +76,20 @@ function PreviewCard({ item }: { item: PreviewItem }) {
         We&rsquo;ve made this change on a preview of your site. Take a look, and
         if you&rsquo;re happy we&rsquo;ll put it live.
       </p>
+
+      {item.summary && (
+        <div className="timeline-summary">
+          <p className="timeline-summary-label">What we changed</p>
+          <p className="timeline-summary-body">{item.summary}</p>
+        </div>
+      )}
+
+      {/* The change as a picture, straight from the preview deploy — the
+          deploy workflow screenshots the home page at phone width and ships
+          it inside the preview at a known path. A client on a phone can
+          often decide from this without leaving the portal. Hidden, not
+          broken, when a site built before that workflow has no screenshot. */}
+      <PreviewShot previewUrl={item.previewUrl} title={item.requestTitle} />
 
       <p>
         <a
@@ -173,6 +189,25 @@ function PreviewCard({ item }: { item: PreviewItem }) {
         </form>
       )}
     </div>
+  );
+}
+
+function PreviewShot({ previewUrl, title }: { previewUrl: string; title: string }) {
+  const [available, setAvailable] = useState(true);
+  if (!available) return null;
+  const src = `${previewUrl.replace(/\/$/, "")}/__preview/home-390.png`;
+  return (
+    <figure className="preview-shot">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a cross-origin
+          image on the preview deploy; next/image would proxy it for nothing */}
+      <img
+        src={src}
+        alt={`The home page of your site with "${title}" applied, at phone size`}
+        loading="lazy"
+        onError={() => setAvailable(false)}
+      />
+      <figcaption className="muted">How the home page looks with this change.</figcaption>
+    </figure>
   );
 }
 

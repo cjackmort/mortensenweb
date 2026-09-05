@@ -1,0 +1,22 @@
+---
+import { dollars, type Plan } from "@mortensenweb/plans";
+interface Props { plan: Plan; compact?: boolean }
+const { plan, compact = false } = Astro.props;
+---
+
+<div class:list={["plan", "reveal", { "plan--featured": plan.featured }]}>
+  {plan.featured && <span class="plan__badge">Most chosen</span>}
+  <p class="plan__name">{plan.name}</p>
+  <p class="plan__price">{dollars(plan.monthlyCents)}<small>/month</small></p>
+  <p class="plan__for">{plan.bestFor}</p>
+  {
+    !compact && (
+      <ul>
+        {plan.features.map((f) => <li>{f}</li>)}
+      </ul>
+    )
+  }
+  <a class="btn btn--ghost" href={compact ? "/pricing/" : "/contact/"}>
+    {compact ? "Compare plans" : "Start a project"} <span class="arrow">→</span>
+  </a>
+</div>

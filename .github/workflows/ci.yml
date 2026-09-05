@@ -60,6 +60,16 @@ jobs:
       - name: Build
         run: npm run build --workspace apps/platform
 
+      # The public site: `astro check` (types and templates), a build, and the
+      # same structural checks the client-site pipeline runs. Netlify builds it
+      # separately for deploy; this is what stops a broken link or a missing
+      # image reaching main.
+      - name: Check and build the public site
+        run: |
+          npm run check --workspace apps/portfolio
+          npm run build --workspace apps/portfolio
+          node agent/verify/check.mjs apps/portfolio/dist
+
   migrate:
     name: Apply migrations to Neon
     needs: verify
