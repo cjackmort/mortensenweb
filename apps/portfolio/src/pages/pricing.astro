@@ -1,19 +1,43 @@
 ---
 import Base from "../layouts/Base.astro";
 import PlanCard from "../components/PlanCard.astro";
-import { PLANS, OVERAGE_CENTS, dollars, CHEAPEST_PLAN } from "@mortensenweb/plans";
+import {
+  PLANS,
+  OVERAGE_CENTS,
+  dollars,
+  CHEAPEST_PLAN,
+  BUILD_PRICE_CENTS,
+  BUILD_WITH_CARE_CENTS,
+  BUILD_DISCOUNT_CENTS,
+  BUILD_COMMITMENT_MONTHS,
+} from "@mortensenweb/plans";
 
 const faq = [
   ["What counts as a change?", "One request in the portal — a new photo, a price, a paragraph, a seasonal notice. If a request is really several unrelated things, we will say so and count it fairly rather than surprise you."],
   ["What if I need more than my plan includes?", `Any change beyond the allowance is a flat ${dollars(OVERAGE_CENTS)}, on every plan. If that keeps happening, the next plan up is usually cheaper — and you can move at any time.`],
-  ["Is there a minimum term?", "No. Plans are monthly. You can change plan or stop whenever you like, and your domain stays yours."],
-  ["What is not covered?", "A redesign or a new section is a project, quoted separately. Online stores, advertising and social media are outside what we do — see Services."],
+  // Both answers below changed on 2026-09-05. The discounted build introduced
+  // the first commitment this business has ever asked for, and the old copy
+  // ("no minimum term", "the build is quoted") now reads as a contradiction of
+  // the price above it.
+  ["Is there a minimum term?", `Only if you take the discounted build. ${dollars(BUILD_WITH_CARE_CENTS)} assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months; leave before then and we invoice the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata, and nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} for the build and there is no commitment at all. After the first year every plan is month to month.`],
+  ["What does the build cost?", `${dollars(BUILD_PRICE_CENTS)} on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it — the same site either way, up to five pages. Anything unusual we quote before you commit, and the build is invoiced half to start and half at launch.`],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Online stores, advertising and social media are outside what we do — see Services."],
+];
+
+/** Rows of the comparison table, so the markup below stays one loop per plan. */
+const columns = [
+  { head: "Per month", cell: (p: (typeof PLANS)[number]) => dollars(p.monthlyCents), money: true },
+  { head: "Changes / month", cell: (p: (typeof PLANS)[number]) => String(p.includedChangesPerMonth ?? "Unlimited"), money: false },
+  { head: "Extra change", cell: (p: (typeof PLANS)[number]) => (p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"), money: false },
+  { head: "Hosting · SSL · security", cell: () => "✓", money: false },
+  { head: "Analytics", cell: (p: (typeof PLANS)[number]) => (p.includesAnalytics ? "✓" : "—"), money: false },
+  { head: "Preview before live", cell: () => "✓", money: false },
 ];
 ---
 
 <Base
   title="Pricing"
-  description={`Care plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month — hosting, SSL, security updates, analytics, and an allowance of content changes at a flat ${dollars(OVERAGE_CENTS)} each beyond it. The build is quoted per project.`}
+  description={`${dollars(BUILD_PRICE_CENTS)} for the site, or ${dollars(BUILD_WITH_CARE_CENTS)} with a care plan. Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month — hosting, SSL, security updates, analytics, and an allowance of content changes at a flat ${dollars(OVERAGE_CENTS)} each beyond it.`}
   path="/pricing/"
   schema={[
     {
@@ -25,14 +49,82 @@ const faq = [
   <section class="section">
     <div class="wrap">
       <div class="section-head">
-        <div><p class="eyebrow">Pricing</p></div>
+        <div><p class="eyebrow">01 · The build</p></div>
         <div>
-          <h1 style="font-size: var(--text-2xl)">The build is quoted. Everything after it is a monthly plan.</h1>
+          <h1 style="font-size: var(--text-2xl)">Two ways to pay for the site.</h1>
+          <p class="lede" style="margin-top: 1rem">
+            Same site either way — up to five pages, your words and
+            photographs, mobile first, launched on your domain. The difference
+            is whether you commit to a care plan.
+          </p>
+        </div>
+      </div>
+
+      <div class="builds">
+        <div class="build">
+          <p class="eyebrow">Just the site</p>
+          <p class="build__price">{dollars(BUILD_PRICE_CENTS)}<small>one-time</small></p>
+          <p class="build__fine">For a business that wants the site and nothing ongoing.</p>
+          <ul class="build__list">
+            <li>The finished site, launched on your domain</li>
+            <li>Up to five pages, written with you</li>
+            <li>Two rounds of revisions before launch</li>
+            <li>30 days of fixes after launch</li>
+            <li>Hosting set up on your own Netlify account — yours to keep</li>
+            <li>No portal, no analytics, no monthly cost</li>
+          </ul>
+          <p class="build__fine">
+            Want changes later? Join any care plan at any time and the portal
+            switches on.
+          </p>
+        </div>
+
+        <div class="build build--featured">
+          <span class="build__badge">Most chosen</span>
+          <p class="eyebrow">Site + Care</p>
+          <p class="build__price">
+            <s>{dollars(BUILD_PRICE_CENTS)}</s>{dollars(BUILD_WITH_CARE_CENTS)}<small>one-time</small>
+          </p>
+          <p class="build__fine">
+            {dollars(BUILD_DISCOUNT_CENTS)} off the build when you stay on a care
+            plan for the first {BUILD_COMMITMENT_MONTHS} months. Any plan
+            qualifies, {CHEAPEST_PLAN.short} included.
+          </p>
+          <ul class="build__list">
+            <li>Everything in “Just the site”</li>
+            <li>Portal and visitor analytics from launch day</li>
+            <li>Your monthly change allowance starts at launch</li>
+            <li>Hosting, SSL, security updates handled by us</li>
+            <li>Cancel early and the unused part of the {dollars(BUILD_DISCOUNT_CENTS)} is invoiced pro-rata — nothing else</li>
+          </ul>
+          <p class="build__fine">
+            After {BUILD_COMMITMENT_MONTHS} months the plan is month-to-month.
+            Stop whenever you like; the domain and the site stay yours.
+          </p>
+        </div>
+      </div>
+
+      <p class="build__note">
+        Why the discount is this size: over a year, the cheapest plan
+        ({dollars(CHEAPEST_PLAN.monthlyCents)} × {BUILD_COMMITMENT_MONTHS} = {dollars(CHEAPEST_PLAN.monthlyCents * BUILD_COMMITMENT_MONTHS)})
+        plus {dollars(BUILD_WITH_CARE_CENTS)} lands within
+        {" "}{dollars(BUILD_PRICE_CENTS - (CHEAPEST_PLAN.monthlyCents * BUILD_COMMITMENT_MONTHS + BUILD_WITH_CARE_CENTS))} of
+        the full build price — so a client who stays pays about the same, spread
+        over the year, and gets hosting, analytics and twelve changes for it.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">02 · Care plans</p></div>
+        <div>
+          <h2>Monthly. No minimum term after the first year.</h2>
           <p class="lede" style="margin-top: 1rem">
             Every plan includes hosting, SSL, security updates and visitor
             analytics. They differ in how many changes are included each
             month. A change beyond that is a flat {dollars(OVERAGE_CENTS)}.
-            Prices in US dollars, monthly, no minimum term.
           </p>
         </div>
       </div>
@@ -46,7 +138,7 @@ const faq = [
   <section class="section section--sunk">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">Side by side</p></div>
+        <div><p class="eyebrow">03 · Side by side</p></div>
         <h2>The same numbers, as a table.</h2>
       </div>
       <div class="table-wrap reveal">
@@ -54,20 +146,25 @@ const faq = [
           <caption class="sr-only">Care plan comparison by monthly price, included changes, and extras.</caption>
           <thead>
             <tr>
-              <th scope="col"></th>
-              {PLANS.map((p) => <th scope="col">{p.short}</th>)}
+              <th scope="col">Plan</th>
+              {columns.map((c) => <th scope="col">{c.head}</th>)}
             </tr>
           </thead>
           <tbody>
-            <tr><th scope="row">Per month</th>{PLANS.map((p) => <td>{dollars(p.monthlyCents)}</td>)}</tr>
-            <tr><th scope="row">Changes included</th>{PLANS.map((p) => <td>{p.includedChangesPerMonth ?? "Unlimited"}</td>)}</tr>
-            <tr><th scope="row">Extra change</th>{PLANS.map((p) => <td>{p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"}</td>)}</tr>
-            <tr><th scope="row">Hosting, SSL, security</th>{PLANS.map(() => <td>Included</td>)}</tr>
-            <tr><th scope="row">Visitor analytics</th>{PLANS.map((p) => <td>{p.includesAnalytics ? "Included" : "—"}</td>)}</tr>
-            <tr><th scope="row">Preview before it goes live</th>{PLANS.map(() => <td>Always</td>)}</tr>
+            {PLANS.map((p) => (
+              <tr class={p.featured ? "is-featured" : undefined}>
+                <th scope="row">
+                  <span class="compare__plan">{p.name}{p.featured && <span class="compare__flag">most chosen</span>}</span>
+                  <span class="compare__for">{p.bestFor.replace(/\.$/, "")}</span>
+                </th>
+                {columns.map((c) => (
+                  <td class={c.money ? "compare__money" : undefined}>{c.cell(p)}</td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
-        <p class="eyebrow table-hint">Swipe sideways for the Unlimited column →</p>
+        <p class="eyebrow table-hint">Swipe sideways for the last columns →</p>
       </div>
     </div>
   </section>
@@ -75,7 +172,7 @@ const faq = [
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">Questions</p></div>
+        <div><p class="eyebrow">04 · Questions</p></div>
         <h2>Before you pick one.</h2>
       </div>
       <ul class="rows">

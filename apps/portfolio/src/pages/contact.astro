@@ -55,17 +55,35 @@ import { SITE } from "../data/site";
             </div>
           </div>
 
-          <div class="grid-2">
-            <div>
-              <label for="business">Business name</label>
-              <input id="business" name="business" type="text" autocomplete="organization" required />
-            </div>
-            <div>
-              <label for="current-site">Current website</label>
-              <input id="current-site" name="current-site" type="url" inputmode="url" placeholder="https://" />
-              <p class="hint">If there is one. It is fine if there is not.</p>
-            </div>
+          <div>
+            <label for="business">Business name</label>
+            <input id="business" name="business" type="text" autocomplete="organization" required />
           </div>
+
+          {/*
+            The website question is a CSS-only disclosure: the radios are the
+            only state, and `#has-site-yes:checked ~ .ask__more` reveals the
+            URL field. Deliberately not JavaScript — this site ships no
+            framework runtime and renders with scripts off, and a form that
+            hides a field behind a script is a form that loses answers when
+            the script does not run. The radios must stay direct siblings of
+            `.ask__more` for the combinator to work; wrapping them in the
+            layout div is what breaks it.
+          */}
+          <fieldset class="ask">
+            <legend>Do you have a website already?</legend>
+            <input class="ask__radio" type="radio" id="has-site-no" name="has-site" value="No" />
+            <input class="ask__radio" type="radio" id="has-site-yes" name="has-site" value="Yes" />
+            <div class="ask__choices">
+              <label class="ask__btn" for="has-site-no">No</label>
+              <label class="ask__btn" for="has-site-yes">Yes</label>
+            </div>
+            <div class="ask__more">
+              <label for="current-site">Your current website</label>
+              <input id="current-site" name="current-site" type="url" inputmode="url" placeholder="https://" />
+              <p class="hint">Optional — a link just saves us asking.</p>
+            </div>
+          </fieldset>
 
           <div>
             <label for="budget">Rough budget for the build</label>
