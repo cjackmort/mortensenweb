@@ -9,6 +9,7 @@ import {
   addSite,
   requireOrganizationSite,
   setAnalyticsConnection,
+  setSitePreviewMode,
 } from "@/db/repositories/admin/sites";
 
 /**
@@ -61,6 +62,54 @@ export async function addSiteAction(
   });
 
   revalidatePath(`/admin/clients/${clientPublicId}`);
+  return { ok: true };
+}
+
+export async function setPreviewModeAction(
+  _previous: SiteActionResult | null,
+  formData: FormData,
+): Promise<SiteActionResult> {
+  const ctx = await requireAdmin();
+  const db = await getDb();
+
+  const clientPublicId = String(formData.get("clientPublicId") ?? "");
+  const sitePublicId = String(formData.get("sitePublicId") ?? "");
+  const mode = String(formData.get("previewMode") ?? "");
+
+  if (mode !== "screenshot" && mode !== "live") {
+    return { ok: false, message: "Pick a thumbnail source." };
+  }
+
+  let detail;
+  try {
+    detail = await getClientDetail(ctx, db, clientPublicId);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "That client no longer exists." };
+    }
+    throw error;
+  }
+
+  // Same scoping as the analytics action: a site id from another client
+  // cannot be retargeted from this page.
+  try {
+    await requireOrganizationSite(ctx, db, detail.organization.id, sitePublicId);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "That site is not on this client." };
+    }
+    throw error;
+  }
+
+  const result = await setSitePreviewMode(ctx, db, sitePublicId, mode);
+  if (!result.ok) {
+    return { ok: false, message: "That site no longer exists." };
+  }
+
+  // Both grids draw from this column, so both are stale until revalidated.
+  revalidatePath(`/admin/clients/${clientPublicId}`);
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin");
   return { ok: true };
 }
 

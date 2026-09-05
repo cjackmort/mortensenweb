@@ -166,6 +166,7 @@ export default async function AdminOverview() {
                     <SitePreview
                       url={c.site ? siteHomeUrl(c.site) : null}
                       name={c.site?.name ?? c.name}
+                      mode={c.site?.previewMode}
                       fallbackInitial={(c.site?.name ?? c.name).charAt(0).toUpperCase()}
                     />
                   </div>

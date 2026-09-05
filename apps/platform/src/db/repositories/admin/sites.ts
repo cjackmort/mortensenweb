@@ -182,6 +182,7 @@ export async function listSitesWithAnalytics(
       automationEnabled: repositoryConnections.allowlisted,
       repoDefaultBranch: repositoryConnections.defaultBranch,
       previewUrlStyle: sites.previewUrlStyle,
+      previewMode: sites.previewMode,
     })
     .from(sites)
     .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))
@@ -190,6 +191,28 @@ export async function listSitesWithAnalytics(
       and(eq(sites.organizationId, organizationId)),
     )
     .orderBy(sites.createdAt);
+}
+
+/**
+ * Choose how the client grid draws this site's thumbnail.
+ *
+ * `live` is only meaningful when the site itself names the portal in
+ * `frame-ancestors`; nothing here can check that, because the refusal happens
+ * in the operator's browser and is invisible to the server. The form says so
+ * rather than pretending to validate it.
+ */
+export async function setSitePreviewMode(
+  _ctx: AdminContext,
+  db: Database,
+  sitePublicId: string,
+  mode: "screenshot" | "live",
+): Promise<{ ok: boolean }> {
+  const updated = await db
+    .update(sites)
+    .set({ previewMode: mode, updatedAt: new Date() })
+    .where(eq(sites.publicId, sitePublicId))
+    .returning({ id: sites.id });
+  return { ok: updated.length > 0 };
 }
 
 /** Resolve a site that belongs to the given organization, or throw. */

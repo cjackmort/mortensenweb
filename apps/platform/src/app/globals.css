@@ -2223,9 +2223,19 @@ input[type="file"] {
 /* -------------------------------------------------------- site previews */
 
 /*
- * The framed page is laid out at four times the tile's width and scaled by
- * a quarter, so the tile shows a desktop-width rendering whatever size the
- * grid gives it. See components/site-preview.tsx for the containment story.
+ * Two ways to draw a tile, layered the same way: the picture on z-index 1,
+ * the client's initial on z-index 0 behind it. Both pictures fail by showing
+ * nothing — a tile shot that 404s because the site has not deployed since
+ * this was built, a frame the site refuses — so the letter is simply what is
+ * left visible, with no error handling anywhere.
+ *
+ * Nothing in this block may put an opaque background on the picture itself.
+ * That was the bug: the frame carried `background: #fff` above the letter, so
+ * a site that refused to be framed — most of them — showed a blank rectangle
+ * and the fallback it was supposed to reveal never once appeared. The ground
+ * belongs on the container, underneath both.
+ *
+ * See components/site-preview.tsx for which mode a site gets and why.
  */
 .site-preview {
   position: absolute;
@@ -2233,6 +2243,30 @@ input[type="file"] {
   display: block;
 }
 
+/*
+ * The tile shot, at the 16:9 the deploy captured it at.
+ *
+ * A background rather than an <img> so that a site which has not deployed
+ * since this shipped — and therefore has no shot yet — renders as nothing at
+ * all, revealing the letter. A broken <img> keeps its box and draws Chrome's
+ * broken-image marker in it. See components/site-preview.tsx.
+ */
+.site-preview-shot {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * The framed page is laid out at four times the tile's width and scaled by
+ * a quarter, so the tile shows a desktop-width rendering whatever size the
+ * grid gives it.
+ */
 .site-preview-frame {
   position: absolute;
   top: 0;
@@ -2243,7 +2277,6 @@ input[type="file"] {
   transform: scale(0.25);
   transform-origin: 0 0;
   pointer-events: none;
-  background: #fff;
   z-index: 1;
 }
 
@@ -2269,7 +2302,16 @@ input[type="file"] {
   position: relative;
 }
 
-/* The gradient is the ground for a letter; a live page brings its own. */
+/*
+ * The gradient is the ground for a letter; a framed page brings its own, and
+ * a plain ground under it avoids the gradient showing through a site whose
+ * body is transparent. This sits *below* the letter, not above it — that is
+ * the whole point of putting it on the container.
+ *
+ * Tiles drawn from a screenshot keep the gradient: a shot that loads covers
+ * it entirely, and a shot that 404s should land the letter on the same
+ * ground as a site with no URL at all.
+ */
 .site-card-media:has(.site-preview-frame),
 .client-tile-media:has(.site-preview-frame) {
   background: var(--surface-sunk);
