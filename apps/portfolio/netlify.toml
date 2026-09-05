@@ -58,3 +58,12 @@
   for = "/work/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+# Google Search Console holds the old Next.js export's /sitemap.xml and keeps
+# re-fetching it. Astro's sitemap integration emits /sitemap-index.xml instead, so
+# without this the submitted sitemap turns into a standing 404 in Search Console
+# and the site stops reporting its pages.
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/sitemap-index.xml"
+  status = 301
