@@ -61,6 +61,14 @@ describe("protected paths", () => {
     expect(isProtectedPath("package-lock.json")).toBe(true);
   });
 
+  it("protects the header files that decide who may frame the site", () => {
+    // The portal's grid tile can be a live frame of the client's home page,
+    // which only works while the site permits it. A content change must not
+    // be able to withdraw that — or any other security header — on its own.
+    expect(isProtectedPath("_headers")).toBe(true);
+    expect(isProtectedPath("src/_headers")).toBe(true);
+  });
+
   it("is not defeated by a leading ./ or by casing", () => {
     expect(isProtectedPath("./.github/workflows/deploy.yml")).toBe(true);
     expect(isProtectedPath(".GitHub/workflows/deploy.yml")).toBe(true);

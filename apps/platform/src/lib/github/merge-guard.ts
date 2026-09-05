@@ -116,6 +116,12 @@ export function isPathAllowed(path: string, allowedPaths: string[]): boolean {
 const NEVER_AUTO_MERGE = [
   ".github/",
   "netlify.toml",
+  // Netlify's other way of setting headers, for a site that uses it instead of
+  // netlify.toml. Guarded for the same reason: it decides who may frame the
+  // site, and one permitted answer is the portal, whose grid tile depends on
+  // it. A content change has no business editing either.
+  "_headers",
+  "src/_headers",
   "wrangler.toml",
   "wrangler.jsonc",
   "package.json",

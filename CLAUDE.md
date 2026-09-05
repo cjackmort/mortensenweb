@@ -125,6 +125,31 @@ Nothing is invented on a client's behalf. An unconfirmed detail stays an obvious
 placeholder — a wrong phone number on a real business's website is worse than a
 visible gap.
 
+## When you build or change a client site: the portal's tile
+
+The admin overview draws every client as a tile, and that tile is a screenshot
+of their home page taken by the deploy workflow on each push to `main`
+(`agent/verify/screenshot.mjs` → `/__preview/home-tile.png`). It replaced an
+iframe of the live page, which any site sending `X-Frame-Options` or a CSP
+`frame-ancestors` refuses — three of the first four clients showed a blank tile
+while all three sites were perfectly healthy.
+
+Two things follow, both of which are your job when scaffolding a new site:
+
+- **Ship `netlify.toml` from `templates/client-repo/`.** It carries
+  `frame-ancestors 'self' https://portal.mortensenweb.com`, which is what makes
+  a live tile possible later. Adding it up front costs nothing; retrofitting it
+  means a pull request against a guarded file on someone else's repository.
+- **If the home page animates above the fold, say so in the pull request and
+  set the site to `live`** in the portal (client → the site → Grid thumbnail).
+  A still shot is taken under `reducedMotion: 'reduce'`, so a background whose
+  whole character is motion can photograph as a flat block of colour. The full
+  procedure is in `agent/skills/animation/SKILL.md` — "If the home page moves,
+  the portal's thumbnail has to move with it".
+
+A static home page needs neither decision: the default is the screenshot, and
+for a site that only changes when it deploys that is exactly current.
+
 ## What the client sees
 
 The loop a client actually touches, all of it shipped and none of it yet used

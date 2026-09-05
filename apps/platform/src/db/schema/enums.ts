@@ -69,6 +69,29 @@ export const previewUrlStyleEnum = pgEnum("preview_url_style", [
   "deploy_preview",
 ]);
 
+/**
+ * How the portal's client grid draws this site's thumbnail.
+ *
+ *  - `screenshot`: an image taken at deploy time and published with the site
+ *    at `/__preview/home-tile.png`. The default, and right for almost every
+ *    site: it cannot be blocked, costs one small image to load, and is exactly
+ *    as current as the last release.
+ *  - `live`: an iframe of the real home page. Only worth its cost where the
+ *    page moves — an animated background, a canvas, anything a still picture
+ *    misrepresents — and only possible where that site's headers name the
+ *    portal in `frame-ancestors`, because a cross-origin frame is refused by
+ *    default and a refused frame renders nothing.
+ *
+ * Per site rather than global because the answer differs per site and getting
+ * it wrong is quiet either way: `live` on a site that refuses framing shows an
+ * empty tile, and `screenshot` on an animated site shows a frame of it that
+ * may not look like the site at all.
+ */
+export const sitePreviewModeEnum = pgEnum("site_preview_mode", [
+  "screenshot",
+  "live",
+]);
+
 export const deploymentStatusEnum = pgEnum("deployment_status", [
   "queued",
   "building",

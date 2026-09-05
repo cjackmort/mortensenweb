@@ -113,6 +113,7 @@ export default async function AdminClientsPage() {
                     <SitePreview
                       url={site ? siteHomeUrl(site) : null}
                       name={site?.name ?? c.name}
+                      mode={site?.previewMode}
                       fallbackInitial={(site?.name ?? c.name).charAt(0).toUpperCase()}
                     />
                     <span className="client-tile-chevron" aria-hidden="true" />

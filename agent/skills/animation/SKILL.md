@@ -109,6 +109,44 @@ Swiss: none — the restraint is the signature. Brutalist: marquee + instant bla
 
 `will-change` only on elements actually animating and remove after; no layout thrash in scroll handlers (read then write, `passive: true`); IntersectionObserver over scroll listeners; total JS for animation < 30KB gzipped unless GSAP is justified; test at 4× CPU throttle; verify no CLS from entrance animations (reserve space, animate transform not height).
 
+## If the home page moves, the portal's thumbnail has to move with it
+
+The operator's client grid draws each site from a screenshot taken at deploy
+time (`/__preview/home-tile.png`). For almost every site that is the right
+picture. For a site whose **home page above the fold** animates — an aurora or
+mesh background, a canvas field, a marquee, a hero that assembles on load — it
+is not: the shot catches one arbitrary frame, and it is taken under
+`reducedMotion: 'reduce'`, so a background whose whole character is motion can
+photograph as a flat block of colour. The tile then misrepresents the site to
+the only person who checks all of them.
+
+Such a site should be drawn as a live frame instead. That needs two things,
+and **both are your job in the same pull request that ships the animation**:
+
+1. **The site must let the portal frame it.** Repositories scaffolded from our
+   template already do — `netlify.toml` ships
+   `Content-Security-Policy: frame-ancestors 'self' https://portal.mortensenweb.com`.
+   Check that it is there. An older site usually sends a blanket
+   `X-Frame-Options: DENY`/`SAMEORIGIN` or `frame-ancestors 'none'` instead,
+   which refuses the portal and renders an empty tile. Replace it with the
+   line above — drop `X-Frame-Options` entirely, as it has no allowlist form
+   and cannot express this.
+
+   `netlify.toml` is in the merge guard, so a pull request touching it will
+   not auto-merge and waits for a person. That is expected. **Say in the pull
+   request body that the header change is there and why**, so the wait is one
+   glance rather than an investigation.
+
+2. **The site has to be switched over in the portal.** You cannot do this from
+   the repository — it is a column on the site. Say so explicitly in the pull
+   request body: *"This home page is animated. Set Grid thumbnail →
+   Live page on this site in the portal (client → the site → Grid
+   thumbnail), or the tile will keep showing a still frame."*
+
+If the animation is below the fold, or the home page is static and only inner
+pages move, change nothing: the screenshot is still an honest likeness, and a
+live frame costs a whole page load per tile for no gain.
+
 ## Output
 
 Emit the easing tokens, the reduced-motion block, the reveal system, the chosen signature move, and page transitions for the stack. Keep the animation code in one file (`animations.js` / `motion.ts`) so it is easy to tune.

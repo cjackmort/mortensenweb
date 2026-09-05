@@ -91,6 +91,26 @@ jobs:
           playwright install --with-deps chromium
           node .mortensenweb/agent/verify/screenshot.mjs dist --base "$BASE_REF"
 
+      # The portal's client-grid thumbnail, refreshed on every release.
+      #
+      # There is no pull request to illustrate here, so this takes the tile
+      # alone. It is what the portal shows instead of framing the live site:
+      # a site that sends X-Frame-Options or `frame-ancestors` — which most
+      # do, correctly — cannot be iframed, and the operator got a blank tile
+      # for a perfectly healthy site. See agent/verify/screenshot.mjs.
+      - name: Screenshot the home page for the portal
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Never block a release on a thumbnail. The script already survives a
+        # page that will not screenshot, but installing Playwright and its
+        # browser is a network operation that can fail on its own — and the
+        # cost of that failing the job would be a client's approved change not
+        # reaching their website. The portal falls back to their initial.
+        continue-on-error: true
+        run: |
+          npm install -g playwright@1.50.1
+          playwright install --with-deps chromium
+          node .mortensenweb/agent/verify/screenshot.mjs dist --tile-only
+
       - name: Report on the pull request
         if: github.event_name == 'pull_request' && always()
         env:
@@ -140,7 +160,11 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
         run: |
-          rm -rf dist/__preview
+          # Production publishes the portal tile and nothing else from
+          # __preview/. The per-page diff shots exist to illustrate a pull
+          # request and have no business on the live domain; the tile does,
+          # because the portal loads it from here as an ordinary image.
+          find dist/__preview -type f ! -name 'home-tile.png' -delete 2>/dev/null || true
           npx --yes netlify-cli@17 deploy \
             --dir=dist \
             --prod \
