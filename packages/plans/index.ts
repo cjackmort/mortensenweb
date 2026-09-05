@@ -129,3 +129,29 @@ export function dollars(cents: number): string {
 }
 
 export const CHEAPEST_PLAN = PLANS.reduce((low, p) => (p.monthlyCents < low.monthlyCents ? p : low));
+
+/**
+ * The build, as sold: one site, two prices.
+ *
+ * Until 2026-09-05 the build was "quoted per project" and no number appeared
+ * publicly, so every enquiry needed a conversation before a prospect could
+ * tell whether we were in their range at all.
+ *
+ * `BUILD_WITH_CARE_CENTS` is the price when the client commits to a care plan
+ * for `BUILD_COMMITMENT_MONTHS`. Leaving inside that window invoices the
+ * unused part of the discount pro-rata, and that clawback is the only thing
+ * that makes the lower number safe to advertise — copy that quotes the
+ * discount has to state the commitment in the same breath.
+ *
+ * The discount is derived rather than stored a second time, so the headline
+ * and the two prices cannot drift apart.
+ *
+ * Sized against the cheapest plan: 50 × 12 + 500 = 1,100 against 1,200, so a
+ * client who stays a year pays within $100 of buying the site outright and
+ * gets hosting, analytics and twelve changes for it. Move these numbers and
+ * that sentence stops being true — it is spelled out on the pricing page.
+ */
+export const BUILD_PRICE_CENTS = 120000;
+export const BUILD_WITH_CARE_CENTS = 50000;
+export const BUILD_COMMITMENT_MONTHS = 12;
+export const BUILD_DISCOUNT_CENTS = BUILD_PRICE_CENTS - BUILD_WITH_CARE_CENTS;

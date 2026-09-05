@@ -1317,31 +1317,195 @@ img {
   font-weight: 500;
 }
 
+/* ------------------------------------------------------------ build cards */
+
+.builds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+@media (max-width: 46rem) {
+  .builds {
+    grid-template-columns: 1fr;
+  }
+}
+
+.build {
+  position: relative;
+  padding: var(--space-5);
+  border: 1px solid var(--rule-strong);
+  background: var(--white);
+}
+
+.build--featured {
+  border-color: var(--blue);
+}
+
+.build__badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  padding: 0.4rem 0.7rem;
+  font: 500 var(--text-xs) / 1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--blue);
+  color: var(--white);
+}
+
+.build__price {
+  margin: 0.6rem 0 0;
+  font-size: var(--text-2xl);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* The struck price is the anchor the discount is read against, so it stays
+   legible rather than decorative. */
+.build__price s {
+  margin-right: 0.5rem;
+  font-size: 0.55em;
+  font-weight: 400;
+  color: var(--muted);
+  text-decoration-thickness: 1px;
+}
+
+.build__price small {
+  margin-left: 0.45rem;
+  font: 400 var(--text-sm) / 1 var(--sans);
+  color: var(--muted);
+}
+
+.build__fine {
+  margin: 0.8rem 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.build__list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.build__list li {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.build__list li:first-child {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.build__note {
+  margin-top: var(--space-5);
+  max-width: 52rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* One row per plan, one column per attribute.
+   The table was transposed until 2026-09-05, which put each plan's name in a
+   column head and left the numbers to be read downwards. Rows per plan is the
+   order people actually compare in, but it only works if the columns are
+   visibly separated — hence the rules between cells and the min-width, which
+   stops the plan column collapsing to one word per line and lets the wrapper
+   scroll instead. */
 .compare {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
+  min-width: 52rem;
 }
 
 .compare th,
 .compare td {
   text-align: left;
-  padding: 0.8rem 0.6rem;
+  padding: 0.95rem 1.05rem;
   border-bottom: 1px solid var(--rule);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
-.compare th {
+.compare thead th {
   font: 500 var(--text-xs) / 1.4 var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  vertical-align: bottom;
+  border-bottom-color: var(--rule-strong);
 }
 
+/* The separators. Every cell but the first in its row carries a left rule, so
+   each value sits visibly under its own heading. */
+.compare th:not(:first-child),
 .compare td:not(:first-child),
-.compare th:not(:first-child) {
-  text-align: right;
+.compare tbody td {
+  border-left: 1px solid var(--rule);
+}
+
+/* The plan column: a name and a line about who it is for, so it needs room
+   and the sans face rather than the uppercase mono of the header row. */
+.compare tbody th {
+  min-width: 16rem;
+  font-family: var(--sans);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.compare__plan {
+  display: block;
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.compare__flag {
+  margin-left: 0.5rem;
+  font: 500 var(--text-xs) / 1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.compare__for {
+  display: block;
+  margin-top: 0.3rem;
+  max-width: 22rem;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.compare tbody td {
+  text-align: center;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.compare__money {
+  font-weight: 500;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+/* The table lives inside .section--sunk, which is already --paper-2, so the
+   featured row lifts to --white rather than tinting down into the background. */
+.compare tbody tr.is-featured {
+  background: var(--white);
 }
 
 .table-wrap {
@@ -1437,6 +1601,90 @@ img {
 .hp {
   position: absolute;
   left: -200vw;
+}
+
+/* ---------------------------------------------------- form: ask/disclose */
+
+/* A yes/no question that reveals a follow-up field, with no JavaScript. The
+   radios carry the state and stay focusable; the labels are what you see.
+   Scripted disclosure would lose the answer on any page where the script
+   does not run, and nothing else on this site waits for one. */
+
+.ask {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.ask legend {
+  padding: 0;
+  font: 500 var(--text-xs) / 1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 0.45rem;
+}
+
+/* Off-screen rather than display:none, so the group stays keyboard-reachable
+   and arrow keys still move between the two options. */
+.ask__radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ask__choices {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.form .ask__btn {
+  margin: 0;
+  cursor: pointer;
+  min-width: 5.5rem;
+  text-align: center;
+  padding: 0.7rem 1.1rem;
+  border: 1px solid var(--rule-strong);
+  background: var(--white);
+  color: var(--ink-2);
+  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
+}
+
+.form .ask__btn:hover {
+  border-color: var(--blue);
+  color: var(--ink);
+}
+
+#has-site-no:checked ~ .ask__choices .ask__btn[for="has-site-no"],
+#has-site-yes:checked ~ .ask__choices .ask__btn[for="has-site-yes"] {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+}
+
+/* Focus has to be drawn on the label, because the radio itself is off-screen. */
+.ask__radio:focus-visible ~ .ask__choices .ask__btn[for="has-site-no"],
+.ask__radio:focus-visible ~ .ask__choices .ask__btn[for="has-site-yes"] {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.ask__more {
+  display: none;
+  margin-top: var(--space-4);
+}
+
+#has-site-yes:checked ~ .ask__more {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form .ask__btn {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------------- cta */

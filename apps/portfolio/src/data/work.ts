@@ -61,31 +61,35 @@ export const WORK: Work[] = [
     year: 2026,
   },
   {
-    slug: "matts-seasonal-sales",
-    name: "Matt's Seasonal Sales",
-    sector: "Seasonal retail — pumpkin patch and tree lot",
-    description:
-      "A pitch build for a seasonal retail lot: patch hours, the games and photo spots on site, and a tree-lot section that swaps in once pumpkin season ends. Built to work from a phone in a gravel parking lot with one bar of signal.",
-    domain: "matts-seasonal-sales-demo.netlify.app",
-    href: "https://matts-seasonal-sales-demo.netlify.app",
-    status: "concept",
-    tags: ["Seasonal retail", "Mobile-first", "Pitch build"],
-    image: "/work/matts-seasonal-sales.webp",
-    imageAlt: "A pumpkin display tower at Matt's Seasonal Sales.",
-    year: 2026,
-  },
-  {
     slug: "mitch-bedke-art",
     name: "Mitch Bedke Glass Art",
     sector: "Glass art studio",
     description:
-      "A gallery pitch for a glass artist — full-bleed shots of fused and blown work, a studio story, and a commission path. Built to make the glass itself carry the page rather than a template layout.",
-    domain: "mitch-bedke-art-demo.netlify.app",
-    href: "https://mitch-bedke-art-demo.netlify.app",
-    status: "concept",
+      "A gallery site for a glass artist — full-bleed shots of fused and blown work, a studio story, and a commission path. Built to make the glass itself carry the page rather than a template layout.",
+    domain: "mitchbedkeart.com",
+    href: "https://mitchbedkeart.com",
+    status: "live",
     tags: ["Gallery site", "Photography-led", "Commission enquiries"],
     image: "/work/mitch-bedke-art.webp",
     imageAlt: "A fused glass panel by Mitch Bedke, lit from behind.",
+    year: 2026,
+  },
+  // Ours, and last on purpose. It goes in as `internal` because it is not a
+  // client engagement, and it sits below the client work because this page
+  // exists to show what we do for other people.
+  {
+    slug: "jack-mortensen-portfolio",
+    name: "Jack Mortensen Portfolio",
+    sector: "Mechanical engineering portfolio",
+    description:
+      "A personal portfolio for a mechanical engineering student at the University of Utah. The featured project loads its CAD assembly into the page as a 3D model you can drag to rotate, so a reviewer turns the machine around instead of reading a photograph of it.",
+    domain: "jackmortensenportfolio.netlify.app",
+    href: "https://jackmortensenportfolio.netlify.app",
+    status: "internal",
+    tags: ["Portfolio", "3D in the browser", "Single page"],
+    image: "/work/jack-mortensen-portfolio.webp",
+    imageAlt:
+      "The portfolio home page: the name in large white type over a dark, marbled fluid background.",
     year: 2026,
   },
 ];

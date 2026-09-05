@@ -3,7 +3,15 @@ import Base from "../layouts/Base.astro";
 import Marquee from "../components/Marquee.astro";
 import Loop from "../components/Loop.astro";
 import PlanCard from "../components/PlanCard.astro";
-import { PLANS, CHEAPEST_PLAN, dollars } from "@mortensenweb/plans";
+import {
+  PLANS,
+  CHEAPEST_PLAN,
+  dollars,
+  BUILD_PRICE_CENTS,
+  BUILD_WITH_CARE_CENTS,
+  BUILD_DISCOUNT_CENTS,
+  BUILD_COMMITMENT_MONTHS,
+} from "@mortensenweb/plans";
 import { SITE, LOOP } from "../data/site";
 
 const soldPlans = PLANS.filter((p) => p.key !== "care-unlimited");
@@ -17,13 +25,16 @@ const faq = [
     q: "What if the change is not what I wanted?",
     a: "Say so on the preview. Asking for changes on a preview does not use up another of your monthly changes; it is part of the same request until you are happy with it.",
   },
+  // Both answers changed on 2026-09-05, when the build stopped being "quoted"
+  // and got a published price. Left as they were they would have contradicted
+  // the number now sitting further up the same page.
   {
     q: "Do I have to sign a contract?",
-    a: "No. The build is a fixed quote. Care plans are monthly and you can change plan or stop any time. Your domain stays yours.",
+    a: `Only if you take the discounted build. ${dollars(BUILD_WITH_CARE_CENTS)} assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months, and leaving early invoices the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata — nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} for the build and there is no commitment at all. Your domain stays yours either way.`,
   },
   {
     q: "What does the build cost?",
-    a: "It depends on the site, and we quote it after a conversation rather than from a menu. Most small-business sites land in the low thousands. After that, the monthly plan is the only recurring cost.",
+    a: `${dollars(BUILD_PRICE_CENTS)} for the site on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it — the same site either way, up to five pages. After that the monthly plan is the only recurring cost.`,
   },
 ];
 
@@ -48,7 +59,7 @@ const schema = [
       <div class="hero__status">
         <span class="eyebrow">Small-business websites</span>
         <span class="eyebrow">Built, hosted, looked after</span>
-        <span class="eyebrow">From {dollars(CHEAPEST_PLAN.monthlyCents)}/mo after the build</span>
+        <span class="eyebrow">{dollars(BUILD_WITH_CARE_CENTS)} build with a care plan · from {dollars(CHEAPEST_PLAN.monthlyCents)}/mo</span>
       </div>
 
       <div class="hero__grid">
@@ -175,11 +186,14 @@ const schema = [
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">Care plans</p></div>
+        <div><p class="eyebrow">Pricing</p></div>
         <div>
           <h2>Priced so you can plan for it.</h2>
           <p class="lede" style="margin-top: 1rem">
-            The build is quoted per project. After launch, one monthly plan
+            The site is {dollars(BUILD_PRICE_CENTS)} on its own, or
+            {" "}{dollars(BUILD_WITH_CARE_CENTS)} when you start a care plan with
+            it — {dollars(BUILD_DISCOUNT_CENTS)} off for staying
+            {" "}{BUILD_COMMITMENT_MONTHS} months. After launch, one monthly plan
             covers hosting, security, analytics and an allowance of changes —
             so keeping the site current is a fixed cost, not a decision every
             time.
@@ -190,7 +204,7 @@ const schema = [
         {soldPlans.map((plan) => <PlanCard plan={plan} compact />)}
       </div>
       <p class="eyebrow" style="margin-top: 1rem">
-        Unlimited changes: {dollars(PLANS[3]!.monthlyCents)}/month · <a class="link" href="/pricing/">compare every plan</a>
+        Unlimited changes: {dollars(PLANS[3]!.monthlyCents)}/month · <a class="link" href="/pricing/">see both build prices and compare every plan</a>
       </p>
     </div>
   </section>

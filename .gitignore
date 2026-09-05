@@ -82,3 +82,8 @@ infra/umami/.env
 
 # Local Netlify folder
 .netlify
+
+# Astro dev-server cache. Generated on `astro dev`; the type stubs beside
+# them are checked in, so the directory itself cannot be ignored wholesale.
+apps/portfolio/.astro/data-store.json
+apps/portfolio/.astro/settings.json
