@@ -2418,3 +2418,40 @@ button.link:focus-visible {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ------------------------------------------------------- preview shot */
+
+/* A phone-width screenshot of the changed home page, shown at phone width
+   and cropped to a sensible height — the fold and a bit more. The whole
+   picture is one tap away in the preview itself. */
+.preview-shot {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.preview-shot img {
+  display: block;
+  width: min(100%, 22rem);
+  max-height: 28rem;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+}
+
+.preview-shot figcaption {
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+/* A client's after-the-fact note, under the request title in the queue. */
+.queue-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  max-width: 36ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -84,6 +84,13 @@ function PreviewCard({ item }: { item: PreviewItem }) {
         </div>
       )}
 
+      {/* The change as a picture, straight from the preview deploy — the
+          deploy workflow screenshots the home page at phone width and ships
+          it inside the preview at a known path. A client on a phone can
+          often decide from this without leaving the portal. Hidden, not
+          broken, when a site built before that workflow has no screenshot. */}
+      <PreviewShot previewUrl={item.previewUrl} title={item.requestTitle} />
+
       <p>
         <a
           className="button"
@@ -182,6 +189,25 @@ function PreviewCard({ item }: { item: PreviewItem }) {
         </form>
       )}
     </div>
+  );
+}
+
+function PreviewShot({ previewUrl, title }: { previewUrl: string; title: string }) {
+  const [available, setAvailable] = useState(true);
+  if (!available) return null;
+  const src = `${previewUrl.replace(/\/$/, "")}/__preview/home-390.png`;
+  return (
+    <figure className="preview-shot">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a cross-origin
+          image on the preview deploy; next/image would proxy it for nothing */}
+      <img
+        src={src}
+        alt={`The home page of your site with "${title}" applied, at phone size`}
+        loading="lazy"
+        onError={() => setAvailable(false)}
+      />
+      <figcaption className="muted">How the home page looks with this change.</figcaption>
+    </figure>
   );
 }
 

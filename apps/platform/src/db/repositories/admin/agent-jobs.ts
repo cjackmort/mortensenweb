@@ -21,6 +21,7 @@ import {
   renderIssueBody,
   renderIssueTitle,
   scanForInjection,
+  sizeLabel,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
 import { attachmentUrl } from "@/lib/storage/signed-links";
@@ -376,6 +377,23 @@ async function runDispatch(
   const attachmentUrls =
     input.attachmentUrls ?? (await attachmentLinksFor(db, request.id));
 
+  // Anything the client added since sending. Empty on a first dispatch;
+  // on a re-dispatch after "ask for changes" it is often the whole point.
+  const clientNotes = (
+    await db
+      .select({ body: requestEvents.body })
+      .from(requestEvents)
+      .where(
+        and(
+          eq(requestEvents.requestId, request.id),
+          eq(requestEvents.kind, "client_note"),
+        ),
+      )
+      .orderBy(requestEvents.createdAt)
+  )
+    .map((e) => e.body?.trim() ?? "")
+    .filter(Boolean);
+
   let issue: { number: number; html_url: string };
   try {
     issue = await createIssue(target, {
@@ -390,8 +408,17 @@ async function runDispatch(
         desiredTiming: request.desiredTiming,
         attachmentUrls,
         allowedPaths: input.allowedPaths,
+        clientNotes,
       }),
-      labels: ["portal-request", "claude"],
+      labels: [
+        "portal-request",
+        "claude",
+        sizeLabel({
+          title: request.title,
+          description: request.description,
+          attachmentCount: attachmentUrls?.length ?? 0,
+        }),
+      ],
     });
   } catch (error) {
     await db

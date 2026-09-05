@@ -7,6 +7,7 @@ import { listEscalations } from "@/db/repositories/admin/escalations";
 import { listPreviewsAwaitingRelease } from "@/db/repositories/admin/release";
 import { ReleasePanel } from "./release-panel";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
+import { formatDate } from "@/lib/time";
 import { DispatchButton } from "./dispatch-button";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,9 @@ export default async function AdminRequestsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
+  // Request time, taken once in the async page (which may read the clock)
+  // and passed down: the table rows are plain components and must not.
+  const now = new Date().getTime();
   const [all, escalations, awaitingRelease] = await Promise.all([
     listAllChangeRequests(ctx, db, { limit: 200 }),
     listEscalations(ctx, db),
@@ -137,7 +141,7 @@ export default async function AdminRequestsPage() {
               <p>Every request has been seen through.</p>
             </div>
           ) : (
-            <RequestTable rows={open} />
+            <RequestTable rows={open} now={now} />
           )}
         </section>
 
@@ -147,7 +151,7 @@ export default async function AdminRequestsPage() {
               <h2>Settled</h2>
               <span className="muted">{settled.length}</span>
             </div>
-            <RequestTable rows={settled} />
+            <RequestTable rows={settled} now={now} />
           </section>
         )}
       </main>
@@ -157,8 +161,10 @@ export default async function AdminRequestsPage() {
 
 function RequestTable({
   rows,
+  now,
 }: {
   rows: Awaited<ReturnType<typeof listAllChangeRequests>>;
+  now: number;
 }) {
   return (
     <div className="table-wrap">
@@ -170,13 +176,21 @@ function RequestTable({
             <th>Status</th>
             <th>Priority</th>
             <th>Sent</th>
+            <th>Run</th>
             <th>Agent</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.publicId}>
-              <td data-label="Request">{r.title}</td>
+              <td data-label="Request">
+                {r.title}
+                {r.latestNote && (
+                  <span className="queue-note" title={r.latestNote}>
+                    Client added: {r.latestNote}
+                  </span>
+                )}
+              </td>
               <td data-label="Client">{r.organizationName}</td>
               <td data-label="Status">
                 <span className={`pill ${statusPill(r.status)}`}>
@@ -190,11 +204,14 @@ function RequestTable({
                   <span className="muted">{r.priority}</span>
                 )}
               </td>
-              <td data-label="Sent">
-                {r.createdAt.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
+              <td data-label="Sent">{formatDate(r.createdAt)}</td>
+              <td data-label="Run">
+                <RunTiming
+                  dispatchedAt={r.agentDispatchedAt}
+                  finishedAt={r.agentFinishedAt}
+                  prUrl={r.agentPrUrl}
+                  now={now}
+                />
               </td>
               <td data-label="Agent">
                 <DispatchButton
@@ -207,5 +224,45 @@ function RequestTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+
+/**
+ * How long the automation took, or has been taking.
+ *
+ * The number an operator actually wants from the queue: is the run still
+ * going, did it take four minutes or twenty, and where is the pull request.
+ * Elapsed time for a run without a finish yet is measured to now, so a run
+ * that has been "going" for 40 minutes reads as the stall it is.
+ */
+function RunTiming({
+  dispatchedAt,
+  finishedAt,
+  prUrl,
+  now,
+}: {
+  dispatchedAt: Date | string | null;
+  finishedAt: Date | string | null;
+  prUrl: string | null;
+  now: number;
+}) {
+  if (!dispatchedAt) return <span className="muted">—</span>;
+  const start = new Date(dispatchedAt).getTime();
+  const end = finishedAt ? new Date(finishedAt).getTime() : now;
+  const minutes = Math.max(0, Math.round((end - start) / 60_000));
+  const label = minutes < 1 ? "<1 min" : `${minutes} min`;
+  return (
+    <span className={finishedAt ? undefined : "muted"}>
+      {finishedAt ? label : `${label} so far`}
+      {prUrl && (
+        <>
+          {" · "}
+          <a href={prUrl} target="_blank" rel="noopener noreferrer">
+            PR
+          </a>
+        </>
+      )}
+    </span>
   );
 }

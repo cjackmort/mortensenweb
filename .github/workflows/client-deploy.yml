@@ -1,0 +1,147 @@
+# =============================================================================
+# Build, verify, screenshot, deploy — shared by every client repository.
+#
+# Two paths, and the difference between them is the whole approval mechanism:
+#
+#   pull request  ->  verify + screenshots, then an alias deploy at
+#                     pr-<n>--<site>.netlify.app. This is the preview the
+#                     client is shown and approves; the screenshots ride along
+#                     inside it at /__preview/ so the portal can show the change
+#                     as a picture beside the approve button.
+#
+#   push to main  ->  production. Only reachable by merging, and merging only
+#                     happens after the portal's merge guard has passed.
+#
+# The portal predicts the alias URL from the pull request number and *verifies
+# it answers* before showing it to anyone, so `--alias pr-<n>` is load-bearing.
+#
+# Verification is what stands between "the agent said it worked" and "the
+# client is asked to approve it". A broken link, a missing image, a page that
+# fails to build: any of these fails the job, the commit status goes red, the
+# merge guard holds, and the pull request gets a comment saying exactly what
+# is wrong — before a client ever sees it.
+# =============================================================================
+
+name: Client deploy (reusable)
+
+on:
+  workflow_call:
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Netlify's deploy status is reported to GitHub as a commit status,
+      # which the portal's merge guard reads.
+      statuses: write
+      # The verification report is posted as a pull request comment.
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, so the screenshot step can diff against the base
+          # branch to find which pages the pull request changed.
+          fetch-depth: 0
+
+      - name: Fetch the agency's verification tools
+        uses: actions/checkout@v4
+        with:
+          repository: cjackmort/mortensenweb
+          ref: main
+          path: .mortensenweb
+          sparse-checkout: |
+            agent
+          sparse-checkout-cone-mode: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        # `npm ci` rather than `npm install`: the lockfile is what was tested.
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Structural checks, no browser: every local link and image resolves in
+      # dist/, every image has alt text, no placeholder text or external image
+      # URL crept in, every page has a title. Fails the job on an error.
+      - name: Verify the built site
+        id: verify
+        run: node .mortensenweb/agent/verify/check.mjs dist --report verify-report.md
+        continue-on-error: true
+
+      # Pictures of the change, at phone and desktop width, of every page the
+      # pull request touched plus the home page. Written into dist/__preview/
+      # so they deploy with the preview and can be shown in the portal.
+      - name: Screenshot the changed pages
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: |
+          npm install -g playwright@1.50.1
+          playwright install --with-deps chromium
+          node .mortensenweb/agent/verify/screenshot.mjs dist --base "$BASE_REF"
+
+      - name: Report on the pull request
+        if: github.event_name == 'pull_request' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "<!-- agent-verify: ${VERIFY_OUTCOME} -->"
+            if [ "$VERIFY_OUTCOME" = "success" ]; then
+              echo "### ✅ Verified"
+            else
+              echo "### ❌ Verification failed — this cannot merge until it is fixed"
+            fi
+            echo
+            cat verify-report.md 2>/dev/null || echo "_No report was produced._"
+            if [ -f dist/__preview/index.json ]; then
+              echo
+              echo "Screenshots deploy with the preview at \`/__preview/\`:"
+              node -e 'for (const s of require("./dist/__preview/index.json").shots) console.log(`- ${s.page} at ${s.width}px → \`${s.file}\``)'
+            fi
+          } > pr-comment.md
+          gh pr comment "$PR" --body-file pr-comment.md --edit-last || gh pr comment "$PR" --body-file pr-comment.md
+
+      - name: Fail if verification failed
+        if: steps.verify.outcome != 'success'
+        run: |
+          echo "Verification failed; see the pull request comment."
+          exit 1
+
+      - name: Deploy preview
+        if: github.event_name == 'pull_request'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          # A plaintext repository *variable*, not a secret — a Netlify site id
+          # appears in deploy URLs and build logs.
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+        run: |
+          npx --yes netlify-cli@17 deploy \
+            --dir=dist \
+            --alias="pr-${{ github.event.pull_request.number }}" \
+            --message="PR #${{ github.event.pull_request.number }}"
+
+      - name: Deploy production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+        run: |
+          rm -rf dist/__preview
+          npx --yes netlify-cli@17 deploy \
+            --dir=dist \
+            --prod \
+            --message="${{ github.event.head_commit.message }}"

@@ -23,7 +23,11 @@ const CSP = [
     ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  // Preview screenshots are served from the client's own preview deploy
+  // (`<preview>/__preview/home-390.png`, written by the deploy workflow).
+  // Those are on netlify.app and, later, on the client's domain — so `https:`
+  // rather than a list that would need editing per client.
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self'",
   // The admin overview frames each client's live home page as a thumbnail

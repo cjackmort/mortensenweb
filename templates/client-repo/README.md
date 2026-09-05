@@ -19,11 +19,15 @@ GITHUB_REPO_OWNER=<account>          # where new client repos are created
 GITHUB_INSTALLATION_ID=<id>          # the App's installation on that account
 ```
 
-### 2. `APP_ACTOR_LOGIN` is replaced in `claude.yml`
+### 2. The App's actor login is named in the agency's reusable workflow
 
 `anthropics/claude-code-action` refuses to run for a bot actor unless that bot
 is named in `allowed_bots`. The portal opens issues as the GitHub App, which
 *is* a bot actor, so without this every run fails immediately.
+
+That line now lives in `cjackmort/mortensenweb/.github/workflows/client-change.yml`,
+not in each client repository — `claude.yml` here is a nine-line caller. If
+the App is ever reinstalled under a new slug, change it there once.
 
 The value is the App's actor login — usually `<app-slug>[bot]`. Find it by
 opening any issue the portal created and reading the author name, or:
@@ -31,9 +35,6 @@ opening any issue the portal created and reading the author name, or:
 ```bash
 gh api /repos/OWNER/REPO/issues/1 --jq .user.login
 ```
-
-This applies to `workflow_dispatch` too, so it cannot be sidestepped by
-changing the trigger.
 
 ### 3. The portal holds the credentials the workflows need
 
@@ -66,12 +67,23 @@ encryption, which keeps one more credential out of the sealing path.
 
 | File | Trigger | What it does |
 | --- | --- | --- |
-| `claude.yml` | issue labelled `claude` | Reads the issue, implements the change, opens a pull request |
-| `deploy.yml` | pull request / push to `main` | Deploys a preview alias / production |
+| `claude.yml` | issue labelled `claude` | Calls the agency's `client-change` workflow: reads the issue, implements the change with the agency's skills, checks it, opens a pull request |
+| `deploy.yml` | pull request / push to `main` | Calls the agency's `client-deploy` workflow: builds, verifies links and images, screenshots the changed pages, deploys a preview alias / production |
+
+Both are thin callers of reusable workflows in `cjackmort/mortensenweb`
+(`.github/workflows/client-change.yml` and `client-deploy.yml`). The prompt,
+model, tool allowlist, skills and verification live there, so a change to any
+of them reaches this repository on its next run without this repository
+changing. `secrets: inherit` passes this repository's own secrets through;
+nothing is read from the agency repository.
 
 They are separate on purpose. `claude.yml` writes code; `deploy.yml` publishes
 it. Merging them would mean the credential that can edit the repository and the
 credential that can publish to the live site are held by the same run.
+
+**Existing client repositories** scaffolded before this change carry the old
+full-length workflows. Replace their two files with these two callers (one
+pull request per repository) and they pick up everything above.
 
 ## The build contract
 

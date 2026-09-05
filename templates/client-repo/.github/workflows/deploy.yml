@@ -1,23 +1,12 @@
 # =============================================================================
 # TEMPLATE — copied into every client repository at scaffold time.
 #
-# Deploys the site to Netlify. Two paths, and the difference between them is
-# the whole client-approval mechanism:
+# A caller. Build, verification, screenshots and the two deploy paths (preview
+# on a pull request, production on main) live in the agency repository's
+# reusable workflow. See that file for what each path means.
 #
-#   pull request  ->  an alias deploy at pr-<n>--<site>.netlify.app
-#                     This is the preview the client is shown and approves.
-#
-#   push to main  ->  production
-#                     Only reachable by merging, and merging only happens after
-#                     the portal's merge guard has passed.
-#
-# The portal predicts the alias URL from the pull request number and then
-# *verifies it answers* before showing it to anyone, so the `--alias pr-<n>`
-# below is load-bearing. Changing the alias format breaks preview links in a way
-# that looks like the build failing.
-#
-# Editing this template does NOT change repositories that were already
-# scaffolded; each one owns its copy.
+# One deploy per ref: two builds racing to publish the same alias would let the
+# loser overwrite the winner, and the client would see the older version.
 # =============================================================================
 
 name: Deploy
@@ -28,63 +17,16 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# One deploy per ref. A client pushing twice, or an agent amending a pull
-# request, should not have two builds racing to publish to the same alias — the
-# loser can overwrite the winner and the client sees the older version.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  # Netlify's deploy status is reported to GitHub as a commit status, which the
-  # portal's merge guard reads. Without this the guard sees no status and holds
-  # the merge, which is safe but means nothing ever ships automatically.
   statuses: write
+  pull-requests: write
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install
-        # `npm ci` rather than `npm install`: the lockfile is what was tested,
-        # and a deploy that silently resolves a different dependency tree is a
-        # deploy of something nobody reviewed.
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy preview
-        if: github.event_name == 'pull_request'
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          # A plaintext repository *variable*, not a secret — a Netlify site id
-          # appears in deploy URLs and build logs. The portal writes it at
-          # scaffold time, which is why no crypto is needed to provision a repo.
-          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
-        run: |
-          npx --yes netlify-cli@17 deploy \
-            --dir=dist \
-            --alias="pr-${{ github.event.pull_request.number }}" \
-            --message="PR #${{ github.event.pull_request.number }}"
-
-      - name: Deploy production
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
-        run: |
-          npx --yes netlify-cli@17 deploy \
-            --dir=dist \
-            --prod \
-            --message="${{ github.event.head_commit.message }}"
+    uses: cjackmort/mortensenweb/.github/workflows/client-deploy.yml@main
+    secrets: inherit

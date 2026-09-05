@@ -38,7 +38,7 @@ npm run dev --workspace apps/platform
 | | |
 | --- | --- |
 | `npm run dev --workspace apps/platform` | development server |
-| `npm test --workspace apps/platform` | the suite (298 tests) |
+| `npm test --workspace apps/platform` | the suite (332 tests) |
 | `npm run lint --workspace apps/platform` | ESLint, flat config |
 | `npm run typecheck --workspace apps/platform` | `tsc --noEmit` |
 | `npm run db:generate --workspace apps/platform` | migration from a schema change |
@@ -153,15 +153,18 @@ by a real person:
 - No payment has been taken through Square, in sandbox or production
 - **Nothing above has been exercised through the UI by a person** — the suite
   covers the logic, but no one has clicked cancel or watched an escalation
-- Client repositories own their copy of `claude.yml`, so an existing client
-  does not get new agent instructions until they are copied across
+- Client repositories scaffolded before the reusable workflows still carry a
+  full copy of `claude.yml` and `deploy.yml`; each needs its two files
+  replaced with the callers in `templates/client-repo/.github/workflows/`
+  (one small pull request per repository) to get the shared prompt, skills,
+  verification and screenshots
 - The one-open-request rule is enforced in application code; a genuine
   double-submit race needs a partial unique index on `(site_id) WHERE status
   NOT IN (settled)`, not added because the migration fails if production
   already holds two open requests on one site
-- Analytics shows pages, referrers, devices and countries. Umami also exposes
-  `type=event`, so click tracking is possible once sites emit
-  `data-umami-event` attributes — nothing does yet
+- Click tracking (`data-umami-event`) is read by the dashboard and the
+  template tags its phone and email links; sites built before that need the
+  attributes added
 - Plan override and billing render inside the per-site loop, though both are
   client-level
 - No health endpoint; production health is inferred from status codes
@@ -170,4 +173,5 @@ by a real person:
   repository connected in place uses Netlify's Git integration. Now that a
   Netlify `installation_id` is known to be readable and reusable, these could
   collapse into one.
-- One moderate Dependabot advisory, unexamined
+- The moderate npm advisories are all `esbuild` under `drizzle-kit`, a
+  dev-only tool that never ships; clear when a fixed `drizzle-kit` lands
