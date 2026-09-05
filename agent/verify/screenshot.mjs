@@ -28,8 +28,10 @@
  * --with-deps chromium`); resolved from the global root so the client
  * repository carries no dependency. Serves dist/ itself on a local port.
  *
- * Deliberately generous with time: fonts load, entrance animations finish.
- * A screenshot of a page mid-fade tells the client nothing.
+ * Deliberately generous with time: fonts load, preloaders clear, entrance
+ * animations finish. Every shot waits for a floor and then for two identical
+ * frames (see `settle`). A screenshot of a page mid-fade — or of its splash
+ * screen — tells the client nothing.
  */
 
 import { createServer } from "node:http";
@@ -115,6 +117,61 @@ mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch();
 const shots = [];
+
+/**
+ * Wait until the page stops changing, then shoot.
+ *
+ * `networkidle` plus a fixed 800ms pause was not enough, and it failed the bad
+ * way: intermittently. scottmortensenfinearts.com fires `load` at 0.6s but does
+ * not hide its `#preloader` until 2.5s, so networkidle resolved around 1.2s and
+ * the pause landed at ~2.0s — half a second short. The tile came out as a
+ * picture of the splash screen often enough to matter, for a site that is
+ * perfectly healthy. That is the same class of bug the tile replaced iframes
+ * to avoid: the grid reporting a problem that does not exist.
+ *
+ * Two conditions, and both are needed:
+ *
+ *   - A floor. Frame comparison alone is not enough, because a *static* splash
+ *     screen is itself two identical frames — the check would happily conclude
+ *     the page had settled and photograph the splash. The floor is set past the
+ *     preloaders actually seen in the wild rather than derived from anything.
+ *   - Then stability: two consecutive byte-identical frames. This is what
+ *     catches whatever the floor did not — entrance animations, late fonts,
+ *     lazily loaded images — without knowing anything about the markup.
+ *
+ * A site with a permanently animating background never goes stable, so this is
+ * capped and returns anyway. Reaching the cap is expected, not a failure, and
+ * the screenshot is still taken. The JPEG is only ever compared, never written.
+ */
+async function settle(tab, cap) {
+  const start = Date.now();
+  const deadline = start + cap;
+  let previous = null;
+
+  while (Date.now() < deadline) {
+    let frame;
+    try {
+      frame = await tab.screenshot({ type: "jpeg", quality: 40 });
+    } catch {
+      return; // Let the real screenshot below report the failure properly.
+    }
+    const steady = previous !== null && frame.equals(previous);
+    if (steady && Date.now() - start >= SETTLE_FLOOR_MS) return;
+    previous = frame;
+    await tab.waitForTimeout(350);
+  }
+}
+
+/**
+ * Never shoot before this, however still the page looks. The longest preloader
+ * measured on a live client site was 2.5s; this clears it with room to spare.
+ */
+const SETTLE_FLOOR_MS = 3500;
+/** The tile is what the portal grid and the public work page both show. */
+const TILE_SETTLE_MS = 9000;
+/** Diff shots run per page and per width, so they get a tighter budget. */
+const PAGE_SETTLE_MS = 6000;
+
 const pages = tileOnly ? [] : changedPages();
 if (pages.length > 0) {
   console.log(`Screenshotting ${pages.length} page(s): ${pages.join(", ")}`);
@@ -131,7 +188,7 @@ for (const page of pages) {
     const tab = await context.newPage();
     try {
       await tab.goto(`http://127.0.0.1:${port}${page}`, { waitUntil: "networkidle", timeout: 30_000 });
-      await tab.waitForTimeout(800);
+      await settle(tab, PAGE_SETTLE_MS);
       const slug = page === "/" ? "home" : page.replace(/^\/|\/$/g, "").replace(/\.html$/, "").replace(/[^a-z0-9]+/gi, "-");
       const file = `${slug}-${width}.png`;
       await tab.screenshot({ path: join(outDir, file), fullPage: true });
@@ -158,7 +215,7 @@ let tile = null;
   const tab = await context.newPage();
   try {
     await tab.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 30_000 });
-    await tab.waitForTimeout(800);
+    await settle(tab, TILE_SETTLE_MS);
     await tab.screenshot({ path: join(outDir, TILE.file), fullPage: false });
     tile = `/__preview/${TILE.file}`;
     console.log(`  ${TILE.file} (portal tile)`);

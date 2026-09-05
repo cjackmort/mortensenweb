@@ -41,6 +41,13 @@ export type Work = {
   image: string;
   /** Describes the image for anyone who cannot see it — not the project. */
   imageAlt: string;
+  /**
+   * Refresh `image` from the site's own `/__preview/home-tile.png` at build
+   * time. True for anything built by our pipeline, which publishes that tile
+   * on every deploy; the committed image stays as the fallback and is what
+   * ships until the site actually serves one. See scripts/sync-tiles.ts.
+   */
+  autoTile?: boolean;
   year: number;
 };
 
@@ -58,6 +65,7 @@ export const WORK: Work[] = [
     image: "/work/scott-mortensen-fine-arts.webp",
     imageAlt:
       "A bronze mountain lion sculpture by Scott Mortensen, shown mid-stride.",
+    autoTile: true,
     year: 2026,
   },
   {
@@ -72,6 +80,7 @@ export const WORK: Work[] = [
     tags: ["Gallery site", "Photography-led", "Commission enquiries"],
     image: "/work/mitch-bedke-art.webp",
     imageAlt: "A fused glass panel by Mitch Bedke, lit from behind.",
+    autoTile: true,
     year: 2026,
   },
   // Ours, and last on purpose. It goes in as `internal` because it is not a
