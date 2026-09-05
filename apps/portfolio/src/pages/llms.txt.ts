@@ -18,7 +18,7 @@ export const GET: APIRoute = () =>
       `> ${SITE.description}`,
       "",
       "## Key pages",
-      `- [Work](${SITE.url}/work/): live client sites, each one linked`,
+      `- [Work](${SITE.url}/work/): live client sites and in-house work, each one linked and labelled`,
       `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request — and what is not included (online stores, advertising, social media)`,
       `- [Pricing](${SITE.url}/pricing/): both build prices, the care plans and a comparison table`,
       `- [Contact](${SITE.url}/contact/): enquiry form; every enquiry is answered`,

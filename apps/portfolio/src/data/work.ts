@@ -74,6 +74,24 @@ export const WORK: Work[] = [
     imageAlt: "A fused glass panel by Mitch Bedke, lit from behind.",
     year: 2026,
   },
+  // Ours, and last on purpose. It goes in as `internal` because it is not a
+  // client engagement, and it sits below the client work because this page
+  // exists to show what we do for other people.
+  {
+    slug: "jack-mortensen-portfolio",
+    name: "Jack Mortensen Portfolio",
+    sector: "Mechanical engineering portfolio",
+    description:
+      "A personal portfolio for a mechanical engineering student at the University of Utah. The featured project loads its CAD assembly into the page as a 3D model you can drag to rotate, so a reviewer turns the machine around instead of reading a photograph of it.",
+    domain: "jackmortensenportfolio.netlify.app",
+    href: "https://jackmortensenportfolio.netlify.app",
+    status: "internal",
+    tags: ["Portfolio", "3D in the browser", "Single page"],
+    image: "/work/jack-mortensen-portfolio.webp",
+    imageAlt:
+      "A CAD render of a mecanum-wheel robot with a tall telescoping lift mast.",
+    year: 2026,
+  },
 ];
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {
