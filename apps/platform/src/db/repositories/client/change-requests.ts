@@ -297,3 +297,123 @@ export async function listSites(db: Database, ctx: TenantContext) {
     .where(eq(sites.organizationId, ctx.organizationId))
     .orderBy(sites.name);
 }
+
+// ---------------------------------------------------------------------------
+// Timeline
+// ---------------------------------------------------------------------------
+
+export interface TimelineEntry {
+  requestPublicId: string;
+  kind: string;
+  body: string | null;
+  actorType: string;
+  createdAt: Date;
+}
+
+/**
+ * What happened to each request, in the client's words.
+ *
+ * Only `client_visible` events, and only for requests the tenant owns — the
+ * join to `change_requests` filtered by `ctx.organizationId` is the scope,
+ * not the ids the caller passes. Fetched for a page of requests at once so
+ * the list does not become one query per request.
+ */
+export async function listRequestTimelines(
+  db: Database,
+  ctx: TenantContext,
+  requestPublicIds: string[],
+): Promise<Map<string, TimelineEntry[]>> {
+  const grouped = new Map<string, TimelineEntry[]>();
+  if (requestPublicIds.length === 0) return grouped;
+
+  const rows = await db
+    .select({
+      requestPublicId: changeRequests.publicId,
+      kind: requestEvents.kind,
+      body: requestEvents.body,
+      actorType: requestEvents.actorType,
+      createdAt: requestEvents.createdAt,
+    })
+    .from(requestEvents)
+    .innerJoin(changeRequests, eq(changeRequests.id, requestEvents.requestId))
+    .where(
+      and(
+        eq(changeRequests.organizationId, ctx.organizationId),
+        inArray(changeRequests.publicId, requestPublicIds),
+        eq(requestEvents.visibility, "client_visible"),
+      ),
+    )
+    .orderBy(requestEvents.createdAt);
+
+  for (const row of rows) {
+    const list = grouped.get(row.requestPublicId) ?? [];
+    list.push(row);
+    grouped.set(row.requestPublicId, list);
+  }
+  return grouped;
+}
+
+/**
+ * Something the client wants to add to a request that is already in flight.
+ *
+ * "I forgot to mention the price is $120" used to have no home: the form was
+ * locked by the one-open-request rule and the preview note only exists once a
+ * preview does. A note is recorded on the timeline, and where the request has
+ * an issue open in the client's repository it is posted there too — inside a
+ * quoted block, as data for whoever picks it up next, never as instruction —
+ * so the operator sees it in the same place as the original request.
+ *
+ * It does not interrupt a run in progress: the agent reads the issue once at
+ * the start. The note is there for the next pass — an "ask for changes"
+ * round, a re-dispatch, or the operator — which is exactly when it is needed.
+ */
+export async function addRequestNote(
+  db: Database,
+  ctx: TenantContext,
+  requestPublicId: string,
+  note: string,
+): Promise<{ ok: true; postedToIssue: boolean } | { ok: false; message: string }> {
+  assertMutable(ctx);
+
+  const trimmed = note.trim();
+  if (trimmed.length < 2) {
+    return { ok: false, message: "Write a little more so we know what you mean." };
+  }
+  if (trimmed.length > 2000) {
+    return { ok: false, message: "That's a bit long — please keep a note under 2,000 characters." };
+  }
+
+  const rows = await db
+    .select({
+      id: changeRequests.id,
+      status: changeRequests.status,
+    })
+    .from(changeRequests)
+    .where(
+      and(
+        eq(changeRequests.organizationId, ctx.organizationId),
+        eq(changeRequests.publicId, requestPublicId),
+      ),
+    )
+    .limit(1);
+  const request = rows[0];
+  if (!request) throw new NotFoundError();
+
+  if (!(BLOCKING_STATUSES as readonly string[]).includes(request.status)) {
+    return {
+      ok: false,
+      message: "This request is finished — send anything new as a fresh request.",
+    };
+  }
+
+  await db.insert(requestEvents).values({
+    requestId: request.id,
+    actorType: "client",
+    actorUserId: ctx.userId,
+    kind: "client_note",
+    body: trimmed,
+    visibility: "client_visible",
+  });
+
+  return { ok: true, postedToIssue: false };
+}

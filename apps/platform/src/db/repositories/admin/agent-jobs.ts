@@ -11,6 +11,8 @@ import {
   sites,
 } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { notifyClientOfRequest } from "@/lib/notify/request";
+import { refundChange } from "@/db/repositories/client/entitlements";
 import {
   createIssue,
   type Repo,
@@ -545,8 +547,13 @@ export async function expireStalledJobs(db: Database): Promise<number> {
   const now = new Date();
 
   const stalled = await db
-    .select({ id: agentJobs.id, requestId: agentJobs.requestId })
+    .select({
+      id: agentJobs.id,
+      requestId: agentJobs.requestId,
+      allowanceId: changeRequests.allowanceId,
+    })
     .from(agentJobs)
+    .leftJoin(changeRequests, eq(changeRequests.id, agentJobs.requestId))
     .where(
       and(
         sql`${agentJobs.status} IN ('queued', 'dispatched', 'running')`,
@@ -578,6 +585,19 @@ export async function expireStalledJobs(db: Database): Promise<number> {
       body: "Automation did not finish in time; this needs a look.",
       visibility: "internal",
     });
+
+    // A failure on our side is not a change the client received, so it is not
+    // one they used. Cancelling already refunds by policy; a timeout is the
+    // same situation without the client having asked for it.
+    if (job.allowanceId) {
+      await refundChange(db, job.allowanceId);
+      await db
+        .update(changeRequests)
+        .set({ allowanceId: null })
+        .where(eq(changeRequests.id, job.requestId));
+    }
+
+    await notifyClientOfRequest(db, job.requestId, "snag");
   }
 
   return stalled.length;

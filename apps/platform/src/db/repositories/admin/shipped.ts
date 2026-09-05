@@ -8,6 +8,7 @@ import {
   sites,
 } from "@/db/schema";
 import { findDeployForCommit, verifyUrlServes } from "@/lib/netlify/api";
+import { notifyClientOfRequest } from "@/lib/notify/request";
 
 /**
  * Following a merged change to the point it is actually on the website.
@@ -174,6 +175,10 @@ export async function advanceShippedChanges(
         body: "We've checked your website and the change is there.",
         visibility: "client_visible",
       });
+
+      // Only now, when the site has actually been fetched and served the
+      // change — never on the merge, which is a promise rather than a fact.
+      await notifyClientOfRequest(db, row.requestId, "change_live");
 
       markedVerified.push(row.requestPublicId);
     } catch (error) {

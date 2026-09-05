@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@/auth";
+import { nudgeScheduler } from "@/lib/scheduler/nudge";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import {
@@ -114,6 +115,11 @@ export async function approveAndApply(
     // less alarming.
     return { ok: true, live: false, message: outcome.message };
   }
+
+  // The merge is done; confirming the deploy and the live site is the
+  // scheduler's job. Nudging it now turns "confirmed live" from a
+  // five-minute wait into a short one.
+  nudgeScheduler("change approved");
 
   return { ok: true, live: true, message: outcome.message };
 }

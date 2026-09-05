@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import {
   listChangeRequests,
+  listRequestTimelines,
   listSites,
 } from "@/db/repositories/client/change-requests";
 import {
@@ -12,11 +13,13 @@ import {
 } from "@/db/repositories/client/entitlements";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { RequestProgress } from "@/components/request-progress";
+import { RequestTimeline } from "@/components/request-timeline";
 import { isCancellable, stageIndex } from "@/lib/requests/status";
 import { formatDate } from "@/lib/time";
 import { RequestForm } from "./request-form";
 import { PreviewPanel } from "./preview-panel";
 import { CancelRequestButton } from "./cancel-button";
+import { NoteForm } from "./note-form";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +64,12 @@ export default async function ClientRequestsPage() {
     ],
   );
 
+  const timelines = await listRequestTimelines(
+    db,
+    ctx,
+    requests.map((r) => r.publicId),
+  );
+
   // No client record at all is treated as unlocked rather than locked. That
   // case is a gap on our side, and the proportionate response to our own gap
   // is not to block someone out of the thing they are paying for.
@@ -85,6 +94,13 @@ export default async function ClientRequestsPage() {
             requestPublicId: preview.requestPublicId,
             requestTitle: preview.requestTitle,
             previewUrl: preview.previewUrl,
+            // What was changed, in the agent's words, beside the buttons
+            // that decide on it — so a client on a phone can often approve
+            // without hunting for the change in the preview.
+            summary:
+              timelines
+                .get(preview.requestPublicId)
+                ?.find((e) => e.kind === "agent_summary")?.body ?? null,
           }))}
         />
 
@@ -175,15 +191,22 @@ export default async function ClientRequestsPage() {
                   </p>
                 )}
 
+                <RequestTimeline
+                  entries={timelines.get(request.publicId) ?? []}
+                />
+
                 {/* Offered only where the server would honour it — see
                     `isCancellable`. A change that has already merged is past
                     the point of calling off, and showing the button anyway
                     would be an invitation to a refusal. */}
                 {isCancellable(request.status) && (
-                  <CancelRequestButton
-                    requestPublicId={request.publicId}
-                    hasPreview={Boolean(request.previewUrl)}
-                  />
+                  <>
+                    <NoteForm requestPublicId={request.publicId} />
+                    <CancelRequestButton
+                      requestPublicId={request.publicId}
+                      hasPreview={Boolean(request.previewUrl)}
+                    />
+                  </>
                 )}
               </div>
             ))

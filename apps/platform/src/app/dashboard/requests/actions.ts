@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@/auth";
+import { nudgeScheduler } from "@/lib/scheduler/nudge";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import {
+  addRequestNote,
   createChangeRequest,
   findOpenRequestForSite,
   getChangeRequestOrThrow,
@@ -228,9 +230,10 @@ export async function submitChangeRequest(
   // request "failed" had in fact had it saved — they just could not tell, so
   // they typed it again.
   //
-  // The scheduled job picks up `submitted` requests instead, within five
-  // minutes. Nothing downstream cares about the delay: a preview has to be
-  // built and then reviewed before the client sees it either way.
+  // The scheduled job picks up `submitted` requests instead — and is nudged
+  // to run right now, after this response has gone back, so the usual wait
+  // is seconds rather than the tick. See `lib/scheduler/nudge.ts`.
+  nudgeScheduler("request submitted");
 
   revalidatePath("/dashboard/requests");
 
@@ -299,4 +302,46 @@ export async function cancelRequest(
   revalidatePath("/dashboard");
 
   return { ok: outcome.ok, message: outcome.message };
+}
+
+export type NoteResult = { ok: boolean; message: string };
+
+/**
+ * Add a note to a request that is already in progress.
+ *
+ * Recorded on the request's timeline where the client can see it, and read
+ * by whoever handles the next pass on the change. Never a new request, never
+ * a charge.
+ */
+export async function addNote(
+  _previous: NoteResult | null,
+  formData: FormData,
+): Promise<NoteResult> {
+  const user = await currentUser();
+  if (!user || !user.organizationId) {
+    return { ok: false, message: "Please sign in again." };
+  }
+
+  const requestPublicId = String(formData.get("requestPublicId") ?? "").trim();
+  const note = String(formData.get("note") ?? "");
+  if (!requestPublicId) return { ok: false, message: "No request was specified." };
+
+  const ctx = tenantContextFrom(user, user.organizationId);
+  const db = await getDb();
+
+  try {
+    const outcome = await addRequestNote(db, ctx, requestPublicId, note);
+    if (!outcome.ok) return { ok: false, message: outcome.message };
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "We couldn't find that request." };
+    }
+    throw error;
+  }
+
+  revalidatePath("/dashboard/requests");
+  return {
+    ok: true,
+    message: "Added. We'll see this alongside your request.",
+  };
 }

@@ -32,6 +32,8 @@ export interface PreviewItem {
   requestPublicId: string;
   requestTitle: string;
   previewUrl: string;
+  /** The agent's description of the change, for a non-technical reader. */
+  summary?: string | null;
 }
 
 function PreviewCard({ item }: { item: PreviewItem }) {
@@ -74,6 +76,13 @@ function PreviewCard({ item }: { item: PreviewItem }) {
         We&rsquo;ve made this change on a preview of your site. Take a look, and
         if you&rsquo;re happy we&rsquo;ll put it live.
       </p>
+
+      {item.summary && (
+        <div className="timeline-summary">
+          <p className="timeline-summary-label">What we changed</p>
+          <p className="timeline-summary-body">{item.summary}</p>
+        </div>
+      )}
 
       <p>
         <a
