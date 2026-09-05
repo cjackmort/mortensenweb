@@ -17,6 +17,7 @@ import {
   environmentKindEnum,
   previewUrlStyleEnum,
   readinessStatusEnum,
+  sitePreviewModeEnum,
   siteStatusEnum,
 } from "./enums";
 
@@ -57,6 +58,15 @@ export const sites = pgTable(
     netlifySiteName: text("netlify_site_name"),
     /** Where the site actually serves once live. Set at launch, not at setup. */
     productionUrl: text("production_url"),
+
+    /**
+     * How the client grid draws this site's thumbnail. Defaults to the shot
+     * the deploy publishes, which works without the site's cooperation; see
+     * `sitePreviewModeEnum` for when `live` earns the exception.
+     */
+    previewMode: sitePreviewModeEnum("preview_mode")
+      .notNull()
+      .default("screenshot"),
 
     /**
      * The DNS records the client has to create, exactly as sent to them.

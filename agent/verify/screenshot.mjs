@@ -3,12 +3,26 @@
  * Screenshots of the pages a change touched, written into the build so they
  * deploy with the preview.
  *
- *   node screenshot.mjs dist [--base <sha>] [--all]
+ *   node screenshot.mjs dist [--base <sha>] [--all] [--tile-only]
  *
  * Output: dist/__preview/<page>-<width>.png for the home page and every HTML
  * page changed since `--base` (default: origin/main), at 390px and 1280px,
  * plus dist/__preview/index.json listing them. The portal shows the 390px
  * home shot beside the approve button; the pull request comment lists all.
+ *
+ * Always also writes dist/__preview/home-tile.png: the home page at 1280x720,
+ * viewport only, which is the thumbnail the portal's client grid shows. It is
+ * a separate shot rather than a reuse of home-1280.png because that one is
+ * `fullPage` — a whole scrolling page squeezed into a 16:9 tile is a smear.
+ * `--tile-only` produces just this one and skips the diff shots, which is what
+ * a production deploy wants: no pull request to illustrate, but a thumbnail
+ * that should refresh with every release.
+ *
+ * The tile is why a client site never needs to allow framing. The portal used
+ * to iframe each live home page, which any site sending X-Frame-Options or
+ * `frame-ancestors` refuses — a blank tile for a perfectly healthy site. A
+ * picture taken at deploy time is as current as the deploy, costs the operator
+ * nothing to load, and cannot be blocked.
  *
  * Requires Playwright (`npm i -g playwright@1.50.1 && playwright install
  * --with-deps chromium`); resolved from the global root so the client
@@ -28,6 +42,10 @@ const args = process.argv.slice(2);
 const root = resolve(args.find((a) => !a.startsWith("--")) ?? "dist");
 const base = args.includes("--base") ? args[args.indexOf("--base") + 1] : "origin/main";
 const all = args.includes("--all");
+const tileOnly = args.includes("--tile-only");
+
+/** The portal's client grid is a 16:9 tile; shoot the fold at that shape. */
+const TILE = { width: 1280, height: 720, file: "home-tile.png" };
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -97,8 +115,10 @@ mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch();
 const shots = [];
-const pages = changedPages();
-console.log(`Screenshotting ${pages.length} page(s): ${pages.join(", ")}`);
+const pages = tileOnly ? [] : changedPages();
+if (pages.length > 0) {
+  console.log(`Screenshotting ${pages.length} page(s): ${pages.join(", ")}`);
+}
 
 for (const page of pages) {
   for (const width of [390, 1280]) {
@@ -125,8 +145,37 @@ for (const page of pages) {
   }
 }
 
+// The portal thumbnail. Viewport only — what a desktop visitor sees before
+// scrolling — so the tile reads as the top of the site rather than as the
+// whole page shrunk to illegibility.
+let tile = null;
+{
+  const context = await browser.newContext({
+    viewport: { width: TILE.width, height: TILE.height },
+    deviceScaleFactor: 1,
+    reducedMotion: "reduce",
+  });
+  const tab = await context.newPage();
+  try {
+    await tab.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 30_000 });
+    await tab.waitForTimeout(800);
+    await tab.screenshot({ path: join(outDir, TILE.file), fullPage: false });
+    tile = `/__preview/${TILE.file}`;
+    console.log(`  ${TILE.file} (portal tile)`);
+  } catch (error) {
+    // Not fatal: the portal falls back to the client's initial, and failing a
+    // deploy over a thumbnail would be a poor trade.
+    console.warn(`  could not screenshot the portal tile: ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
 await browser.close();
 server.close();
 
-writeFileSync(join(outDir, "index.json"), JSON.stringify({ generatedAt: new Date().toISOString(), shots }, null, 2));
-console.log(`Wrote ${shots.length} screenshot(s) to ${relative(process.cwd(), outDir)}/`);
+writeFileSync(
+  join(outDir, "index.json"),
+  JSON.stringify({ generatedAt: new Date().toISOString(), tile, shots }, null, 2),
+);
+console.log(`Wrote ${shots.length + (tile ? 1 : 0)} screenshot(s) to ${relative(process.cwd(), outDir)}/`);

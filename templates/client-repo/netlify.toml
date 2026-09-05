@@ -1,0 +1,53 @@
+# =============================================================================
+# TEMPLATE — copied into every client repository at scaffold time.
+#
+# Read by `netlify deploy --dir=dist` in the shared deploy workflow. Headers
+# set here apply to the deployed site; there is no other place to set them,
+# because this is a directory of HTML with no server in front of it.
+#
+# This file is in the merge guard's never-auto-merge list. A change to it
+# waits for a person, every time — which is the point, since it is the file
+# that decides who may embed this site.
+# =============================================================================
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    # Who may put this site in a frame: the site itself, and the portal.
+    #
+    # The portal's client grid can draw a site's thumbnail two ways — a
+    # screenshot taken at deploy time, or an iframe of the live page. The
+    # screenshot is the default and needs nothing from this file. The iframe
+    # is for sites whose home page *moves*, where a still picture is a
+    # misleading likeness of the site, and it is only possible if the site
+    # says the portal may frame it. That permission is here, ahead of need,
+    # so an animated site never has to negotiate for it later.
+    #
+    # Naming the portal is not a weakening. The alternative that "looks"
+    # safer is no header at all, which lets *anyone* frame the site; this
+    # refuses every origin except two we control. Sites that shipped before
+    # this template did the opposite — a blanket `X-Frame-Options: DENY` or
+    # `SAMEORIGIN` — and the visible result was an empty tile in the portal
+    # for a perfectly healthy site.
+    #
+    # Deliberately no `X-Frame-Options` alongside it. That header has no
+    # allowlist form — only DENY and SAMEORIGIN — so it cannot express this
+    # and would only contradict it in browsers that read both.
+    Content-Security-Policy = "frame-ancestors 'self' https://portal.mortensenweb.com"
+
+# Content-hashed assets can be cached indefinitely; HTML never can, or a
+# client approves a change and still sees the old page.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

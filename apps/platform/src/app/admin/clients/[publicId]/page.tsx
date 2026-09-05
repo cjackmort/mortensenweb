@@ -22,7 +22,7 @@ import {
 import { formatCurrency } from "@/lib/payments/venmo";
 import { listBriefs } from "@/db/repositories/admin/briefs";
 import { ActivateForm, ReissueForm } from "./credential-forms";
-import { AddSiteForm } from "./site-forms";
+import { AddSiteForm, PreviewModeForm } from "./site-forms";
 import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { BriefForm, DispatchBriefForm } from "./brief-forms";
 import { LaunchPanel } from "./launch-forms";
@@ -301,6 +301,15 @@ export default async function ClientDetailPage({
                         }
                       : null
                   }
+                />
+              </div>
+
+              <div style={{ marginTop: "1.5rem" }}>
+                <h3 style={{ fontSize: "0.95rem" }}>Grid thumbnail</h3>
+                <PreviewModeForm
+                  clientPublicId={client.publicId}
+                  sitePublicId={site.publicId}
+                  currentMode={site.previewMode ?? "screenshot"}
                 />
               </div>
 

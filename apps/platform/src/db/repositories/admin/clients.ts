@@ -89,6 +89,7 @@ export async function listClientsWithPrimarySite(_ctx: AdminContext, db: Databas
       primaryDomain: sites.primaryDomain,
       productionUrl: sites.productionUrl,
       netlifySiteName: sites.netlifySiteName,
+      previewMode: sites.previewMode,
       createdAt: sites.createdAt,
     })
     .from(sites)

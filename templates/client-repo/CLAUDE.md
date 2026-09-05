@@ -68,10 +68,27 @@ Tag every photo the site shows, every phone and email link, and every form
 submit. Do not tag navigation: knowing someone clicked "About" is noise, and a
 long list of nothing teaches the client to stop reading the panel.
 
+## The portal's thumbnail of this site
+
+The operator sees every client site as a tile in one grid. That tile is a
+screenshot of this site's home page, taken by the deploy workflow on every push
+to `main` and published at `/__preview/home-tile.png`. Nothing is asked of you
+to keep it working — it happens in CI — but two things follow from it:
+
+- **The home page above the fold is the picture of this site.** It is what the
+  operator scans to notice something has broken. Worth remembering when a
+  change moves something out of that first screen.
+- **If you make the home page animate, the still picture stops being honest.**
+  That case has its own procedure, including a header this site must send and a
+  setting only the operator can change. Read the animation skill — the section
+  "If the home page moves, the portal's thumbnail has to move with it" — before
+  shipping an animated background.
+
 ## What never to touch
 
 - `.github/` and `.claude/` — the workflows and the skills you were given
 - `netlify.toml`, `package.json`, `package-lock.json`, any deploy config
+  (`netlify.toml` carries the framing header the portal tile depends on)
 - Anything under an environment file
 - Dependencies: do not add, remove, or upgrade
 
