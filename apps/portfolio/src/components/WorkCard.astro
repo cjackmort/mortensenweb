@@ -1,9 +1,26 @@
 ---
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { Work } from "../data/work";
 import { STATUS_LABEL } from "../data/work";
 interface Props { work: Work; index: number }
 const { work, index } = Astro.props;
-const small = work.image.replace(/\.webp$/, "-640.webp");
+
+/*
+ * Prefer the screenshot scripts/sync-tiles.ts pulled from the site itself, and
+ * fall back to the committed image when there is not one — the case for any
+ * site not yet publishing `/__preview/home-tile.png`, and for entries that
+ * never opted in. This tests for the file rather than trusting the flag,
+ * because the script is allowed to fail: `autoTile` records that we try, not
+ * that it worked.
+ */
+const auto = `/work/${work.slug}-auto.webp`;
+const hasAuto =
+  work.autoTile === true &&
+  existsSync(path.join(process.cwd(), "public", `work/${work.slug}-auto.webp`));
+
+const image = hasAuto ? auto : work.image;
+const small = image.replace(/\.webp$/, "-640.webp");
 ---
 
 <a class="work reveal" href={work.href} target="_blank" rel="noopener noreferrer" data-umami-event={`work: ${work.name}`}>
@@ -13,8 +30,8 @@ const small = work.image.replace(/\.webp$/, "-640.webp");
   </div>
   <figure>
     <img
-      src={work.image}
-      srcset={`${small} 640w, ${work.image} 1120w`}
+      src={image}
+      srcset={`${small} 640w, ${image} 1120w`}
       sizes="(max-width: 40rem) 100vw, (max-width: 70rem) 50vw, 33vw"
       width="1120"
       height="700"

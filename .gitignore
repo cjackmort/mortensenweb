@@ -87,3 +87,8 @@ infra/umami/.env
 # them are checked in, so the directory itself cannot be ignored wholesale.
 apps/portfolio/.astro/data-store.json
 apps/portfolio/.astro/settings.json
+
+# Work-card screenshots pulled from each site at build time by
+# apps/portfolio/scripts/sync-tiles.ts. Generated per build; the committed
+# image beside each one is the fallback and is what belongs in git.
+apps/portfolio/public/work/*-auto.webp
