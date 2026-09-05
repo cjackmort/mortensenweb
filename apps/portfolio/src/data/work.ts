@@ -89,7 +89,7 @@ export const WORK: Work[] = [
     tags: ["Portfolio", "3D in the browser", "Single page"],
     image: "/work/jack-mortensen-portfolio.webp",
     imageAlt:
-      "A CAD render of a mecanum-wheel robot with a tall telescoping lift mast.",
+      "The portfolio home page: the name in large white type over a dark, marbled fluid background.",
     year: 2026,
   },
 ];
