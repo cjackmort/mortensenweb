@@ -21,6 +21,16 @@
 -- organization can hold more than one site in general, so "insert this site
 -- only if this org doesn't already have one" has to be spelled out with
 -- WHERE NOT EXISTS rather than relied on as a constraint.
+--
+-- The repository_connections insert additionally skips if `cjackmort/
+-- mortensenweb` is already connected to *any* site -- `(owner, name)` is
+-- globally unique, one repository can only ever back one site, and this
+-- migration has no way to know from here whether an existing connection is
+-- a real, intentional one worth leaving alone or stray test data worth
+-- reassigning. Either way, guessing wrong and stealing someone else's
+-- connection is worse than leaving the new site without one -- that just
+-- shows "not connected," which is honest and easily fixed by hand through
+-- the same repository-connect panel every client's page already has.
 
 INSERT INTO "clients" ("public_id", "organization_id", "onboarding_status", "is_internal")
 SELECT
@@ -60,4 +70,8 @@ WHERE "o"."kind" = 'agency'
   AND "s"."primary_domain" = 'portal.mortensenweb.com'
   AND NOT EXISTS (
     SELECT 1 FROM "repository_connections" WHERE "site_id" = "s"."id"
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM "repository_connections"
+    WHERE "owner" = 'cjackmort' AND "name" = 'mortensenweb'
   );
