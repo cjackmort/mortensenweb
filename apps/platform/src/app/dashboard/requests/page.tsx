@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import {
@@ -14,6 +13,7 @@ import {
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { RequestProgress } from "@/components/request-progress";
 import { isCancellable, stageIndex } from "@/lib/requests/status";
+import { formatDate } from "@/lib/time";
 import { RequestForm } from "./request-form";
 import { PreviewPanel } from "./preview-panel";
 import { CancelRequestButton } from "./cancel-button";
@@ -34,7 +34,7 @@ export default async function ClientRequestsPage() {
 
   if (!user.organizationId) {
     return (
-      <AppShell user={user}>
+      <>
         <main className="shell">
           <div className="masthead">
             <h1>Requests</h1>
@@ -45,7 +45,7 @@ export default async function ClientRequestsPage() {
             it up.
           </p>
         </main>
-      </AppShell>
+      </>
     );
   }
 
@@ -67,7 +67,7 @@ export default async function ClientRequestsPage() {
   const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Requests</h1>
@@ -136,10 +136,7 @@ export default async function ClientRequestsPage() {
                       </>
                     )}
                     sent{" "}
-                    {request.createdAt.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {formatDate(request.createdAt)}
                   </span>
                 </div>
                 <RequestProgress
@@ -193,6 +190,6 @@ export default async function ClientRequestsPage() {
           )}
         </section>
       </main>
-    </AppShell>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { getDb } from "@/db/client";
@@ -123,8 +124,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  *
  * Re-validates the token's claims against the database, so a disabled account
  * or a bumped `sessionEpoch` stops working immediately.
+ *
+ * Wrapped in React's `cache` so that within one request — the layout that
+ * draws the shell and the page that renders inside it — the database is read
+ * once, not once per caller. The cache is per request, so revocation is still
+ * immediate on the next one.
  */
-export async function currentUser() {
+export const currentUser = cache(async function currentUser() {
   const session = await auth();
   if (!session) return null;
 
@@ -134,4 +140,33 @@ export async function currentUser() {
   };
   const db = await getDb();
   return resolveSession(db, claims);
+});
+
+/**
+ * The token's own claims, with NO database read.
+ *
+ * For routing decisions only — "which page should this cookie be sent to" —
+ * never for rendering data or authorising an action. The page it lands on
+ * calls `currentUser()` and re-validates against the database, so a revoked
+ * session still ends at /login; it simply takes one redirect to get there.
+ *
+ * Why this exists: sign-in used to pass through `/`, which read the user row
+ * to decide between /admin and /dashboard, and then the destination read it
+ * again. Each of those is an HTTPS round trip to Neon in production, paid
+ * before the client has seen anything. A pure router does not need the
+ * database to route.
+ */
+export async function sessionHint() {
+  const session = await auth();
+  if (!session) return null;
+  const claims = session as unknown as {
+    userId?: string;
+    role?: "admin" | "client";
+    mustChangePassword?: boolean;
+  };
+  if (!claims.userId || !claims.role) return null;
+  return {
+    role: claims.role,
+    mustChangePassword: Boolean(claims.mustChangePassword),
+  };
 }

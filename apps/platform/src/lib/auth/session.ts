@@ -46,6 +46,11 @@ export async function resolveSession(
 ): Promise<AuthenticatedUser | null> {
   if (!claims?.userId || typeof claims.sessionEpoch !== "number") return null;
 
+  // One round trip, not two. This runs on every authenticated request, and in
+  // production each query is an HTTPS call to Neon — so the membership lookup
+  // that used to follow the user read was a second network hop paid on every
+  // page, before the page's own queries had even started. A left join costs
+  // the database nothing extra and halves the fixed latency of being signed in.
   const rows = await db
     .select({
       id: users.id,
@@ -55,8 +60,13 @@ export async function resolveSession(
       status: users.status,
       sessionEpoch: users.sessionEpoch,
       mustChangePassword: users.mustChangePassword,
+      organizationId: organizationMemberships.organizationId,
     })
     .from(users)
+    .leftJoin(
+      organizationMemberships,
+      eq(organizationMemberships.userId, users.id),
+    )
     .where(eq(users.id, claims.userId))
     .limit(1);
 
@@ -66,12 +76,6 @@ export async function resolveSession(
   // The revocation check.
   if (user.sessionEpoch !== claims.sessionEpoch) return null;
 
-  const membership = await db
-    .select({ organizationId: organizationMemberships.organizationId })
-    .from(organizationMemberships)
-    .where(eq(organizationMemberships.userId, user.id))
-    .limit(1);
-
   return {
     userId: user.id,
     email: user.email,
@@ -80,7 +84,7 @@ export async function resolveSession(
     status: user.status,
     sessionEpoch: user.sessionEpoch,
     mustChangePassword: user.mustChangePassword,
-    organizationId: membership[0]?.organizationId ?? null,
+    organizationId: user.organizationId ?? null,
   };
 }
 
@@ -116,43 +120,59 @@ export async function authenticate(
 
   const windowStart = new Date(Date.now() - ATTEMPT_WINDOW_MINUTES * 60_000);
 
-  const recentByAccount = await db
-    .select({ count: sql<number>`count(*)::int` })
+  // Sign-in used to be seven database round trips in a row, and in production
+  // every one of them is an HTTPS request to Neon. The queries do not depend on
+  // each other until the password is verified, so they are issued together:
+  // both rate-limit counts come back in one statement (a filtered aggregate
+  // over the same indexed window), and the user row is read alongside them
+  // with its membership joined in. The rate-limit *decision* is still taken
+  // before the password is checked, which is what matters for throttling —
+  // reading the user row a few milliseconds early reveals nothing.
+  const countsQuery = db
+    .select({
+      byAccount: sql<number>`count(*) filter (where ${loginAttempts.emailHash} = ${emailHash})::int`,
+      byIp: ipHash
+        ? sql<number>`count(*) filter (where ${loginAttempts.ipHash} = ${ipHash})::int`
+        : sql<number>`0`,
+    })
     .from(loginAttempts)
     .where(
       and(
-        eq(loginAttempts.emailHash, emailHash),
         eq(loginAttempts.succeeded, false),
         gt(loginAttempts.createdAt, windowStart),
+        ipHash
+          ? or(
+              eq(loginAttempts.emailHash, emailHash),
+              eq(loginAttempts.ipHash, ipHash),
+            )
+          : eq(loginAttempts.emailHash, emailHash),
       ),
     );
 
-  if ((recentByAccount[0]?.count ?? 0) >= MAX_ATTEMPTS_PER_ACCOUNT) {
+  const userQuery = db
+    .select({
+      user: users,
+      organizationId: organizationMemberships.organizationId,
+    })
+    .from(users)
+    .leftJoin(
+      organizationMemberships,
+      eq(organizationMemberships.userId, users.id),
+    )
+    .where(or(eq(users.email, identifier), eq(users.username, identifier)))
+    .limit(1);
+
+  const [counts, rows] = await Promise.all([countsQuery, userQuery]);
+
+  if ((counts[0]?.byAccount ?? 0) >= MAX_ATTEMPTS_PER_ACCOUNT) {
+    return { ok: false, reason: "rate_limited" };
+  }
+  if (ipHash && (counts[0]?.byIp ?? 0) >= MAX_ATTEMPTS_PER_IP) {
     return { ok: false, reason: "rate_limited" };
   }
 
-  if (ipHash) {
-    const recentByIp = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(loginAttempts)
-      .where(
-        and(
-          eq(loginAttempts.ipHash, ipHash),
-          eq(loginAttempts.succeeded, false),
-          gt(loginAttempts.createdAt, windowStart),
-        ),
-      );
-    if ((recentByIp[0]?.count ?? 0) >= MAX_ATTEMPTS_PER_IP) {
-      return { ok: false, reason: "rate_limited" };
-    }
-  }
-
-  const rows = await db
-    .select()
-    .from(users)
-    .where(or(eq(users.email, identifier), eq(users.username, identifier)))
-    .limit(1);
-  const user = rows[0];
+  const user = rows[0]?.user;
+  const organizationId = rows[0]?.organizationId ?? null;
 
   const recordAttempt = async (succeeded: boolean) => {
     await db.insert(loginAttempts).values({ emailHash, ipHash, succeeded });
@@ -175,17 +195,19 @@ export async function authenticate(
 
   if (!valid) {
     const failures = user.failedLoginCount + 1;
-    await db
-      .update(users)
-      .set({
-        failedLoginCount: failures,
-        lockedUntil:
-          failures >= MAX_ATTEMPTS_PER_ACCOUNT
-            ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
-            : user.lockedUntil,
-      })
-      .where(eq(users.id, user.id));
-    await recordAttempt(false);
+    await Promise.all([
+      db
+        .update(users)
+        .set({
+          failedLoginCount: failures,
+          lockedUntil:
+            failures >= MAX_ATTEMPTS_PER_ACCOUNT
+              ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+              : user.lockedUntil,
+        })
+        .where(eq(users.id, user.id)),
+      recordAttempt(false),
+    ]);
     return { ok: false, reason: "invalid" };
   }
 
@@ -205,26 +227,28 @@ export async function authenticate(
     return { ok: false, reason: "expired" };
   }
 
-  // Transparent upgrade: the plaintext is in hand exactly once, here.
-  if (needsRehash(user.passwordHash)) {
-    const upgraded = await hashPassword(password);
-    await db
+  // Transparent upgrade: the plaintext is in hand exactly once, here. Folded
+  // into the same update as the counter reset so a rehash costs no extra hop.
+  const upgradedHash = needsRehash(user.passwordHash)
+    ? await hashPassword(password)
+    : null;
+
+  // The bookkeeping writes are independent of each other and of the answer,
+  // so they go out together rather than one after the other.
+  await Promise.all([
+    db
       .update(users)
-      .set({ passwordHash: upgraded, passwordUpdatedAt: new Date() })
-      .where(eq(users.id, user.id));
-  }
-
-  await db
-    .update(users)
-    .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() })
-    .where(eq(users.id, user.id));
-  await recordAttempt(true);
-
-  const membership = await db
-    .select({ organizationId: organizationMemberships.organizationId })
-    .from(organizationMemberships)
-    .where(eq(organizationMemberships.userId, user.id))
-    .limit(1);
+      .set({
+        failedLoginCount: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+        ...(upgradedHash
+          ? { passwordHash: upgradedHash, passwordUpdatedAt: new Date() }
+          : {}),
+      })
+      .where(eq(users.id, user.id)),
+    recordAttempt(true),
+  ]);
 
   return {
     ok: true,
@@ -236,7 +260,7 @@ export async function authenticate(
       status: user.status,
       sessionEpoch: user.sessionEpoch,
       mustChangePassword: user.mustChangePassword,
-      organizationId: membership[0]?.organizationId ?? null,
+      organizationId,
     },
   };
 }

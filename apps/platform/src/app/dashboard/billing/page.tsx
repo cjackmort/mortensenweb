@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { getBillingOverview } from "@/db/repositories/client/billing";
@@ -34,7 +33,7 @@ export default async function BillingPage() {
 
   if (!user.organizationId) {
     return (
-      <AppShell user={user}>
+      <>
         <main className="shell">
           <div className="masthead">
             <h1>Billing</h1>
@@ -44,7 +43,7 @@ export default async function BillingPage() {
             and we&rsquo;ll finish setting it up.
           </p>
         </main>
-      </AppShell>
+      </>
     );
   }
 
@@ -79,7 +78,7 @@ export default async function BillingPage() {
       : null;
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Billing</h1>
@@ -190,7 +189,7 @@ export default async function BillingPage() {
           )}
         </section>
       </main>
-    </AppShell>
+    </>
   );
 }
 

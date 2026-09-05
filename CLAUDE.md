@@ -81,7 +81,7 @@ that query, so `/login` still returns 200 and the site looks fine. Check with
 `curl -o /dev/null -w "%{http_code}" https://portal.mortensenweb.com/preview/notarealtoken`
 — 404 means the database answered, 500 means it did not.
 
-**Anything unauthenticated must be listed in `middleware.ts`.** Webhook
+**Anything unauthenticated must be listed in `proxy.ts` (Next 16 renamed `middleware.ts`).** Webhook
 receivers, signed attachment links and `/api/cron` all authenticate themselves
 and none can hold a session. An unlisted route is redirected to `/login` and
 answered 307 — so the scheduler ran every five minutes for a day, recorded a

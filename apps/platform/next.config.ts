@@ -26,6 +26,15 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  // The admin overview frames each client's live home page as a thumbnail
+  // (components/site-preview.tsx). Those pages live on the clients' own
+  // domains, so they cannot be enumerated here; `https:` is the narrowest
+  // source that still admits them. Only pages the portal itself embeds are
+  // affected — nothing in this directive lets another site frame the portal,
+  // which `frame-ancestors 'none'` below still forbids.
+  process.env.NODE_ENV === "production"
+    ? "frame-src https:"
+    : "frame-src https: http://localhost:*",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

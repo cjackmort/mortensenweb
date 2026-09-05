@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import {
@@ -81,7 +80,7 @@ export default async function AdminProspectsPage() {
   const netlifyReady = isNetlifyConfigured();
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Potential clients</h1>
@@ -203,6 +202,6 @@ export default async function AdminProspectsPage() {
           ))
         )}
       </main>
-    </AppShell>
+    </>
   );
 }

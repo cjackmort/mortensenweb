@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
 import { RequestProgress } from "@/components/request-progress";
@@ -56,7 +55,7 @@ export default async function MortensenWebPage({
   const internal = await getInternalClient(ctx, db);
   if (!internal) {
     return (
-      <AppShell user={user}>
+      <>
         <main className="shell">
           <div className="masthead">
             <h1>MortensenWeb</h1>
@@ -71,7 +70,7 @@ export default async function MortensenWebPage({
             </div>
           </section>
         </main>
-      </AppShell>
+      </>
     );
   }
 
@@ -98,7 +97,7 @@ export default async function MortensenWebPage({
   const comparedTo = `previous ${days} days`;
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>MortensenWeb</h1>
@@ -240,6 +239,6 @@ export default async function MortensenWebPage({
           )}
         </section>
       </main>
-    </AppShell>
+    </>
   );
 }

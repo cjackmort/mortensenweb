@@ -1,18 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Middleware is a redirect convenience, NOT an authorization boundary.
+ * Proxy (Next 16's name for what was `middleware.ts` — same file, same
+ * matcher, renamed by the framework's own codemod) is a redirect convenience,
+ * NOT an authorization boundary.
  *
  * It only checks whether a session cookie is present, so an unauthenticated
  * visitor lands on /login instead of a flash of empty dashboard. It
- * deliberately does not import the auth config or the database: middleware
+ * deliberately does not import the auth config or the database: the proxy
  * runs before the Node.js server context is available, and pulling the
  * database driver in here would break the build and tempt us into treating
  * this file as the security check.
  *
  * The real checks live in each page and route handler, where `currentUser()`
  * re-reads the user row and compares `sessionEpoch`, and where the repository
- * layer enforces tenant scope. A forged or stale cookie gets past middleware
+ * layer enforces tenant scope. A forged or stale cookie gets past the proxy
  * and is then rejected by those. That ordering is intentional.
  */
 
@@ -62,10 +64,20 @@ const PUBLIC_PATHS = [
   // cookie (i.e. everyone the login page exists for) has this request
   // redirected to /login instead of served, and the background silently
   // never loads for the one audience it's for.
-  "/auth-backdrop.jpg",
+  "/auth-backdrop.webp",
+  "/auth-backdrop-sm.webp",
+  // The installable-app manifest and its icons. A phone fetches these without
+  // a session when the client adds the portal to their home screen; redirected
+  // to /login they would install a generic bookmark instead of the app.
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/maskable.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Exact match or a path segment beneath it. A bare `startsWith` would also

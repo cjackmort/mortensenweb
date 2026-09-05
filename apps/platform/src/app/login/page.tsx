@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
-import { currentUser, signIn } from "@/auth";
+import { sessionHint, signIn } from "@/auth";
 import { AuthShell } from "@/components/auth-shell";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +21,13 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const user = await currentUser();
-  if (user) {
-    if (user.mustChangePassword) redirect("/change-password");
-    redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  // A signed-in visitor is bounced by the cookie alone — no database read on
+  // the one page that every sign-in loads. The destination re-validates the
+  // session properly; a stale cookie makes one extra hop and ends up back here.
+  const hint = await sessionHint();
+  if (hint) {
+    if (hint.mustChangePassword) redirect("/change-password");
+    redirect(hint.role === "admin" ? "/admin" : "/dashboard");
   }
 
   const params = await searchParams;

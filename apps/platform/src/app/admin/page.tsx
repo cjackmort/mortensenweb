@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
+import { SitePreview, siteHomeUrl } from "@/components/site-preview";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import {
@@ -62,7 +62,7 @@ export default async function AdminOverview() {
   const needsAttention = awaiting.length + overdue.length + openRequests.length;
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Overview</h1>
@@ -163,9 +163,11 @@ export default async function AdminOverview() {
                   className="site-card"
                 >
                   <div className="site-card-media">
-                    <span className="site-card-initial">
-                      {(c.site?.name ?? c.name).charAt(0).toUpperCase()}
-                    </span>
+                    <SitePreview
+                      url={c.site ? siteHomeUrl(c.site) : null}
+                      name={c.site?.name ?? c.name}
+                      fallbackInitial={(c.site?.name ?? c.name).charAt(0).toUpperCase()}
+                    />
                   </div>
                   <div className="site-card-body">
                     <div className="site-card-eyebrow">
@@ -197,7 +199,7 @@ export default async function AdminOverview() {
           )}
         </section>
       </main>
-    </AppShell>
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { AppShell } from "@/components/app-shell";
+import { SitePreview, siteHomeUrl } from "@/components/site-preview";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { listClients } from "@/db/repositories/admin/clients";
@@ -75,7 +75,7 @@ export default async function AdminClientsPage() {
   );
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="shell">
         <div className="masthead">
           <h1>Clients</h1>
@@ -110,9 +110,11 @@ export default async function AdminClientsPage() {
               <details key={c.clientPublicId} className="client-tile">
                 <summary>
                   <div className="client-tile-media">
-                    <span className="client-tile-initial">
-                      {(site?.name ?? c.name).charAt(0).toUpperCase()}
-                    </span>
+                    <SitePreview
+                      url={site ? siteHomeUrl(site) : null}
+                      name={site?.name ?? c.name}
+                      fallbackInitial={(site?.name ?? c.name).charAt(0).toUpperCase()}
+                    />
                     <span className="client-tile-chevron" aria-hidden="true" />
                   </div>
                   <div className="client-tile-body">
@@ -177,6 +179,6 @@ export default async function AdminClientsPage() {
           </div>
         )}
       </main>
-    </AppShell>
+    </>
   );
 }
