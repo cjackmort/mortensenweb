@@ -37,7 +37,7 @@ jobs:
           # Matches `engines` in package.json and NODE_VERSION in netlify.toml.
           # Three places is two too many, but CI silently building on a
           # different major than production is worse.
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install
@@ -94,7 +94,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install

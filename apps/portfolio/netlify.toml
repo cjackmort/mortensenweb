@@ -17,7 +17,7 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
   NEXT_TELEMETRY_DISABLED = "1"
   # This site is Astro now, but the repository still holds a Next.js app
   # (the portal), and Netlify's zero-config Next.js Runtime auto-attaches on
