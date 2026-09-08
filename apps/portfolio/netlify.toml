@@ -44,9 +44,16 @@
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     # 'unsafe-inline' on script-src covers the one inline script (pointer
     # effects) and the JSON-LD block; on style-src it covers Astro's inlined
-    # stylesheet. cloud.umami.is loads the tracker and receives its beacon;
-    # Google Fonts serves the two typefaces. Everything else is 'self'.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    # stylesheet. Google Fonts serves the two typefaces. Everything else is
+    # 'self'.
+    #
+    # Umami Cloud uses two hosts and needs both named: the tracker is served
+    # from cloud.umami.is (script-src) but it POSTs every event to
+    # gateway.umami.is (connect-src). Naming only the first is silent — the
+    # script loads, the page is fine, and every beacon is refused, so the
+    # dashboard reports no visitors while the site looks healthy. Both hosts
+    # stay listed even though only one is used per directive.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloud.umami.is https://gateway.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 # Content-hashed build output can be cached indefinitely; nothing else can.
 [[headers]]
