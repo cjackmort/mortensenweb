@@ -18,6 +18,12 @@ const fullTitle = title ? `${title} — ${SITE.name}` : `${SITE.name} — ${SITE
 const canonical = new URL(path ?? Astro.url.pathname, SITE.url).toString();
 const current = Astro.url.pathname;
 
+// home.css is only inlined on the home page, but it overrides layout rules that
+// global.css also sets (section rhythm, row spacing). Hanging those overrides
+// off `.home` makes them win on specificity rather than on stylesheet order,
+// which the bundler is free to change.
+const isHome = (path ?? Astro.url.pathname) === "/";
+
 const organization = {
   "@context": "https://schema.org",
   "@graph": [
@@ -82,6 +88,8 @@ const organization = {
         <a href="/" class="brand" aria-label="Mortensen Web Co. home">
           Mortensen<span class="brand__mark">Web</span>
           <span class="brand__co">Co.</span>
+          {/* The period of the "M." mark. */}
+          <span class="brand__dot" aria-hidden="true"></span>
         </a>
         <nav class="nav" aria-label="Main">
           {
@@ -112,7 +120,7 @@ const organization = {
       </nav>
     </header>
 
-    <main id="main">
+    <main id="main" class={isHome ? "home" : undefined}>
       <slot />
     </main>
 

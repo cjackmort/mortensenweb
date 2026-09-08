@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
+import react from "@astrojs/react";
 
 /**
  * The public agency site.
@@ -7,9 +8,15 @@ import sitemap from "@astrojs/sitemap";
  * Astro, static. The previous version was a Next.js export that shipped 457 KB
  * of JavaScript to render five pages of copy, and hid every section behind an
  * observer until that JavaScript had run — a blank page on a slow phone. This
- * one ships no framework runtime at all: the HTML is the page, the CSS does
- * the motion, and the only script is the analytics tag plus a few hundred
- * bytes for pointer effects that degrade to nothing.
+ * one keeps that lesson: the HTML is the page, the CSS does most of the
+ * motion, and no section is parked at opacity 0 waiting for a script.
+ *
+ * React is here for one job — the home page's scroll set-pieces, which are
+ * stateful enough that hand-written observers would be worse. It is loaded per
+ * island, so /pricing/ and /services/ still ship zero framework runtime; only
+ * the components explicitly marked `client:*` cost anything. If an island ever
+ * becomes the only way to read something on the page, that is the mistake the
+ * Next.js version made and it should be reverted, not optimised.
  *
  * `trailingSlash: "always"` keeps the URLs the old site had (/work/, /pricing/)
  * so nothing that linked to them breaks.
@@ -18,7 +25,27 @@ export default defineConfig({
   site: "https://mortensenweb.com",
   trailingSlash: "always",
   build: { format: "directory", inlineStylesheets: "always" },
+  vite: {
+    build: {
+      /*
+       * esbuild, not Astro 7's default Lightning CSS.
+       *
+       * Lightning folds `animation-timeline` into the `animation` shorthand —
+       * `animation: linear both card-turn view()`. That syntax was in an early
+       * Level 2 draft and was then removed, so Chrome rejects the declaration
+       * outright and takes `animation-name` with it. Every scroll-driven
+       * animation on the home page died in the production build while dev
+       * looked perfect, because dev does not minify.
+       *
+       * The page still rendered correctly — everything just sat at its resting
+       * state, which is the designed fallback — so nothing looked broken. That
+       * is exactly why this is pinned rather than left to the default.
+       */
+      cssMinify: "esbuild",
+    },
+  },
   integrations: [
+    react(),
     sitemap({
       // The form's thank-you page is not a page anyone should be sent to.
       filter: (page) => !page.includes("/thanks/"),

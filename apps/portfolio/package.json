@@ -6,7 +6,7 @@
   "description": "The public agency site — mortensenweb.com. Astro, static, zero client JavaScript by default.",
   "scripts": {
     "dev": "astro dev",
-    "build": "tsx scripts/sync-tiles.ts && astro build",
+    "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
     "lint": "astro check",
@@ -14,12 +14,17 @@
     "sync:tiles": "tsx scripts/sync-tiles.ts"
   },
   "dependencies": {
+    "@astrojs/react": "^6.0.5",
     "@astrojs/sitemap": "^3.4.1",
     "@mortensenweb/plans": "*",
-    "astro": "^7.1.1"
+    "astro": "^7.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "sharp": "^0.35.0",
     "typescript": "^5.7.0"
   }

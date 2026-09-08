@@ -1,0 +1,56 @@
+---
+/**
+ * The brand lockup that opens the home page.
+ *
+ * The blue square is a separate node so it can be animated on its own — it is
+ * the page's one accent, and it lands last. Everything here is ordinary static
+ * markup, so with JavaScript off the lockup is simply the finished lockup:
+ * nothing is parked at opacity 0 waiting for a script, which is the mistake
+ * the Next.js version of this site made.
+ *
+ * `size="nav"` renders the same mark small for the masthead, drawn identically
+ * so the two read as one mark at two sizes.
+ */
+interface Props {
+  size?: "hero" | "nav";
+  class?: string;
+}
+const { size = "hero", class: className = "" } = Astro.props;
+---
+
+<div class:list={["lockup", `lockup--${size}`, className]}>
+  <svg
+    class="lockup__mark"
+    viewBox="0 0 72 64"
+    role="img"
+    aria-label="Mortensen Web Co."
+  >
+    <path
+      class="lockup__m"
+      d="M14 47V17h7l11 16 11-16h7v30h-7V29L32 44 21 29v18z"
+    ></path>
+    <rect
+      class="lockup__dot"
+      x="57"
+      y="37"
+      width="10"
+      height="10"></rect>
+  </svg>
+
+  {
+    size === "hero" && (
+      <>
+        <p class="lockup__word">
+          <span style="--i:0">Mortensen</span><em style="--i:1">Web</em>
+          <span class="lockup__co" style="--i:2">
+            Co.
+          </span>
+        </p>
+        <hr class="lockup__rule" />
+        <p class="lockup__tagline">
+          Small-business websites · Built, hosted, looked after
+        </p>
+      </>
+    )
+  }
+</div>

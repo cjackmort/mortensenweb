@@ -19,7 +19,7 @@ export const GET: APIRoute = () =>
       "",
       "## Key pages",
       `- [Work](${SITE.url}/work/): live client sites and in-house work, each one linked and labelled`,
-      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request — and what is not included (online stores, advertising, social media)`,
+      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; advertising and social media are not included`,
       `- [Pricing](${SITE.url}/pricing/): both build prices, the care plans and a comparison table`,
       `- [Contact](${SITE.url}/contact/): enquiry form; every enquiry is answered`,
       "",
