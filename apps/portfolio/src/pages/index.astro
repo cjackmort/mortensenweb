@@ -2,7 +2,6 @@
 import Base from "../layouts/Base.astro";
 import Marquee from "../components/Marquee.astro";
 import Lockup from "../components/Lockup.astro";
-import SquareFlight from "../react/SquareFlight";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
 import PlanCard from "../components/PlanCard.astro";
@@ -13,6 +12,7 @@ import {
   BUILD_WITH_CARE_CENTS,
   BUILD_DISCOUNT_CENTS,
   BUILD_COMMITMENT_MONTHS,
+  OVERAGE_CENTS,
 } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
 
@@ -21,22 +21,22 @@ const soldPlans = PLANS.filter((p) => p.key !== "care-unlimited");
 const faq = [
   {
     q: "How fast does a change actually happen?",
-    a: "Most changes — a photo, a price, a line of text — are built and waiting for your approval within the hour. Bigger ones, like a new section, can take a day. You are emailed the moment a preview is ready, and again when it is live.",
+    a: "Most of the time — a photo, a price, a line of text — it will be waiting for your approval within the hour. Something bigger, like a whole new section, might take a day.",
   },
   {
     q: "What if the change is not what I wanted?",
-    a: "Say so on the preview. Asking for changes on a preview does not use up another of your monthly changes; it is part of the same request until you are happy with it.",
+    a: "Just tell us on the preview. We keep working on it until you are happy, and it still counts as the one change.",
   },
   // Both answers changed on 2026-09-05, when the build stopped being "quoted"
   // and got a published price. Left as they were they would have contradicted
   // the number now sitting further up the same page.
   {
     q: "Do I have to sign a contract?",
-    a: `Only if you take the discounted build. ${dollars(BUILD_WITH_CARE_CENTS)} assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months, and leaving early invoices the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata — nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} for the build and there is no commitment at all. Your domain stays yours either way.`,
+    a: `Only if you take the discounted build. The ${dollars(BUILD_WITH_CARE_CENTS)} price assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months — leave early and we invoice the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata, nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} up front and you are not committed to anything. Either way, your domain stays yours.`,
   },
   {
     q: "What does the build cost?",
-    a: `${dollars(BUILD_PRICE_CENTS)} for the site on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it — the same site either way, up to five pages. After that the monthly plan is the only recurring cost.`,
+    a: `${dollars(BUILD_PRICE_CENTS)} for the site on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it. You get the same site either way, up to five pages, and after that the monthly plan is your only recurring cost.`,
   },
 ];
 
@@ -64,11 +64,24 @@ const schema = [
   {/* ------------------------------------------------------------ hero */}
   <section class="hero-sq sq">
     <div class="hero-sq__grid" aria-hidden="true"></div>
-    {/* Answers to the pointer and to the square as it passes. Falls back
-        to the static grid above it if it never mounts. */}
+    {/* Answers to the pointer. Falls back to the static grid above it if it
+        never mounts. */}
     <HeroField client:load />
     <Lockup />
-    {/* Where the square is about to go, hinted before it moves. */}
+    {/* The way to contact us from the first screen. Before this the only route
+        from the home page was the masthead's "Client login" — which is for
+        existing clients, not prospects — or scrolling the whole page to the
+        CTA at the bottom. On a phone that is seven screens. */}
+    <div class="hero-sq__cta">
+      <a
+        class="btn btn--primary"
+        href="/contact/"
+        data-umami-event="cta: hero start a project"
+      >
+        Start a project <span class="arrow">→</span>
+      </a>
+    </div>
+    {/* A scroll cue: a line pointing down out of the lockup. */}
     <div class="hero-sq__path" aria-hidden="true"></div>
   </section>
 
@@ -79,35 +92,36 @@ const schema = [
     <div class="wrap">
       <div class="section-head reveal">
         <div><p class="eyebrow">What we do</p></div>
-        <h2>Three things, done properly. Nothing you will not use.</h2>
+        <h2>Three things, done properly. Nothing you won't use.</h2>
       </div>
 
       <ul class="rows">
         <li class="reveal">
           <h3><span class="n">A</span> Design and build</h3>
           <p>
-            A site structured around the handful of things a visitor actually
-            came to find — what you make, what it costs, how to reach you.
-            Written with you, using your photographs, laid out for a phone
-            first. Not a template with your name typed in.
+            We build the site the way you want it. We get on a call, you tell
+            us what it needs to do, and we make it happen — your words, your
+            photos, laid out for a phone first. No strong feelings about the
+            design? We'll come back with something that suits the business, and
+            you tell us what to change.
           </p>
         </li>
         <li class="reveal">
           <h3><span class="n">B</span> Hosting and care</h3>
           <p>
-            Hosting, SSL, domain configuration, and security updates are part
-            of the plan, not a separate bill. We check your site is up and
-            serving; if something breaks, fixing it is our problem, not a
-            ticket you have to chase.
+            Hosting, SSL, your domain and the security updates are all in your
+            plan, not a separate bill. We watch that the site is up and
+            serving, and if something breaks, fixing it is our job — not a
+            ticket you have to chase us about.
           </p>
         </li>
         <li class="reveal">
           <h3><span class="n">C</span> Changes on request</h3>
           <p>
-            New photos, a changed price, a seasonal note at the top of the
-            page. You ask in the portal, we make the change and show you a
-            preview before it goes live. Every plan includes a monthly
-            allowance; extras are a flat $25.
+            Need something changed? Ask in the portal, in your own words. We
+            make the change and show you a preview, and it only goes live when
+            you say so. Every plan includes a monthly allowance; anything past
+            that is a flat {dollars(OVERAGE_CENTS)}.
           </p>
         </li>
       </ul>
@@ -115,10 +129,27 @@ const schema = [
   </section>
 
   {/* ------------------------------------------------------ the loop */}
-  {/* --------------------------------------------- the square's journey */}
-  <section class="sq-stage" aria-label="How a change happens">
+  <section class="sq-stage sq" aria-label="How a change happens">
+   <div class="stage__inner">
+    {/* The rail duplicates the step names that are already in each step, so
+        it is hidden from assistive tech and from narrow screens; there the
+        steps carry their own `01 ·` labels instead. */}
+    <aside class="rail" aria-hidden="true">
+      <p class="rail__title">How a change happens</p>
+      <div class="rail__track">
+        <span class="rail__fill"></span>
+        <ol class="rail__list">
+          <li class="rail__step" data-step="1"><b>01</b> You ask</li>
+          <li class="rail__step" data-step="2"><b>02</b> We build it</li>
+          <li class="rail__step" data-step="3"><b>03</b> You approve</li>
+          <li class="rail__step" data-step="4"><b>04</b> It's live</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="stage__steps">
     {/* 01 */}
-    <div class="dock dock--ink dock--ask sq" data-dock="1">
+    <div class="dock dock--ask" data-dock="1">
       <div class="dock__inner">
         <div>
           <p class="dock__n">01 · You ask</p>
@@ -130,9 +161,8 @@ const schema = [
             }
           </h2>
           <p class="dock__p">
-            In your portal, however you'd say it out loud. Attach a photo if it
-            helps — a picture of the thing you mean is usually faster than
-            describing it.
+            Tell us in the portal, however you'd say it out loud. If a photo
+            explains it faster, send that instead.
           </p>
         </div>
         <div class="dock__slot">
@@ -145,7 +175,7 @@ const schema = [
     </div>
 
     {/* 02 */}
-    <div class="dock dock--ink-2 dock--build sq" data-dock="2">
+    <div class="dock dock--build" data-dock="2">
       <div class="dock__inner">
         <div>
           <p class="dock__n">02 · We build it</p>
@@ -157,8 +187,8 @@ const schema = [
             }
           </h2>
           <p class="dock__p">
-            The change is made, checked — every link, every image — and put up
-            at a private address. Usually within the hour.
+            We work on a copy, never your live site. It's checked and waiting
+            for you at a private address, usually within the hour.
           </p>
         </div>
         <div class="dock__slot">
@@ -172,11 +202,10 @@ const schema = [
       </div>
     </div>
 
-    {/* 03 — the square at its largest: it *is* the approve button. This
-        stage stays dark the whole way through, because a blue plane here
-        would be a blue surface that is not the square, and the page only
-        has one rule. */}
-    <div class="dock dock--ink dock--approve sq" data-dock="3">
+    {/* 03 — the square at its largest: it *is* the approve button. The stage
+        stays dark the whole way through, because a blue plane here would be a
+        blue surface that is not the square, and the page only has one rule. */}
+    <div class="dock dock--approve" data-dock="3">
       <div class="dock__inner">
         <div>
           <p class="dock__n">03 · You approve</p>
@@ -188,9 +217,8 @@ const schema = [
             }
           </h2>
           <p class="dock__p">
-            You get an email with the preview and a picture of the change.
-            Looks right? Approve it. Not quite? Say what's off — it doesn't
-            cost another change.
+            It arrives by email. Looks right? Approve it. Not quite? Tell us
+            what's off — that doesn't use up another change.
           </p>
         </div>
         <div class="dock__slot">
@@ -203,7 +231,7 @@ const schema = [
     </div>
 
     {/* 04 */}
-    <div class="dock dock--ink-2 dock--live sq" data-dock="4">
+    <div class="dock dock--live" data-dock="4">
       <div class="dock__inner">
         <div>
           <p class="dock__n">04 · It's live</p>
@@ -215,9 +243,8 @@ const schema = [
             }
           </h2>
           <p class="dock__p">
-            We publish, fetch your live site to confirm it actually serves the
-            change, and tell you. Then it shows up in your visitor numbers like
-            everything else.
+            We publish it, then load your site ourselves to make sure the
+            change is really there — and tell you when it is.
           </p>
         </div>
         <div class="dock__slot">
@@ -228,12 +255,13 @@ const schema = [
       </div>
     </div>
 
+    </div>
+   </div>
+
     {/* The stage ends by handing the page back to daylight: paper wipes up
         over the dark as you leave the last step, so the change in ground
         reads as a deliberate act rather than a seam between two designs. */}
     <div class="stage-out" aria-hidden="true"></div>
-
-    <SquareFlight client:idle />
   </section>
 
 
@@ -248,25 +276,24 @@ const schema = [
         <li class="reveal">
           <h3>Who came, and from where</h3>
           <p>
-            Visitors, the pages they opened, how they found you, and which
-            photos people stop on — in plain words, in your portal, on every
-            plan. Privacy-respecting analytics, not an ad network.
+            You see who visited, what they opened and how they found you — in
+            plain words, on every plan. Privacy-friendly, not an ad network.
           </p>
         </li>
         <li class="reveal">
           <h3>Who got in touch</h3>
           <p>
-            Calls and emails from the site are counted beside the visitors,
-            so you know whether the website is bringing work in — not only
-            whether people looked at it.
+            We count the calls and emails your site brings in, right beside the
+            visitor numbers — so you know it's actually working for you, not
+            just being looked at.
           </p>
         </li>
         <li class="reveal">
           <h3>Every change, on the record</h3>
           <p>
-            Each request has its own timeline in the portal — sent, built,
-            what we changed in plain words, approved, live — so you never
-            have to ask where something got to.
+            Every request you send gets its own timeline in the portal — sent,
+            built, approved, live. You never have to ask us where something
+            got to.
           </p>
         </li>
       </ul>
@@ -281,13 +308,11 @@ const schema = [
         <div>
           <h2>Priced so you can plan for it.</h2>
           <p class="lede" style="margin-top: 1rem">
-            The site is {dollars(BUILD_PRICE_CENTS)} on its own, or
-            {" "}{dollars(BUILD_WITH_CARE_CENTS)} when you start a care plan with
-            it — {dollars(BUILD_DISCOUNT_CENTS)} off for staying
-            {" "}{BUILD_COMMITMENT_MONTHS} months. After launch, one monthly plan
-            covers hosting, security, analytics and an allowance of changes —
-            so keeping the site current is a fixed cost, not a decision every
-            time.
+            The site is {dollars(BUILD_PRICE_CENTS)}, or
+            {" "}{dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with
+            it — that's {dollars(BUILD_DISCOUNT_CENTS)} off for staying
+            {" "}{BUILD_COMMITMENT_MONTHS} months. After launch, one monthly
+            plan covers your hosting, security, analytics and changes.
           </p>
         </div>
       </div>
@@ -328,9 +353,9 @@ const schema = [
           <p class="eyebrow" style="margin-bottom: 1rem">Already a client?</p>
           <h2>Your portal is here.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Request a change, see a preview before it goes live, check your
-            visitor numbers, and view invoices. First time? Use the username
-            and temporary password from your welcome email.
+            Request a change, look at a preview, check your visitor numbers,
+            grab an invoice. First time signing in? Use the details from your
+            welcome email.
           </p>
         </div>
         <div class="btn-row">
@@ -348,10 +373,9 @@ const schema = [
         <div>
           <h2>Let's talk about your site.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Tell us about the business and what you need. We will come back
-            with a straight answer about whether we are a good fit and what
-            it would cost — including when the answer is that your current
-            site is fine.
+            Tell us about the business and what you need. You get a straight
+            answer on whether we're a good fit and what it would cost —
+            including if that answer is that your current site is fine as it is.
           </p>
         </div>
         <div class="btn-row">

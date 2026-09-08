@@ -11,10 +11,9 @@
  * and then signs in sees the same colour meaning the same thing: act here.
  *
  * Motion is CSS. Headline lines rise on load with keyframes (they play with
- * JavaScript off); sections reveal with scroll-driven animation-timeline
- * inside @supports (browsers without it show everything at rest); the pinned
- * story uses a named scroll timeline the same way. Nothing on this site is
- * parked at opacity 0 waiting for a script.
+ * JavaScript off) and sections reveal with scroll-driven animation-timeline
+ * inside @supports, so browsers without it show everything at rest. Nothing on
+ * this site is parked at opacity 0 waiting for a script.
  */
 
 /* ---------------------------------------------------------------- tokens */
@@ -29,9 +28,12 @@
   --rule: #d5d9d2;
   --rule-strong: #b9bfb6;
 
+  /* The one accent. Everything blue on every page resolves to this; the only
+     other blue that ever paints is --blue-2, and only under the cursor. */
   --blue: #1552d6;
+  /* Hover state for the primary button. Same hue (221°), 21% darker — a state
+     of --blue, not a second colour. Keep the hue if you ever retune it. */
   --blue-2: #0f3fa8;
-  --blue-wash: #e6eefc;
   --live: #067647;
 
   --dark: #101418;
@@ -39,6 +41,13 @@
   --dark-rule: #2a313a;
   --on-dark: #edefea;
   --on-dark-muted: #9aa3ae;
+  /* NOT part of the palette — do not reach for this to "fix" blue on a dark
+     ground. It exists because --blue on --dark is 2.86:1, which is fine for a
+     logotype or a solid shape but unreadable as small text. One rule reads it,
+     `.section--dark .rows .n`, and no page currently puts rows in a dark
+     section, so nothing rendered is this colour. Using it anywhere visible
+     puts a second blue on the site, which is what this comment exists to
+     prevent — the wordmark's "Web" was that bug. */
   --blue-on-dark: #7ea6ff;
 
   --sans: "Schibsted Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -308,6 +317,15 @@ img {
   background-size: 100% 1px;
 }
 
+/* A .link that is the whole paragraph rather than a word inside a sentence —
+   the contact page's email address. Inline it inherits the line box and lands
+   at 20px, under the 24px a touch target needs; on its own line it can simply
+   be taller. */
+.link--standalone {
+  display: inline-block;
+  padding-block: 0.35rem;
+}
+
 /* ---------------------------------------------------------------- header */
 
 .masthead {
@@ -381,6 +399,20 @@ img {
   color: var(--white);
 }
 
+/* On the smallest phones the brand and this button together are wider than the
+   bar, and "Client login" broke across two lines inside its own border. Tighter
+   padding and a shorter gap buy back the ~30px it needs to stay on one. */
+@media (max-width: 26rem) {
+  .masthead__inner {
+    gap: var(--space-2);
+  }
+
+  .nav__portal {
+    padding: 0.55rem 0.55rem;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 46rem) {
   .nav__link:not(.nav__portal) {
     display: none;
@@ -395,13 +427,19 @@ img {
 .subnav {
   display: none;
   gap: var(--space-4);
-  padding: 0.6rem 0;
   border-bottom: 1px solid var(--rule);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+/* This bar only exists on phones, so its links were the smallest touch targets
+   on the site in the one place a touch target matters: 11.6px tall, because
+   the row's padding sat on the nav and the anchors were bare text. The links
+   now own the height and fill the bar. */
 .subnav a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   font: 500 var(--text-xs) / 1 var(--mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -759,383 +797,6 @@ img {
   .rows > li {
     grid-template-columns: 1fr;
     gap: var(--space-2);
-  }
-}
-
-/* ---------------------------------------------------------- pinned story */
-
-/*
- * "How a change happens." The text steps scroll; the phone stays. Each
- * screen of the phone fades in as its step passes the middle of the
- * viewport, driven by a named scroll timeline on the story container —
- * no JavaScript, no scroll listeners. Without support the phone shows the
- * last screen and the steps read as a list, which is still the story.
- */
-.story {
-  position: relative;
-  /* A *view* timeline, not a scroll timeline: the page is the scroller, and
-     what the screens follow is this block's progress through the viewport —
-     0% as its top enters at the bottom, 100% as its bottom leaves at the
-     top. `cover` ranges below are fractions of that. */
-  view-timeline: --story block;
-}
-
-.story__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
-  gap: var(--space-6);
-  align-items: start;
-}
-
-.story__steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.story__step {
-  min-height: 52vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--space-6) 0;
-  border-bottom: 1px solid var(--dark-rule);
-}
-
-.story__step:last-child {
-  border-bottom: 0;
-}
-
-/* Room under the last step so the pinned phone is still beside it while
-   its final screen is read, rather than released as the step ends. */
-.story__steps {
-  padding-bottom: 38vh;
-}
-
-.story__step .n {
-  font: 500 var(--text-xs) / 1 var(--mono);
-  color: var(--blue-on-dark);
-  letter-spacing: 0.1em;
-  margin-bottom: var(--space-3);
-}
-
-.story__step h3 {
-  font-size: var(--text-xl);
-  margin-bottom: var(--space-3);
-}
-
-.story__step p {
-  color: var(--on-dark-muted);
-  max-width: 40ch;
-}
-
-.story__phone-wrap {
-  position: sticky;
-  top: 12vh;
-  display: flex;
-  justify-content: center;
-  padding: var(--space-4) 0;
-}
-
-.phone {
-  position: relative;
-  height: min(72vh, 36rem);
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 9 / 15.5;
-  background: var(--dark-2);
-  border: 1px solid var(--dark-rule);
-  overflow: hidden;
-}
-
-.phone::before {
-  content: "";
-  position: absolute;
-  top: 0.7rem;
-  left: 50%;
-  width: 5.5rem;
-  height: 0.85rem;
-  transform: translateX(-50%);
-  background: var(--dark);
-  border: 1px solid var(--dark-rule);
-  z-index: 3;
-}
-
-.screen {
-  position: absolute;
-  inset: 0;
-  padding: 2.4rem 1.05rem 1.05rem;
-  background: var(--paper);
-  color: var(--ink);
-  opacity: 0;
-  transform: translateY(12px);
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-.screen:last-child {
-  opacity: 1;
-  transform: none;
-}
-
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .screen,
-    .screen:last-child {
-      animation: screen linear both;
-      animation-timeline: --story;
-    }
-
-    /* Ranges butt against each other and later screens stack on top, so a
-       screen is never half-transparent over another one's text. They end
-       around three-quarters of the block's travel, which is where the sticky
-       phone is released — the last screen must be up before then. */
-    .screen:nth-child(1) {
-      animation-range: cover 0% cover 26%;
-      animation-name: screen-first;
-      z-index: 1;
-    }
-
-    .screen:nth-child(2) {
-      animation-range: cover 24% cover 44%;
-      z-index: 2;
-    }
-
-    .screen:nth-child(3) {
-      animation-range: cover 42% cover 60%;
-      z-index: 3;
-    }
-
-    .screen:nth-child(4) {
-      animation-range: cover 58% cover 74%;
-      animation-name: screen-last;
-      z-index: 4;
-    }
-  }
-}
-
-@keyframes screen {
-  0% {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  12%,
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes screen-first {
-  0%,
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes screen-last {
-  0% {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  12%,
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* The portal, drawn in CSS: enough to be recognisable, not a screenshot. */
-.screen__bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font: 500 0.62rem / 1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding-bottom: 0.7rem;
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: 0.9rem;
-}
-
-.screen__title {
-  font-weight: 500;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.7rem;
-}
-
-.screen__field {
-  border: 1px solid var(--rule-strong);
-  background: var(--white);
-  padding: 0.55rem 0.6rem;
-  margin-bottom: 0.5rem;
-  color: var(--ink-2);
-  min-height: 2.2rem;
-}
-
-.screen__field--tall {
-  min-height: 5.4rem;
-}
-
-.screen__thumbs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.35rem;
-  margin: 0.4rem 0 0.7rem;
-}
-
-.screen__thumbs span {
-  aspect-ratio: 1;
-  background: linear-gradient(135deg, var(--paper-2), var(--rule));
-}
-
-.screen__btn {
-  display: block;
-  background: var(--blue);
-  color: var(--white);
-  text-align: center;
-  padding: 0.65rem;
-  font: 500 0.62rem / 1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-top: 0.5rem;
-}
-
-.screen__btn--ghost {
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--ink);
-}
-
-.screen__track {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.25rem;
-  margin: 0.8rem 0;
-}
-
-.screen__track span {
-  height: 3px;
-  background: var(--rule);
-}
-
-.screen__track span.on {
-  background: var(--blue);
-}
-
-.screen__track span.live {
-  background: var(--live);
-}
-
-.screen__note {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.screen__mini {
-  border: 1px solid var(--rule);
-  background: var(--white);
-  padding: 0.5rem;
-  margin: 0.5rem 0;
-}
-
-.screen__mini b {
-  display: block;
-  font-size: 0.6rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-weight: 500;
-  margin-bottom: 0.3rem;
-}
-
-.screen__mini i {
-  display: block;
-  height: 0.4rem;
-  background: var(--paper-2);
-  margin-bottom: 0.3rem;
-}
-
-.screen__mini i:nth-child(2) {
-  width: 85%;
-}
-
-.screen__mini i:nth-child(3) {
-  width: 60%;
-}
-
-.screen__live {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font: 500 0.62rem / 1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--live);
-}
-
-.screen__live::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  background: var(--live);
-}
-
-.screen__stat {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-
-.screen__stat div {
-  border-top: 1px solid var(--rule);
-  padding-top: 0.4rem;
-}
-
-.screen__stat b {
-  display: block;
-  font-size: 1.15rem;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-.screen__stat small {
-  font: 500 0.58rem / 1 var(--mono);
-  color: var(--muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-@media (max-width: 52rem) {
-  .story__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .story__phone-wrap {
-    position: relative;
-    top: auto;
-    order: -1;
-  }
-
-  .story__step {
-    min-height: 0;
-  }
-
-  /* Stacked, the pin is gone; show the final screen and let the steps read. */
-  .screen {
-    display: none;
-  }
-
-  .screen:last-child {
-    display: block;
-    opacity: 1;
-    transform: none;
-    animation: none;
   }
 }
 
@@ -1726,6 +1387,14 @@ img {
   .footer__grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  /* The contact column holds the email address, which is wider than half a
+     phone screen — in a half column `overflow-wrap: anywhere` saved it from
+     overflowing by breaking it mid-word ("...@gm / ail.com"). A full row fits
+     it whole. */
+  .footer__grid > div:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .footer__h {
@@ -1743,11 +1412,15 @@ img {
 }
 
 .footer li {
-  padding: 0.25rem 0;
   font-size: var(--text-sm);
 }
 
+/* The padding lives on the anchor, not the <li>, so the whole row is the touch
+   target. On the <li> it was decoration around an 18px-tall link, which is
+   under the 24px WCAG 2.2 asks for and awkward to hit on a phone. */
 .footer li a {
+  display: inline-block;
+  padding-block: 0.4rem;
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
@@ -1800,16 +1473,6 @@ img {
 
   .marquee__track {
     animation: none;
-  }
-
-  .screen {
-    display: none;
-  }
-
-  .screen:last-child {
-    display: block;
-    opacity: 1;
-    transform: none;
   }
 }
 

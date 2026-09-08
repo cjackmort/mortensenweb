@@ -2,16 +2,14 @@
 /**
  * The brand lockup that opens the home page.
  *
- * The blue square is a separate node with `data-square="origin"` because it
- * does not stay here: on the home page an island lifts it out and flies it
- * down the page through the four steps of the change loop. Everything else in
- * this file is ordinary static markup, so with JavaScript off the lockup is
- * simply the finished lockup — nothing is parked at opacity 0 waiting for a
- * script, which is the mistake the Next.js version of this site made.
+ * The blue square is a separate node so it can be animated on its own — it is
+ * the page's one accent, and it lands last. Everything here is ordinary static
+ * markup, so with JavaScript off the lockup is simply the finished lockup:
+ * nothing is parked at opacity 0 waiting for a script, which is the mistake
+ * the Next.js version of this site made.
  *
- * `size="nav"` renders the same mark small for the masthead. The flying square
- * lands in that one at the end of the sequence and becomes its period, so both
- * variants have to draw the square identically.
+ * `size="nav"` renders the same mark small for the masthead, drawn identically
+ * so the two read as one mark at two sizes.
  */
 interface Props {
   size?: "hero" | "nav";
@@ -33,7 +31,6 @@ const { size = "hero", class: className = "" } = Astro.props;
     ></path>
     <rect
       class="lockup__dot"
-      data-square={size === "hero" ? "origin" : "home"}
       x="57"
       y="37"
       width="10"

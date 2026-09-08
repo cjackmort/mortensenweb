@@ -21,7 +21,7 @@ const faq = [
   // the price above it.
   ["Is there a minimum term?", `Only if you take the discounted build. ${dollars(BUILD_WITH_CARE_CENTS)} assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months; leave before then and we invoice the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata, and nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} for the build and there is no commitment at all. After the first year every plan is month to month.`],
   ["What does the build cost?", `${dollars(BUILD_PRICE_CENTS)} on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it — the same site either way, up to five pages. Anything unusual we quote before you commit, and the build is invoiced half to start and half at launch.`],
-  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Online stores, advertising and social media are outside what we do — see Services."],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising and social media are outside what we do, and an online store is something we connect rather than host — see Services."],
 ];
 
 /** Rows of the comparison table, so the markup below stays one loop per plan. */
@@ -141,7 +141,15 @@ const columns = [
         <div><p class="eyebrow">03 · Side by side</p></div>
         <h2>The same numbers, as a table.</h2>
       </div>
-      <div class="table-wrap reveal">
+      {/* Focusable because it scrolls sideways on a phone: a scroll container
+          that cannot be reached by keyboard hides the columns past the fade
+          from anyone not using a pointer. */}
+      <div
+        class="table-wrap reveal"
+        tabindex="0"
+        role="region"
+        aria-label="Care plan comparison table, scrolls sideways"
+      >
         <table class="compare">
           <caption class="sr-only">Care plan comparison by monthly price, included changes, and extras.</caption>
           <thead>

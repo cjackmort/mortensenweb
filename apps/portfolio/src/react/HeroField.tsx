@@ -5,9 +5,8 @@ import { useEffect, useRef, useState } from "react";
  *
  * The static CSS grid behind the lockup is a background image, and a
  * background image cannot answer to anything. This replaces it with the same
- * grid on a canvas, where each square can respond to two things: the pointer,
- * and the travelling square as it goes past (SquareFlight publishes its
- * position as `--sq-x` / `--sq-y`).
+ * grid on a canvas, where each square swells and brightens as the pointer
+ * comes near it.
  *
  * The point is not decoration. The site's argument is that someone is looking
  * after your website — a ground that reacts is the cheapest possible way to
@@ -99,13 +98,6 @@ export default function HeroField() {
         ey += (h * 1.6 - ey) * 0.03;
       }
 
-      // Where the travelling square is right now, in this canvas's space.
-      const root = getComputedStyle(document.documentElement);
-      const hostRect = host.getBoundingClientRect();
-      const sqx = parseFloat(root.getPropertyValue("--sq-x")) - hostRect.left;
-      const sqy = parseFloat(root.getPropertyValue("--sq-y")) - hostRect.top;
-      const hasSq = Number.isFinite(sqx) && Number.isFinite(sqy);
-
       ctx.clearRect(0, 0, w, h);
 
       for (let gx = 0; gx < w + PITCH; gx += PITCH) {
@@ -120,14 +112,6 @@ export default function HeroField() {
           if (d < REACH) {
             const near = 1 - d / REACH;
             energy += near * near * 0.9;
-          }
-
-          if (hasSq) {
-            const sd = Math.hypot(gx - sqx, gy - sqy);
-            if (sd < REACH * 0.8) {
-              const near = 1 - sd / (REACH * 0.8);
-              energy += near * near * 0.75;
-            }
           }
 
           if (energy < 0.02) continue;
