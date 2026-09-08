@@ -12,10 +12,16 @@ Companion to `square-setup.md`. Square is not being replaced — see
 
 Worth stating plainly, because it was not what it looked like:
 
-- **Stripe was not integrated.** No SDK, no environment variables, no webhook
-  route, no customer or price columns. The word `stripe` appeared in the
-  codebase only as a value in `payment_method` — a label for a payment an
-  operator recorded by hand.
+- **Stripe was not integrated *in the portal*.** No SDK, no environment
+  variables, no webhook route, no customer or price columns. The word `stripe`
+  appeared in `apps/platform` only as a value in `payment_method` — a label for
+  a payment an operator recorded by hand.
+- **But there is a second, separate Stripe integration**, on the bookkeeping
+  side: `finance/scripts/sync_stripe_income.py` in the `Website Business`
+  repository. It reads succeeded charges over the REST API and appends them to
+  the Income Log of `Business_Finance_Tracker.xlsx`. It has **never run** —
+  there is no `.stripe_sync_state.json`. See
+  [Two Stripe integrations](#two-stripe-integrations) for how they interact.
 - **The sandbox account was empty.** No products, prices, customers or
   subscriptions.
 - **Square is the real integration**, with a webhook receiver, a catalogue
@@ -183,29 +189,82 @@ subscription is cancelled.
 
 ### Who needs enrolling
 
-At the time of writing: **nobody, automatically.**
+Exactly one client: **`mitch-bedke-art`**. Every other registry entry is a
+demo and must not be enrolled.
 
-The registry lists one active client, `mitch-bedke-art`, on a
-`friends-family` tier at $50/month. Whether that is a complimentary
-arrangement or a genuine $50 charge is not recorded anywhere the portal can
-read, and the two want opposite handling:
+He is **paying, not complimentary** — confirmed by the operator, and
+corroborated by `finance/Business_Finance_Tracker.xlsx`, which records two
+Venmo payments: a $250 build fee and one $50 monthly retainer.
 
-- **Complimentary** → set `comp_plan_id`, and the integration will never
-  charge or chase them.
-- **Paying** → they enrol through Checkout like anyone else.
+Do **not** set `comp_plan_id` on him. It would stop billing someone who agreed
+to pay.
 
-**This needs an answer before any live enrolment.** Guessing wrong either
-charges a friend who was promised a free site, or quietly stops billing
-someone who agreed to pay.
+| | |
+|---|---|
+| Current rail | **Venmo, manual.** Not Square, not Stripe. |
+| Retainer | $50/month |
+| Paid so far | $250 build + $50 first retainer |
+| Stripe customer | none — the workbook's "Stripe Customer Email" cell is empty |
 
-Every other registry entry is a demo and should not be enrolled at all.
+**$50 is not the `care-lite` price.** It coincides with it. `client.json`
+records the rate as deliberately bespoke: *"set to roughly cover the
+operator's fixed monthly hosting costs … should NOT be treated as the going
+rate or used as the anchor for the next client."* Enrolling him on
+`care_lite_monthly_v1` charges the right amount but silently binds him to
+care-lite's **one change a month** — an allowance he never agreed to. Decide
+his entitlement before enrolling him, not after.
+
+### Migrating Mitch — the order matters
+
+1. Decide the allowance (above). If it is not care-lite's, create a separate
+   `friends-family` plan row and price rather than bending care-lite, which is
+   a sold product and must keep meaning one thing.
+2. **Tell him to stop sending Venmo** *before* he completes Checkout. Venmo is
+   client-initiated, so nothing technical prevents him paying twice — only
+   telling him does. This is the whole double-billing risk for this client.
+3. Have him enrol through the portal's Checkout. Do not create the
+   subscription for him: the point of Checkout is that he authorises the
+   recurring charge himself.
+4. Fill in **"Stripe Customer Email"** on the workbook's Clients sheet with the
+   email on his Stripe customer. Without it the finance sync flags every one of
+   his charges `NEEDS REVIEW` — see below.
+5. Leave the two existing Venmo rows in the workbook alone. They are history.
 
 ### Preventing double billing
 
-A client with an existing Square subscription must have it cancelled *before*
-Stripe enrolment, not after — the portal cannot see a Square subscription from
-Stripe's side and will not stop you creating both. The checkout guard only
-prevents a second *Stripe* subscription.
+The checkout guard only prevents a second *Stripe* subscription. It cannot see
+Square or Venmo, so:
+
+- A client with a **Square** subscription must have it cancelled *before*
+  Stripe enrolment.
+- A client paying by **Venmo or cash** must be told to stop. There is no
+  technical guard for a human sending money.
+
+---
+
+## Two Stripe integrations
+
+There are now two, they read the same account, and they are not connected:
+
+| | Portal (`apps/platform`) | Finance sync (`finance/scripts/`) |
+|---|---|---|
+| Variable | `STRIPE_SECRET_KEY` | `STRIPE_API_KEY` |
+| Key type | Secret or restricted, read + write | **Restricted, read-only on Charges** |
+| Writes to | The portal ledger (`payments`) | `Business_Finance_Tracker.xlsx` |
+| Trigger | Webhook, live | Manual `python sync_stripe_income.py` |
+
+**Keep the variable names distinct.** They hold different keys with different
+scopes, and putting a full secret key in `STRIPE_API_KEY` would hand write
+access to a bookkeeping script that only needs to read.
+
+**Neither is authoritative over the other.** The portal ledger drives
+entitlements; the workbook is the bookkeeping record. They will agree only if
+both see the same charges — expect them to diverge and reconcile by hand.
+
+**The finance sync matches clients by billing email**, so a Stripe customer
+created by the portal must carry one. The portal sets `email` from
+`clients.primary_contact_email`; if that is null the customer has no email and
+every charge lands as `NEEDS REVIEW`. Check it is set before enrolling anyone.
 
 ---
 
@@ -227,7 +286,9 @@ so far runs against the sandbox account `Mortensen Web Co. sandbox`
 4. **Set `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET`** in the
    Netlify production environment.
 5. **Run migration 0019** against the production database.
-6. **Resolve the `mitch-bedke-art` question** above.
+6. **Decide Mitch's change allowance**, then migrate him in the order set out
+   in [Migrating Mitch](#migrating-mitch--the-order-matters) — telling him to
+   stop sending Venmo *before* he enrols, not after.
 7. **Verify with one real, small transaction** — enrol a client you control,
    confirm the invoice settles, confirm the ledger row appears with the right
    amount, then refund it.
