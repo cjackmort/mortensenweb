@@ -25,6 +25,25 @@ export default defineConfig({
   site: "https://mortensenweb.com",
   trailingSlash: "always",
   build: { format: "directory", inlineStylesheets: "always" },
+  vite: {
+    build: {
+      /*
+       * esbuild, not Astro 7's default Lightning CSS.
+       *
+       * Lightning folds `animation-timeline` into the `animation` shorthand —
+       * `animation: linear both card-turn view()`. That syntax was in an early
+       * Level 2 draft and was then removed, so Chrome rejects the declaration
+       * outright and takes `animation-name` with it. Every scroll-driven
+       * animation on the home page died in the production build while dev
+       * looked perfect, because dev does not minify.
+       *
+       * The page still rendered correctly — everything just sat at its resting
+       * state, which is the designed fallback — so nothing looked broken. That
+       * is exactly why this is pinned rather than left to the default.
+       */
+      cssMinify: "esbuild",
+    },
+  },
   integrations: [
     react(),
     sitemap({

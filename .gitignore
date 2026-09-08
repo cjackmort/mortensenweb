@@ -87,3 +87,10 @@ infra/umami/.env
 # them are checked in, so the directory itself cannot be ignored wholesale.
 apps/portfolio/.astro/data-store.json
 apps/portfolio/.astro/settings.json
+# Astro 7 runs the dev server as a daemon and records its pid/port here.
+apps/portfolio/.astro/dev.json
+
+# Work-card screenshots pulled from each site at build time by
+# apps/portfolio/scripts/sync-tiles.ts. Generated per build; the committed
+# image beside each one is the fallback and is what belongs in git.
+apps/portfolio/public/work/*-auto.webp
