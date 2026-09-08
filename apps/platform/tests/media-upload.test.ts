@@ -341,6 +341,167 @@ describe("server-side verification", () => {
   });
 });
 
+describe("quota under concurrency", () => {
+  it("counts an in-flight upload against the allowance", async () => {
+    // 3 MB of room, and one 2 MB session opened but not finished.
+    const tenant = await seedTenant(db, "Reserver", { mediaQuotaBytes: 3 * 1024 * 1024 });
+
+    const first = await beginUpload(db, tenant.ctx, {
+      filename: "held.jpg",
+      declaredBytes: 2 * 1024 * 1024,
+      declaredChecksum: "a".repeat(64),
+      declaredContentType: "image/jpeg",
+    });
+    expect(first.ok).toBe(true);
+
+    // Nothing has been uploaded, but the room is spoken for.
+    const usage = await getStorageUsage(db, tenant.ctx);
+    expect(usage.totalBytes).toBe(2 * 1024 * 1024);
+
+    // A second 2 MB session must not fit. With a zero-byte placeholder this
+    // used to succeed, and so would a hundred more after it.
+    const second = await beginUpload(db, tenant.ctx, {
+      filename: "denied.jpg",
+      declaredBytes: 2 * 1024 * 1024,
+      declaredChecksum: "b".repeat(64),
+      declaredContentType: "image/jpeg",
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.reason).toBe("quota");
+  });
+
+  it("holds the line when every session starts at the same instant", async () => {
+    // Ten simultaneous starts against room for exactly five.
+    //
+    // This is the case a `SUM`-based check cannot survive: measured before the
+    // counter existed, all ten were granted and the tenant finished at twice
+    // their allowance. Serverless makes simultaneous requests ordinary.
+    const quota = 10 * 1024 * 1024;
+    const each = 2 * 1024 * 1024;
+    const tenant = await seedTenant(db, "Racer", { mediaQuotaBytes: quota });
+
+    const attempts = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        beginUpload(db, tenant.ctx, {
+          filename: `race-${i}.jpg`,
+          declaredBytes: each,
+          declaredChecksum: "a".repeat(64),
+          declaredContentType: "image/jpeg",
+        }),
+      ),
+    );
+
+    const granted = attempts.filter((a) => a.ok).length;
+    expect(granted).toBe(5);
+
+    const usage = await getStorageUsage(db, tenant.ctx);
+    expect(usage.totalBytes).toBe(quota);
+
+    // And the refusals say why, rather than failing obscurely.
+    const refused = attempts.filter((a) => !a.ok);
+    expect(refused).toHaveLength(5);
+    for (const attempt of refused) {
+      if (attempt.ok) continue;
+      expect(attempt.reason).toBe("quota");
+    }
+  });
+
+  it("releases the reservation when a session is abandoned and swept", async () => {
+    const tenant = await seedTenant(db, "Abandoner", { mediaQuotaBytes: 4 * 1024 * 1024 });
+
+    const begun = await beginUpload(db, tenant.ctx, {
+      filename: "ghost.jpg",
+      declaredBytes: 3 * 1024 * 1024,
+      declaredChecksum: "c".repeat(64),
+      declaredContentType: "image/jpeg",
+    });
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+
+    expect((await getStorageUsage(db, tenant.ctx)).totalBytes).toBe(3 * 1024 * 1024);
+
+    const { mediaUploads } = await import("@/db/schema");
+    await db
+      .update(mediaUploads)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(mediaUploads.publicId, begun.uploadPublicId));
+
+    await sweepExpiredUploads(db, 100);
+
+    // Otherwise a client who closed a tab would be permanently short of room.
+    expect((await getStorageUsage(db, tenant.ctx)).totalBytes).toBe(0);
+  });
+
+  it("recovers room lost to drift", async () => {
+    // A counter can disagree with the truth it summarises — a process dying
+    // between a release and the write that should have followed leaves bytes
+    // reserved that nothing holds. Left alone that is a client who is
+    // permanently and inexplicably short of room.
+    const { clients } = await import("@/db/schema");
+    const { reconcileStorageReservations } = await import(
+      "@/db/repositories/client/media-quota"
+    );
+
+    const tenant = await seedTenant(db, "Drifter", { mediaQuotaBytes: 5 * 1024 * 1024 });
+
+    // Simulate the drift directly: room held against nothing.
+    await db
+      .update(clients)
+      .set({ mediaReservedBytes: 4 * 1024 * 1024 })
+      .where(eq(clients.organizationId, tenant.organizationId));
+
+    const blocked = await beginUpload(db, tenant.ctx, {
+      filename: "blocked.jpg",
+      declaredBytes: 3 * 1024 * 1024,
+      declaredChecksum: "d".repeat(64),
+      declaredContentType: "image/jpeg",
+    });
+    expect(blocked.ok).toBe(false);
+
+    const result = await reconcileStorageReservations(db);
+    expect(result.corrected).toBeGreaterThanOrEqual(1);
+
+    // The phantom reservation is gone and the room is usable again.
+    const afterFix = await beginUpload(db, tenant.ctx, {
+      filename: "unblocked.jpg",
+      declaredBytes: 3 * 1024 * 1024,
+      declaredChecksum: "e".repeat(64),
+      declaredContentType: "image/jpeg",
+    });
+    expect(afterFix.ok).toBe(true);
+  });
+
+  it("leaves an accurate counter alone", async () => {
+    const { reconcileStorageReservations } = await import(
+      "@/db/repositories/client/media-quota"
+    );
+    const tenant = await seedTenant(db, "Accurate");
+    const bytes = new Uint8Array(await images.jpegFixture(400, 300));
+    await uploadFile(tenant, bytes, "counted.jpg");
+    await runDerivativeJobs(db, 10);
+
+    // Run it twice: the second pass must find nothing to fix, or the
+    // reconciliation is itself a source of churn.
+    await reconcileStorageReservations(db);
+    const second = await reconcileStorageReservations(db);
+    expect(second.corrected).toBe(0);
+  });
+
+  it("replaces the reservation with the size actually stored", async () => {
+    const tenant = await seedTenant(db, "Honest");
+    const bytes = new Uint8Array(await images.jpegFixture(500, 400));
+
+    const { completed } = await uploadFile(tenant, bytes, "actual.jpg");
+    expect(completed?.ok).toBe(true);
+
+    const usage = await getStorageUsage(db, tenant.ctx);
+    // The declared figure is a reservation, not a charge. What is counted
+    // afterwards is what was assembled.
+    expect(usage.originalBytes).toBe(bytes.byteLength);
+  });
+});
+
 describe("derivative jobs", () => {
   it("promotes an asset to ready and writes every size", async () => {
     const bytes = new Uint8Array(await images.jpegFixture(2400, 1600));

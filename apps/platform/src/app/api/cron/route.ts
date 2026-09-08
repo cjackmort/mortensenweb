@@ -10,6 +10,7 @@ import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
 import { expireStaleShares } from "@/db/repositories/admin/maintenance";
 import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
+import { reconcileStorageReservations } from "@/db/repositories/client/media-quota";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
@@ -106,6 +107,11 @@ export async function POST(request: Request): Promise<Response> {
     // Abandoned uploads. A client who closed a tab mid-upload leaves parts and
     // a placeholder holding quota, and nothing else will ever finish them.
     ["mediaUploadsSwept", () => sweepExpiredUploads(db)],
+    // Storage counters, recomputed from what is actually stored. The counter is
+    // what makes the quota atomic, and this is what makes the counter safe to
+    // trust: any interruption between a release and the write that should have
+    // followed is corrected here rather than slowly costing a client room.
+    ["storageReconciled", () => reconcileStorageReservations(db)],
   ];
 
   for (const [name, run] of jobs) {

@@ -253,6 +253,12 @@ export function renderIssueBody(input: IssueInput): string {
       "it against the width you intend to render at, and say so in the pull",
       "request if a photo is too small rather than upscaling it.",
       "",
+      "If a download answers **413**, the file is larger than one response may",
+      "carry. The body says how many bytes it is and how many fit; fetch it in",
+      "pieces with a `Range: bytes=start-end` header and join them. Do not",
+      "commit a partial file — a truncated image looks fine in a diff and broken",
+      "on the page.",
+      "",
       ...input.attachmentUrls.flatMap((a, index) => {
         const name = a.title ?? `Photo ${index + 1}`;
         const said = a.caption ? ` — the client says: ${a.caption}` : "";

@@ -288,6 +288,20 @@ CREATE INDEX IF NOT EXISTS "media_usages_asset_idx" ON "media_usages" ("asset_id
 ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "media_quota_bytes" bigint;
 --> statement-breakpoint
 
+-- Bytes spoken for, as an atomic counter.
+--
+-- Not derivable per request: `SUM(byte_size)` has to be read before the quota
+-- decision and written after it, and simultaneous requests all read the same
+-- total. Measured at ten concurrent starts against room for five, every one was
+-- granted. A conditional UPDATE on this column takes a row lock and cannot be
+-- split that way.
+--
+-- Defaults to 0 and is reconciled from the assets themselves on the scheduled
+-- tick, so existing rows need no backfill here: the first reconciliation sets
+-- them, and until then a client simply has their full allowance.
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "media_reserved_bytes" bigint DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+
 -- Makes submitting a change request idempotent. Nullable, and unique only
 -- where present, so every existing row is unaffected.
 ALTER TABLE "change_requests" ADD COLUMN IF NOT EXISTS "idempotency_key" text;

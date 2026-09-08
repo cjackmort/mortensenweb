@@ -21,7 +21,11 @@ import {
 } from "@/lib/storage/driver";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 import { requireOwnFolder } from "./media-folders";
-import { getStorageUsage } from "./media-assets";
+import {
+  adjustReservation,
+  releaseStorage,
+  reserveStorage,
+} from "./media-quota";
 
 /**
  * Chunked uploads.
@@ -145,9 +149,25 @@ export async function beginUpload(
     }
   }
 
-  const usage = await getStorageUsage(db, ctx);
-  if (usage.totalBytes + bytes > usage.quotaBytes) {
-    const freeMb = Math.max(0, Math.floor((usage.quotaBytes - usage.totalBytes) / 1024 / 1024));
+  /*
+   * Claim the room before anything moves.
+   *
+   * One statement, row-locked, so the comparison and the increment cannot be
+   * separated — see `media-quota.ts` for why a `SUM` could not do this. The
+   * claim is for the *declared* size; `completeUpload` trues it up to what
+   * actually arrived, and abort or sweep hands it all back.
+   */
+  const reservation = await reserveStorage(db, ctx, bytes);
+  if (!reservation.ok) {
+    if (reservation.reason === "no_client") {
+      return {
+        ok: false,
+        reason: "invalid",
+        message:
+          "Your account is not linked to a client record yet. Please contact us.",
+      };
+    }
+    const freeMb = Math.floor(reservation.freeBytes / 1024 / 1024);
     return {
       ok: false,
       reason: "quota",
@@ -159,7 +179,8 @@ export async function beginUpload(
   const uploadPublicId = newPublicId();
   const partCount = Math.max(1, Math.ceil(bytes / UPLOAD_PART_BYTES));
 
-  const inserted = await db
+  try {
+    const inserted = await db
     .insert(mediaAssets)
     .values({
       publicId: assetPublicId,
@@ -167,7 +188,12 @@ export async function beginUpload(
       folderId,
       status: "uploading",
       originalFilename: filename,
-      byteSize: 0,
+      // The declared size, not zero: this row *is* the quota reservation for
+      // the duration of the session. `completeUpload` overwrites it with the
+      // size actually assembled, so a client who declares 16 MB and sends 2 MB
+      // holds the larger figure only until they finish or the sweeper collects
+      // them — never permanently.
+      byteSize: bytes,
       uploadedBy: ctx.userId,
     })
     .returning({ id: mediaAssets.id });
@@ -186,14 +212,21 @@ export async function beginUpload(
     createdBy: ctx.userId,
   });
 
-  return {
-    ok: true,
-    uploadPublicId,
-    assetPublicId,
-    partSize: UPLOAD_PART_BYTES,
-    partCount,
-    receivedParts: [],
-  };
+    return {
+      ok: true,
+      uploadPublicId,
+      assetPublicId,
+      partSize: UPLOAD_PART_BYTES,
+      partCount,
+      receivedParts: [],
+    };
+  } catch (error) {
+    // The room was claimed and the session was not created. Give it back, or
+    // the tenant loses that much allowance permanently — the counter would say
+    // bytes are held by something that does not exist.
+    await releaseStorage(db, ctx.organizationId, bytes);
+    throw error;
+  }
 }
 
 interface SessionRow {
@@ -456,6 +489,8 @@ export async function completeUpload(
       .update(mediaUploads)
       .set({ status: "aborted", updatedAt: new Date() })
       .where(eq(mediaUploads.id, session.id));
+    // Nothing usable was stored, so the room goes back.
+    await releaseStorage(db, ctx.organizationId, Number(session.declaredBytes));
     return {
       ok: false,
       retryable: true,
@@ -470,6 +505,7 @@ export async function completeUpload(
       .update(mediaUploads)
       .set({ status: "aborted", updatedAt: new Date() })
       .where(eq(mediaUploads.id, session.id));
+    await releaseStorage(db, ctx.organizationId, Number(session.declaredBytes));
     return {
       ok: false,
       retryable: false,
@@ -513,6 +549,15 @@ export async function completeUpload(
     .update(mediaUploads)
     .set({ status: "completed", updatedAt: new Date() })
     .where(eq(mediaUploads.id, session.id));
+
+  // The reservation was for the declared size; charge what actually arrived.
+  // Unconditional, because the bytes are already in storage — refusing here
+  // would leave the counter disagreeing with reality.
+  await adjustReservation(
+    db,
+    ctx.organizationId,
+    actualTotal - Number(session.declaredBytes),
+  );
 
   // Queue derivatives. `onConflictDoNothing` against the partial unique index
   // means a retried completion does not enqueue a second job for one asset.
@@ -574,6 +619,8 @@ export async function abortUpload(
       and(eq(mediaAssets.id, session.assetId), eq(mediaAssets.status, "uploading")),
     );
 
+  await releaseStorage(db, ctx.organizationId, Number(session.declaredBytes));
+
   return { ok: true };
 }
 
@@ -601,6 +648,8 @@ export async function sweepExpiredUploads(
       id: mediaUploads.id,
       publicId: mediaUploads.publicId,
       assetId: mediaUploads.assetId,
+      organizationId: mediaUploads.organizationId,
+      declaredBytes: mediaUploads.declaredBytes,
     })
     .from(mediaUploads)
     .where(
@@ -635,7 +684,7 @@ export async function sweepExpiredUploads(
 
     // Only ever the placeholder. An asset that reached `processing` or beyond
     // has real bytes and belongs to the client, whatever its session did.
-    await db
+    const removed = await db
       .delete(mediaAssets)
       .where(
         and(
@@ -643,7 +692,19 @@ export async function sweepExpiredUploads(
           eq(mediaAssets.status, "uploading"),
           isNull(mediaAssets.storageKey),
         ),
+      )
+      .returning({ id: mediaAssets.id });
+
+    // Only release when the placeholder was actually removed. An asset that
+    // reached `processing` has real bytes and keeps its room; releasing for it
+    // would let the tenant store the same bytes twice over.
+    if (removed.length > 0) {
+      await releaseStorage(
+        db,
+        session.organizationId,
+        Number(session.declaredBytes),
       );
+    }
   }
 
   return { sessions: stale.length, objects };

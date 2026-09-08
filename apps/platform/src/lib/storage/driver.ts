@@ -115,6 +115,16 @@ class LocalDiskDriver implements StorageDriver {
  * metadata round-tripped through storage would reintroduce exactly the trust
  * the upload validator exists to remove.
  */
+/**
+ * Is this the real site, or a preview of it?
+ *
+ * Netlify sets `CONTEXT` to `production`, `deploy-preview`, `branch-deploy` or
+ * `dev`. Only the first may touch the durable stores.
+ */
+function isProductionContext(): boolean {
+  return process.env.CONTEXT === "production";
+}
+
 class NetlifyBlobsDriver implements StorageDriver {
   private store: Promise<{
     set: (key: string, value: ArrayBuffer | Uint8Array) => Promise<unknown>;
@@ -122,12 +132,33 @@ class NetlifyBlobsDriver implements StorageDriver {
     delete: (key: string) => Promise<unknown>;
   }>;
 
+  /**
+   * Production writes to the global store; everything else writes to a
+   * deploy-scoped one.
+   *
+   * This is a data-safety boundary, not tidiness. `getStore` is global: it is
+   * shared by every deploy of the site, including deploy previews and branch
+   * deploys. Left as it was, opening a pull request and clicking around its
+   * preview would have written test uploads into the same `media` and
+   * `attachments` stores that hold real clients' photographs — and the sweeper
+   * running in that preview would have been free to delete from them.
+   *
+   * `getDeployStore` is scoped to one deploy and is removed when that deploy
+   * is, so a preview cleans up after itself and can touch nothing real. The
+   * cost is that a new commit means a new deploy and therefore an empty store,
+   * which is the right trade for a throwaway environment.
+   *
+   * Production must stay on the global store: an asset has to outlive the
+   * deploy that received it.
+   */
   constructor(
     storeName: string,
     private readonly keyPattern: RegExp = KEY_PATTERN,
   ) {
     this.store = import("@netlify/blobs").then((m) =>
-      m.getStore({ name: storeName, consistency: "strong" }),
+      isProductionContext()
+        ? m.getStore({ name: storeName, consistency: "strong" })
+        : m.getDeployStore({ name: storeName, consistency: "strong" }),
     ) as never;
   }
 

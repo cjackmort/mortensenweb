@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { mediaAssets, mediaDerivatives } from "@/db/schema";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { mediaDriver } from "@/lib/storage/driver";
+import { serveBytes } from "@/lib/media/serve";
 
 /**
  * Serving a client their own image.
@@ -45,7 +46,7 @@ const DERIVATIVE_VARIANTS = new Set([
 ]);
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ assetId: string; variant: string }> },
 ): Promise<Response> {
   const user = await currentUser();
@@ -113,28 +114,26 @@ export async function GET(
   const safeType = contentType && SERVEABLE.has(contentType) ? contentType : null;
   if (!safeType) return NOT_FOUND();
 
-  return new Response(object.bytes as unknown as BodyInit, {
-    status: 200,
-    headers: {
-      "Content-Type": safeType,
-      "Content-Length": String(object.bytes.byteLength),
-      // Derivatives are immutable for the life of a key, so a long private
-      // cache is safe and makes the grid feel instant on a second visit.
-      // `private` keeps it in the one browser that authenticated for it and out
-      // of any shared proxy — these are one tenant's images.
-      "Cache-Control":
-        variant === "original"
-          ? "private, no-store"
-          : "private, max-age=3600, must-revalidate",
-      // Never rendered as a page. An image is bytes to draw, and this origin
-      // carries a session cookie.
-      "X-Content-Type-Options": "nosniff",
-      "Content-Disposition":
-        variant === "original"
-          ? `attachment; filename="${asset.filename.replace(/["\\]/g, "")}"`
-          : "inline",
-      "X-Robots-Tag": "noindex, nofollow",
-      "Referrer-Policy": "no-referrer",
-    },
+  // Range-aware for the same reason as the agent route: an original can exceed
+  // what one Netlify response may carry, and a resumable download is worth
+  // having on a phone regardless.
+  return serveBytes({
+    bytes: object.bytes,
+    contentType: safeType,
+    disposition:
+      variant === "original"
+        ? // Quotes and backslashes stripped so a filename cannot break out of
+          // the header's own quoting.
+          `attachment; filename="${asset.filename.replace(/["\\]/g, "")}"`
+        : "inline",
+    // Derivatives are immutable for the life of a key, so a long private cache
+    // is safe and makes the grid feel instant on a second visit. `private`
+    // keeps it in the one browser that authenticated for it and out of any
+    // shared proxy — these are one tenant's images.
+    cacheControl:
+      variant === "original"
+        ? "private, no-store"
+        : "private, max-age=3600, must-revalidate",
+    rangeHeader: request.headers.get("range"),
   });
 }

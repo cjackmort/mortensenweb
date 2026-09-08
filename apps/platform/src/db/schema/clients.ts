@@ -134,6 +134,30 @@ export const clients = pgTable(
      */
     mediaQuotaBytes: bigint("media_quota_bytes", { mode: "number" }),
 
+    /**
+     * Bytes currently spoken for: stored assets plus uploads in flight.
+     *
+     * A counter rather than `SUM(media_assets.byte_size)` computed per request,
+     * and the reason is concurrency. The sum has to be read before the decision
+     * and written after it, and two requests arriving together both read the
+     * same total and both proceed — measured at ten simultaneous starts against
+     * room for five, every one was granted and the tenant finished at twice
+     * their allowance. Nothing in a serverless runtime makes that rare.
+     *
+     * A single `UPDATE … SET reserved = reserved + n WHERE reserved + n <=
+     * quota` takes a row lock, so the read and the write cannot be separated —
+     * the same shape as `consumeChange` on `change_allowances`, for the same
+     * reason.
+     *
+     * The cost is that this can drift from the true sum if a process dies
+     * between two writes. `reconcileStorageReservations` recomputes it from the
+     * assets themselves on the scheduled tick, so drift is corrected rather
+     * than accumulating into a client who is permanently short of room.
+     */
+    mediaReservedBytes: bigint("media_reserved_bytes", { mode: "number" })
+      .notNull()
+      .default(0),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -1,3 +1,7 @@
+import { MAX_SERVEABLE_BYTES } from "./serve";
+
+export { MAX_SERVEABLE_BYTES };
+
 /**
  * The limits and formats of the media library, in one place.
  *
@@ -27,11 +31,23 @@ export const UPLOAD_PART_BYTES = 3 * 1024 * 1024;
 /**
  * The largest original we will store.
  *
- * Sized for what clients actually have: a 48-megapixel phone photo is 15-25 MB
- * and a scanned artwork can reach 40 MB. At `UPLOAD_PART_BYTES` this is at most
- * 17 parts, which retries comfortably on a phone connection.
+ * **Derived from what can be served back, not from what can be uploaded.**
+ * Chunking means the upload side could take almost any size, and Netlify Blobs
+ * stores up to 5 GB — but a function may return at most 20 MB in one streamed
+ * response, so a larger original would be a file the library accepted and could
+ * never hand back. That failure would surface much later, as an agent run or a
+ * client download that quietly produced nothing.
+ *
+ * `MAX_SERVEABLE_BYTES` is therefore the governing number and this is defined
+ * from it, so the two cannot drift apart in a later edit.
+ *
+ * A 48-megapixel phone photo is 15-25 MB, so this does exclude the largest of
+ * them. Raising it means either raising what one response can carry — which is
+ * not ours to raise — or making every consumer fetch in ranges, which the
+ * serving layer already supports but the agent's tooling does not use by
+ * default. Stated in the UI rather than discovered at the end of an upload.
  */
-export const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
+export const MAX_ORIGINAL_BYTES = MAX_SERVEABLE_BYTES;
 
 /** How many files one browser session may have in flight. Keeps a phone sane. */
 export const MAX_CONCURRENT_UPLOADS = 3;
@@ -39,8 +55,8 @@ export const MAX_CONCURRENT_UPLOADS = 3;
 /**
  * How long an unfinished upload session survives before the sweeper takes it.
  *
- * Long enough for a slow connection to finish a 50 MB file with retries, short
- * enough that a closed tab does not hold quota for a day.
+ * Long enough for a slow connection to finish the largest allowed file with
+ * retries, short enough that a closed tab does not hold quota for a day.
  */
 export const UPLOAD_SESSION_TTL_MINUTES = 120;
 

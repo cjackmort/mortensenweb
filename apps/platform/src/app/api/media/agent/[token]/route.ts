@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { mediaAssets } from "@/db/schema";
 import { mediaDriver } from "@/lib/storage/driver";
 import { verifyMediaAssetToken } from "@/lib/storage/signed-links";
+import { serveBytes } from "@/lib/media/serve";
 
 /**
  * Serving one library original to the agent.
@@ -37,7 +38,7 @@ const NOT_FOUND = () => new Response(null, { status: 404 });
 const SERVEABLE = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> },
 ): Promise<Response> {
   const { token } = await params;
@@ -74,20 +75,19 @@ export async function GET(
   const object = await mediaDriver().get(row.storageKey);
   if (!object) return NOT_FOUND();
 
-  return new Response(object.bytes as unknown as BodyInit, {
-    status: 200,
-    headers: {
-      "Content-Type": contentType,
-      "Content-Length": String(object.bytes.byteLength),
-      // The agent downloads bytes. A person following the link out of
-      // curiosity gets a file, not a page that executes in this origin.
-      "Content-Disposition": "attachment",
-      "X-Content-Type-Options": "nosniff",
-      // The link expires, so a cache holding it would outlive the
-      // authorisation that produced it.
-      "Cache-Control": "private, no-store",
-      "X-Robots-Tag": "noindex, nofollow",
-      "Referrer-Policy": "no-referrer",
-    },
+  // Range-aware, because an original can be larger than one Netlify response
+  // may carry (20 MB streamed). A whole-object request over the ceiling is
+  // refused with a 413 that names the size and the limit, rather than being
+  // truncated into a corrupt file the agent would then commit.
+  return serveBytes({
+    bytes: object.bytes,
+    contentType,
+    // The agent downloads bytes. A person following the link out of curiosity
+    // gets a file, not a page that executes in this origin.
+    disposition: "attachment",
+    // The link expires, so a cache holding it would outlive the authorisation
+    // that produced it.
+    cacheControl: "private, no-store",
+    rangeHeader: request.headers.get("range"),
   });
 }
