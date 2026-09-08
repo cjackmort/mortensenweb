@@ -81,7 +81,9 @@ export function demoAnalytics(
     pageviewsTotal += pageviews;
     series.push({
       date: day.toISOString().slice(0, 10),
-      visitors,
+      // Visits, matching the real series. Demo data that used a different
+      // shape from production would let a chart bug hide behind it.
+      visits: visitors,
       pageviews,
     });
   }
@@ -99,19 +101,26 @@ export function demoAnalytics(
    */
   const previous: PriorPeriod = {
     visitors: priorVisitors,
+    // Demo visitors and visits are the same run-up; a real site has more
+    // visits than visitors, so this is deliberately conservative rather than
+    // flattering.
+    visits: priorVisitors,
     pageviews: priorPageviews,
-    // Lower before than now: more people are leaving straight away. Bad news,
-    // and it must render red despite the arrow pointing up.
+    // Lower before than now: more single-page visits. Bad news, and it must
+    // render red despite the arrow pointing up.
     bounceRate: bounceRate * 0.91,
-    avgSecondsOnSite: Math.round(avgSecondsOnSite * 0.93),
+    avgVisitSeconds: Math.round(avgSecondsOnSite * 0.93),
   };
 
   return {
     visitors: visitorsTotal,
+    visits: visitorsTotal,
     pageviews: pageviewsTotal,
     bounceRate,
-    avgSecondsOnSite,
+    avgVisitSeconds: avgSecondsOnSite,
+    anomaly: null,
     series,
+    hasVisitSeries: true,
     topPages: [
       { label: "/", value: Math.round(pageviewsTotal * 0.42) },
       { label: "/gallery.html", value: Math.round(pageviewsTotal * 0.24) },

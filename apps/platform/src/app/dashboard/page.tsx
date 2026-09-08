@@ -5,7 +5,14 @@ import { currentUser } from "@/auth";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
 import { RequestProgress } from "@/components/request-progress";
-import { ClickSummary } from "@/components/click-summary";
+import { EventPanels } from "@/components/event-panels";
+import { categoriseEvents } from "@/lib/analytics/events";
+import { AnalyticsFilterBar } from "@/components/analytics-filters";
+import {
+  parseFilters,
+  serialiseFilters,
+  type AnalyticsFilters,
+} from "@/lib/analytics/filters";
 import { VisitorsSkeleton } from "@/components/skeletons";
 import { CancelRequestButton } from "./requests/cancel-button";
 import { getDb } from "@/db/client";
@@ -49,7 +56,7 @@ export const dynamic = "force-dynamic";
 export default async function ClientDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -57,8 +64,15 @@ export default async function ClientDashboard({
   if (user.role === "admin") redirect("/admin");
 
   const params = await searchParams;
-  const parsed = Number(params.range);
-  const days: RangeDays = isValidRange(parsed) ? parsed : 30;
+  /*
+   * Filters come from the URL, and the URL cannot name a site.
+   *
+   * `parseFilters` has no `websiteId` field by construction — the site is
+   * resolved from the session below. That is the guarantee that stops a client
+   * from reaching another client's figures by editing a query string.
+   */
+  const filters = parseFilters(params);
+  const days: RangeDays = isValidRange(filters.range) ? filters.range : 30;
 
   if (!user.organizationId) {
     return (
@@ -91,7 +105,9 @@ export default async function ClientDashboard({
   // Analytics is kicked off here, before any HTML is sent, and awaited inside
   // the boundary below. Starting it early means the eight analytics calls run
   // *while* the top of the page is being streamed, not after.
-  const analytics = resolveClientAnalytics(db, ctx, days);
+  // Filters, not just the day count: the provider query narrows too, so the
+  // breakdowns and the headline figures agree with each other.
+  const analytics = resolveClientAnalytics(db, ctx, filters);
 
   const requestsPanel = (
     <RecentRequests
@@ -142,7 +158,7 @@ export default async function ClientDashboard({
         {openRequests > 0 && requestsPanel}
 
         <Suspense fallback={<VisitorsSkeleton />}>
-          <VisitorPanels analytics={analytics} days={days} />
+          <VisitorPanels analytics={analytics} days={days} filters={filters} />
         </Suspense>
 
         {openRequests === 0 && requestsPanel}
@@ -190,9 +206,12 @@ function teaser(lists: { rows: Breakdown[]; suffix?: string }[]): string {
 async function VisitorPanels({
   analytics,
   days,
+  filters,
 }: {
   analytics: Analytics;
   days: RangeDays;
+  /** Passed down rather than re-parsed, so one request has one filter set. */
+  filters: AnalyticsFilters;
 }) {
   const { state, data, showingDemo, isDemoSite } = await analytics;
 
@@ -201,9 +220,18 @@ async function VisitorPanels({
   const comparedTo = `previous ${days} days`;
   const updatedAt = formatTime(data.generatedAt);
 
-  const contactCount = data.events
-    .filter((e) => !e.label.toLowerCase().startsWith("photo:"))
-    .reduce((s, e) => s + e.value, 0);
+  /*
+   * The same miscount as the old event panel, in a second place.
+   *
+   * "Everything that is not a photo is contact" counted portfolio tiles, CTAs
+   * and shop links as people getting in touch, and put the total in the panel
+   * summary where it is read first and questioned least. It now comes from the
+   * registry, and it says "reached out" — taps on a phone number or an email
+   * address — rather than claiming anyone made contact.
+   */
+  const contactTaps = categoriseEvents(data.events)
+    .filter((group) => group.category === "contact_intent")
+    .reduce((sum, group) => sum + group.total, 0);
 
   return (
     <>
@@ -225,7 +253,7 @@ async function VisitorPanels({
             {(Object.keys(RANGES) as unknown as RangeDays[]).map((value) => (
               <Link
                 key={value}
-                href={`/dashboard?range=${value}`}
+                href={`/dashboard${serialiseFilters({ ...filters, range: Number(value) as RangeDays })}`}
                 aria-current={Number(value) === days ? "true" : undefined}
               >
                 {RANGES[value].replace("Last ", "")}
@@ -234,10 +262,37 @@ async function VisitorPanels({
           </nav>
         </div>
 
+        <AnalyticsFilterBar
+          filters={filters}
+          basePath="/dashboard"
+          devices={data.devices.map((d) => d.label)}
+          referrers={data.referrers.map((r) => r.label)}
+          pages={data.topPages.map((p) => p.label)}
+        />
+
         <StatRow data={data} comparedTo={comparedTo} />
 
+        {/* Said once, near the figures it qualifies. Every trailing window ends
+            mid-day, so a client comparing this morning with yesterday is
+            comparing a part-day against a whole one. */}
+        <p className="field-hint">
+          Today is still in progress, so the most recent day is partial.
+        </p>
+
+        {data.anomaly && (
+          <p className="notice">
+            These figures do not add up as expected ({data.anomaly}) — we are
+            looking into it. Treat them as indicative for now.
+          </p>
+        )}
+
         <div className="panel-body">
-          <TimeSeriesChart series={data.series} />
+          <TimeSeriesChart series={data.series} metric="visits" />
+          <TimeSeriesChart
+            series={data.series}
+            metric="pageviews"
+            gradientId="chart-area-fade-pageviews"
+          />
           <SeriesTable series={data.series} />
         </div>
       </section>
@@ -286,8 +341,8 @@ async function VisitorPanels({
           <span className="panel-sub">
             {[
               teaser([{ rows: data.topPages, suffix: " of views" }]),
-              contactCount > 0
-                ? `${contactCount} got in touch`
+              contactTaps > 0
+                ? `${contactTaps} ${contactTaps === 1 ? "tap" : "taps"} on a phone number or email`
                 : null,
             ]
               .filter(Boolean)
@@ -300,7 +355,13 @@ async function VisitorPanels({
             <h3>Most viewed pages</h3>
             <BarList rows={data.topPages} unit="views" />
           </div>
-          <ClickSummary events={data.events} />
+          <EventPanels
+            events={data.events}
+            categoryFilter={filters.eventCategory}
+            // A site that has never emitted an event has not been tagged; one
+            // that has, and shows none this period, was simply quiet.
+            trackingConfigured={data.events.length > 0}
+          />
         </div>
       </details>
     </>

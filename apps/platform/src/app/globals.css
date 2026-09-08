@@ -2497,3 +2497,114 @@ button.link:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   Analytics filters and event panels
+   ========================================================================== */
+
+.filter-bar {
+  margin: 0 0 1rem;
+}
+
+/* Wraps rather than scrolls. Four selects side by side is fine on a laptop and
+   unusable at 360px, and a horizontally scrolling filter row hides controls
+   behind an edge nobody thinks to drag. */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.filter-field label {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin: 0;
+}
+
+.filter-field select {
+  margin: 0;
+  min-height: var(--tap);
+  width: 100%;
+}
+
+.filter-field select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.filter-row button[type="submit"] {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: var(--tap);
+}
+
+/* The active filters. Deliberately loud enough to notice on the way past —
+   a figure that covers only mobile traffic from Google is a different claim
+   from the same figure unfiltered, and the reader has to be able to tell. */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid transparent;
+  /* Comfortably tappable without making the row feel like buttons. */
+  min-height: 1.8rem;
+}
+
+.filter-chip:hover,
+.filter-chip:focus-visible {
+  border-color: var(--accent);
+}
+
+.filter-reset {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+}
+
+/* ---- Event panels ------------------------------------------------------ */
+
+.event-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.event-panel h3 {
+  margin: 0 0 0.2rem;
+}
+
+/* The category description sits directly under its heading, because the
+   heading alone cannot carry the distinction the whole registry exists for:
+   "People reaching out" counts taps, not calls, and that has to be readable
+   without hovering anything. */
+.event-panel > .panel-note:first-of-type {
+  margin-top: 0;
+  margin-bottom: 0.6rem;
+}
+
+.empty-title {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}

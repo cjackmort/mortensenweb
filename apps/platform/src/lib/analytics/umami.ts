@@ -13,9 +13,28 @@
  * Every failure path here returns a distinct state the UI renders explicitly.
  */
 
+import {
+  deriveMetrics,
+  percentChange as percentChangeImpl,
+} from "./metrics";
+import {
+  previousWindow,
+  providerParams,
+  resolveWindow,
+  type AnalyticsFilters,
+  type DateWindow,
+} from "./filters";
+
 export interface SeriesPoint {
   date: string;
-  visitors: number;
+  /**
+   * Sessions on this day, or null when the provider sent no series for them.
+   *
+   * Nullable on purpose: zero is a real value, so it cannot also mean "we were
+   * not told". Conflating the two is how a chart shows a dead site that is in
+   * fact perfectly healthy.
+   */
+  visits: number | null;
   pageviews: number;
 }
 
@@ -36,18 +55,42 @@ export interface Breakdown {
  */
 export interface PriorPeriod {
   visitors: number;
+  /** Sessions. The denominator for bounce rate and visit duration. */
+  visits: number;
   pageviews: number;
-  bounceRate: number;
-  avgSecondsOnSite: number;
+  /** 0–1, or null when there were no visits to divide by. */
+  bounceRate: number | null;
+  /** Seconds, or null when there were no visits to divide by. */
+  avgVisitSeconds: number | null;
 }
 
 export interface AnalyticsSummary {
   visitors: number;
+  /**
+   * Sessions, and the denominator Umami defines for both derived metrics.
+   *
+   * The endpoint has always returned this. The previous implementation never
+   * read it and divided by `visitors` instead, which is wrong by exactly the
+   * average visits-per-visitor — small enough to look plausible.
+   */
+  visits: number;
   pageviews: number;
-  /** 0–1. Rendered as a percentage; never as a "score". */
-  bounceRate: number;
-  avgSecondsOnSite: number;
+  /** 0–1, or null when there were no visits. Never a "score". */
+  bounceRate: number | null;
+  avgVisitSeconds: number | null;
+  /** Set when the provider's own figures contradict each other. */
+  anomaly: string | null;
   series: SeriesPoint[];
+  /**
+   * False when the provider returned no per-day visit series.
+   *
+   * The old code read `sessions` off the pageviews response and defaulted a
+   * missing value to zero, so a change in the provider's response shape would
+   * have drawn a flat line along the bottom of the chart and called it
+   * "visitors". The chart refuses to plot the series at all rather than
+   * inventing one.
+   */
+  hasVisitSeries: boolean;
   topPages: Breakdown[];
   referrers: Breakdown[];
   devices: Breakdown[];
@@ -67,23 +110,12 @@ export interface AnalyticsSummary {
 }
 
 /**
- * Change from `previous` to `current`, as a signed fraction.
+ * Re-exported from `./metrics`, where the arithmetic now lives.
  *
- * Null when there is no honest answer. Growth from zero is the case that
- * matters: every naive implementation divides by it and renders `Infinity`,
- * and the ones that guard usually return 100%, which claims the traffic
- * doubled when it actually appeared out of nothing. Both are worse than
- * showing no arrow, so a zero baseline yields null and the caller draws
- * nothing.
+ * Kept on this module because several admin pages already import it from here,
+ * and moving the import site is churn with no benefit.
  */
-export function percentChange(
-  current: number,
-  previous: number,
-): number | null {
-  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
-  if (previous <= 0) return null;
-  return (current - previous) / previous;
-}
+export const percentChange = percentChangeImpl;
 
 /**
  * Every state the dashboard can be in. Distinguishing them is the point:
@@ -91,9 +123,30 @@ export function percentChange(
  * "genuinely no visitors" is information about the site.
  */
 export type AnalyticsState =
-  | { kind: "ok"; data: AnalyticsSummary; isDemo: boolean }
+  | {
+      kind: "ok";
+      data: AnalyticsSummary;
+      isDemo: boolean;
+      /**
+       * True when every counter is zero for the window.
+       *
+       * Distinguished from `not_connected` because they call for opposite
+       * responses: one is a quiet month, the other is a setup task nobody did.
+       */
+      isEmpty: boolean;
+      /**
+       * True when filters are active and excluded everything.
+       *
+       * A third distinct state, because "no results for this filter" invites
+       * clearing the filter, while "no activity" does not.
+       */
+      filteredToNothing: boolean;
+    }
+  /** No Umami credentials on this server at all. */
   | { kind: "not_configured" }
+  /** Credentials exist; this particular site has no Umami website id. */
   | { kind: "not_connected" }
+  /** The provider failed. Never rendered as zeroes. */
   | { kind: "error"; message: string };
 
 export const RANGES = {
@@ -130,6 +183,11 @@ type UmamiStatField = number | { value?: number } | undefined;
 interface UmamiStatsResponse {
   pageviews?: UmamiStatField;
   visitors?: UmamiStatField;
+  /**
+   * Sessions. Returned by the endpoint all along, and the denominator Umami
+   * documents for both bounce rate and average visit time.
+   */
+  visits?: UmamiStatField;
   bounces?: UmamiStatField;
   totaltime?: UmamiStatField;
 }
@@ -319,107 +377,152 @@ function toBreakdown(rows: UmamiMetric[], limit = 6): Breakdown[] {
  */
 export async function fetchAnalytics(
   websiteId: string,
-  days: RangeDays,
+  rangeOrFilters: RangeDays | AnalyticsFilters,
+  options: { timeZone?: string; now?: Date } = {},
 ): Promise<AnalyticsState> {
   if (!isUmamiConfigured()) return { kind: "not_configured" };
   if (!websiteId) return { kind: "not_connected" };
 
-  const endAt = Date.now();
-  const span = days * 24 * 60 * 60 * 1000;
-  const startAt = endAt - span;
-  const window = { startAt, endAt };
-  // The window immediately before this one, same length, no overlap: the last
-  // 30 days against the 30 before them. Comparing against a *calendar* month
-  // would be a different question, and a misleading one on the 3rd.
-  const priorWindow = { startAt: startAt - span, endAt: startAt };
+  // Callers that predate filtering still pass a plain day count. Accepting both
+  // keeps the admin pages working without a mechanical edit across four files.
+  const filters: AnalyticsFilters =
+    typeof rangeOrFilters === "number"
+      ? { range: rangeOrFilters, compare: true }
+      : rangeOrFilters;
+
+  const timeZone =
+    options.timeZone ?? process.env.BUSINESS_TIMEZONE ?? "America/Denver";
+
+  const window = resolveWindow(filters, timeZone, options.now);
+  const prior = previousWindow(window);
+  const dimensions = providerParams(filters);
+
+  const windowParams = { startAt: window.startAt, endAt: window.endAt, ...dimensions };
+  const priorParams = { startAt: prior.startAt, endAt: prior.endAt, ...dimensions };
 
   try {
-    const [stats, prior, pageviewSeries, pages, referrers, devices, countries, events] =
+    const [stats, priorStats, pageviewSeries, pages, referrers, devices, countries, events] =
       await Promise.all([
-        umamiFetch<UmamiStatsResponse>(`/websites/${websiteId}/stats`, window),
-        // The comparison is the one call allowed to fail on its own. Everything
-        // else here is the page; this is an annotation on it, and losing the
-        // arrows is much better than losing the figures they annotate.
-        umamiFetch<UmamiStatsResponse>(
-          `/websites/${websiteId}/stats`,
-          priorWindow,
-        ).catch(() => null),
-        umamiFetch<{ pageviews: UmamiMetric[]; sessions: UmamiMetric[] }>(
+        umamiFetch<UmamiStatsResponse>(`/websites/${websiteId}/stats`, windowParams),
+        // The one call allowed to fail alone. Everything else here is the page;
+        // this is an annotation on it, and losing the arrows is much better
+        // than losing the figures they annotate.
+        filters.compare
+          ? umamiFetch<UmamiStatsResponse>(
+              `/websites/${websiteId}/stats`,
+              priorParams,
+            ).catch(() => null)
+          : Promise.resolve(null),
+        umamiFetch<{ pageviews?: UmamiMetric[]; sessions?: UmamiMetric[] }>(
           `/websites/${websiteId}/pageviews`,
-          { ...window, unit: "day", timezone: process.env.BUSINESS_TIMEZONE ?? "America/Denver" },
+          { ...windowParams, unit: "day", timezone: timeZone },
         ),
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
-          ...window,
+          ...windowParams,
           type: "url",
         }),
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
-          ...window,
+          ...windowParams,
           type: "referrer",
         }),
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
-          ...window,
+          ...windowParams,
           type: "device",
         }),
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
-          ...window,
+          ...windowParams,
           type: "country",
         }),
-        // Custom events. Umami exposes them through the same metrics endpoint,
-        // so this costs one more call rather than a second integration. A site
-        // that emits none returns an empty list, which the panel renders as a
-        // setup prompt rather than a zero.
+        /*
+         * Custom events, requested well past what is displayed.
+         *
+         * The brief is explicit that a filter must query the full dataset
+         * rather than narrow an already-truncated top ten — with a limit of 12,
+         * filtering to "contact intent" could return nothing simply because the
+         * calls sat at position 13 behind a wall of photographs.
+         */
         umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, {
-          ...window,
+          ...windowParams,
           type: "event",
-          limit: 12,
+          limit: 500,
         }),
       ]);
 
-    const visitors = statValue(stats.visitors);
-    const pageviews = statValue(stats.pageviews);
-    const bounces = statValue(stats.bounces);
-    const totalTime = statValue(stats.totaltime);
+    const derived = deriveMetrics({
+      visitors: statValue(stats.visitors),
+      visits: statValue(stats.visits),
+      pageviews: statValue(stats.pageviews),
+      bounces: statValue(stats.bounces),
+      totaltime: statValue(stats.totaltime),
+    });
 
-    const priorVisitors = prior ? statValue(prior.visitors) : 0;
-    const previous: PriorPeriod | null = prior
-      ? {
-          visitors: priorVisitors,
-          pageviews: statValue(prior.pageviews),
-          bounceRate:
-            priorVisitors > 0
-              ? Math.min(1, statValue(prior.bounces) / priorVisitors)
-              : 0,
-          avgSecondsOnSite:
-            priorVisitors > 0
-              ? Math.round(statValue(prior.totaltime) / priorVisitors)
-              : 0,
-        }
+    const previous: PriorPeriod | null = priorStats
+      ? (() => {
+          const p = deriveMetrics({
+            visitors: statValue(priorStats.visitors),
+            visits: statValue(priorStats.visits),
+            pageviews: statValue(priorStats.pageviews),
+            bounces: statValue(priorStats.bounces),
+            totaltime: statValue(priorStats.totaltime),
+          });
+          return {
+            visitors: p.visitors,
+            visits: p.visits,
+            pageviews: p.pageviews,
+            bounceRate: p.bounceRate,
+            avgVisitSeconds: p.avgVisitSeconds,
+          };
+        })()
       : null;
 
-    const sessionsByDate = new Map(
-      (pageviewSeries.sessions ?? []).map((s) => [s.x ?? "", s.y]),
+    /*
+     * The per-day visit series, if the provider sent one.
+     *
+     * `sessions` is absent from some builds of the pageviews endpoint. The old
+     * code defaulted a missing value to zero per day, which would have drawn a
+     * flat line along the bottom of the chart labelled "visitors" — a silent
+     * zero of exactly the kind this module's header forbids. Absence is now
+     * carried through as null and the chart declines to plot it.
+     */
+    const sessionRows = pageviewSeries.sessions;
+    const hasVisitSeries = Array.isArray(sessionRows) && sessionRows.length > 0;
+    const visitsByDate = new Map(
+      (sessionRows ?? []).map((row) => [row.x ?? "", row.y]),
     );
 
-    const series: SeriesPoint[] = (pageviewSeries.pageviews ?? []).map((p) => ({
-      date: p.x ?? "",
-      pageviews: p.y,
-      visitors: sessionsByDate.get(p.x ?? "") ?? 0,
+    const series: SeriesPoint[] = (pageviewSeries.pageviews ?? []).map((point) => ({
+      date: point.x ?? "",
+      pageviews: point.y,
+      visits: hasVisitSeries ? (visitsByDate.get(point.x ?? "") ?? 0) : null,
     }));
+
+    const isEmpty =
+      derived.visitors === 0 && derived.pageviews === 0 && events.length === 0;
+    const filtering = Object.keys(dimensions).length > 0;
 
     return {
       kind: "ok",
       isDemo: false,
+      isEmpty: isEmpty && !filtering,
+      // Same emptiness, different cause and different advice: clear the filter.
+      filteredToNothing: isEmpty && filtering,
       data: {
-        visitors,
-        pageviews,
-        bounceRate: visitors > 0 ? Math.min(1, bounces / visitors) : 0,
-        avgSecondsOnSite: visitors > 0 ? Math.round(totalTime / visitors) : 0,
+        visitors: derived.visitors,
+        visits: derived.visits,
+        pageviews: derived.pageviews,
+        bounceRate: derived.bounceRate,
+        avgVisitSeconds: derived.avgVisitSeconds,
+        anomaly: derived.anomaly,
         series,
+        hasVisitSeries,
         topPages: toBreakdown(pages),
         referrers: toBreakdown(referrers),
         devices: toBreakdown(devices, 4),
         countries: toBreakdown(countries),
-        events: toBreakdown(events, 12),
+        // Kept whole. The event panels classify and group these themselves, and
+        // truncating here would decide the answer before the question was
+        // asked.
+        events: toBreakdown(events, 500),
         previous,
         generatedAt: new Date(),
       },
@@ -430,4 +533,13 @@ export async function fetchAnalytics(
       message: error instanceof Error ? error.message : "Unknown error",
     };
   }
+}
+
+/** The window a set of filters resolves to. Exported so the UI can label it. */
+export function describeWindow(
+  filters: AnalyticsFilters,
+  timeZone: string,
+  now?: Date,
+): DateWindow {
+  return resolveWindow(filters, timeZone, now);
 }
