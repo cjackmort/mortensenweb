@@ -1,0 +1,535 @@
+/*
+ * The home page — direction: "The Square".
+ *
+ * The premise: the blue square that serves as the period in the "M." monogram
+ * is the only blue object on the page, and it is a single physical thing. It
+ * detaches from the lockup and travels down the page becoming, in order, the
+ * caret in a request field, the preview panel, the approve button, and finally
+ * the live dot — where it flies into the masthead and stays as the period of
+ * the small mark. Every blue surface you see is that one object at a different
+ * point in its life. That is why there is no other accent: a second blue thing
+ * would break the only rule the design has.
+ *
+ * Construction follows the monogram: squares, right angles, zero radius, and a
+ * geometric sans whose bowls are drawn with the same compass. Sections are
+ * planes of colour running to the viewport edge, not cards inside a container.
+ *
+ * Scoped to `.home` rather than :root so the rest of the site keeps the Swiss
+ * design system in global.css untouched — /pricing/ and /services/ are unchanged
+ * and still ship zero JavaScript.
+ */
+
+.sq {
+  --sq-ink: #0e1116;
+  --sq-ink-2: #151a21;
+  --blue: #1552d6;
+  --sq-blue-deep: #0c3390;
+  --on-dark: #edefea;
+  --sq-muted: #97a0ac;
+  --sq-display: Jost, "Schibsted Grotesk", Helvetica, Arial, sans-serif;
+
+  /* One 3px square every 32px — the same construction as the mark, so the
+     ground reads as the brand's grid rather than a generic tech texture. */
+  --sq-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='3' height='3' fill='%23edefea'/%3E%3C/svg%3E");
+
+  background: var(--sq-ink);
+  color: var(--on-dark);
+}
+
+/* ==================================================================== hero */
+
+.hero-sq {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-7) var(--gutter) var(--space-8);
+  overflow: hidden;
+}
+
+.hero-sq__grid {
+  position: absolute;
+  inset: 0;
+  background-image: var(--sq-grid);
+  opacity: 0.22;
+  pointer-events: none;
+  /* Fades the grid out toward the bottom so the first plane edge below the
+     hero is a clean line rather than a seam through the texture. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+
+/* The square's future path, hinted before it moves. */
+.hero-sq__path {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: clamp(3rem, 12vh, 7rem);
+  background: linear-gradient(to bottom, transparent, var(--blue));
+  opacity: 0.5;
+}
+
+/* ================================================================== lockup */
+
+.lockup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-5);
+}
+
+.lockup__mark {
+  width: clamp(4rem, 7vw, 6rem);
+  height: auto;
+  overflow: visible;
+}
+
+.lockup__m {
+  fill: var(--on-dark);
+}
+
+.lockup__dot {
+  fill: var(--blue);
+}
+
+.lockup__word {
+  font-family: var(--sq-display);
+  font-weight: 400;
+  font-size: clamp(2.1rem, 0.6rem + 7vw, 6.75rem);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.lockup__word em {
+  font-style: normal;
+  color: #7ea6ff;
+}
+
+/* "Co." is a legal suffix, not part of the name; mono at a quarter of the
+   size says that without spending another colour on it. */
+.lockup__co {
+  font-family: var(--mono);
+  font-size: 0.2em;
+  letter-spacing: 0.02em;
+  color: var(--sq-muted);
+  margin-left: 0.5em;
+}
+
+.lockup__rule {
+  width: min(40rem, 80vw);
+  height: 1px;
+  background: #2a313a;
+  border: 0;
+  margin: 0;
+}
+
+.lockup__tagline {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--sq-muted);
+  margin: 0;
+  /* Wide tracking pushes the last letter past centre; the indent pays it back. */
+  text-indent: 0.3em;
+}
+
+/* ================================================================== motion
+ *
+ * Entrances are CSS keyframes, and every one animates *toward* the resting
+ * state the HTML already describes. Stopping the animation at any point, or
+ * never starting it, leaves a correct lockup.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  .lockup__m {
+    animation: sq-mark 900ms var(--ease-expo) both;
+  }
+
+  /* The square lands last and slightly late — it is the one blue thing on the
+     page, and the sequence below is about to be its story. */
+  .lockup__dot {
+    animation: sq-dot 520ms var(--ease-out) 640ms both;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .lockup__word > * {
+    display: inline-block;
+    animation: sq-rise 1s var(--ease-expo) both;
+    animation-delay: calc(200ms + var(--i) * 90ms);
+  }
+
+  .lockup__rule {
+    animation: sq-draw 900ms var(--ease-expo) 780ms both;
+  }
+
+  .lockup__tagline {
+    animation: sq-track 1.1s var(--ease-out) 920ms both;
+  }
+
+  .hero-sq__path {
+    animation: sq-draw-y 1s var(--ease-out) 1.1s both;
+    transform-origin: top;
+  }
+}
+
+@keyframes sq-mark {
+  from { opacity: 0; transform: translateY(14px); }
+}
+
+@keyframes sq-dot {
+  from { opacity: 0; transform: scale(0.2); }
+}
+
+@keyframes sq-rise {
+  from { opacity: 0; transform: translateY(0.4em); }
+}
+
+@keyframes sq-draw {
+  from { transform: scaleX(0); }
+}
+
+@keyframes sq-draw-y {
+  from { transform: scaleY(0); }
+}
+
+@keyframes sq-track {
+  from { opacity: 0; letter-spacing: 0.58em; }
+}
+
+/* =================================================================== stage
+ *
+ * The four steps of the change loop. Each one owns a "slot" — the shape the
+ * travelling square becomes when it arrives — and each slot contains a real
+ * blue square in the HTML. With no JavaScript you get four static squares in
+ * four different shapes, which reads as a Bauhaus poster sequence and states
+ * the same four steps. The island's only job is to replace those four with one
+ * object that moves between them.
+ */
+
+.sq-stage {
+  position: relative;
+}
+
+.dock {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  gap: var(--space-5);
+  padding: var(--space-8) var(--gutter);
+  /* Planes run to the viewport edge — the plane boundary is the only section
+     divider on this page, which is why there are no rules anywhere. */
+  border: 0;
+}
+
+.dock--ink { background: var(--sq-ink); color: var(--on-dark); }
+.dock--ink-2 { background: var(--sq-ink-2); color: var(--on-dark); }
+/* The loudest colour on the site is the moment of approval. The contact CTA
+   later uses this identical fill, because it is the same object. */
+.dock--blue { background: var(--blue); color: var(--on-dark); }
+.dock--paper { background: var(--paper); color: #0e1116; }
+
+.dock__inner {
+  width: min(var(--container), 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+@media (min-width: 60rem) {
+  .dock__inner {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: center;
+    gap: var(--space-8);
+  }
+}
+
+.dock__n {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.28em;
+  opacity: 0.7;
+  margin: 0 0 var(--space-4);
+}
+
+.dock__h {
+  font-family: var(--sq-display);
+  font-weight: 400;
+  font-size: clamp(2.4rem, 1rem + 5vw, 5rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  margin: 0 0 var(--space-4);
+}
+
+.dock__p {
+  font-size: var(--text-base);
+  line-height: 1.55;
+  max-width: 46ch;
+  margin: 0;
+  opacity: 0.86;
+}
+
+.dock--blue .dock__p { opacity: 0.95; }
+
+/* ------------------------------------------------------------- the slots */
+
+.dock__slot {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 100%;
+}
+
+.dock__square {
+  background: var(--blue);
+  display: block;
+}
+
+/* 01 — the caret sitting in a request field the client types into. */
+.dock__field {
+  width: 100%;
+  max-width: 34rem;
+  border: 1px solid #2a313a;
+  background: #0b0e12;
+  padding: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--sq-muted);
+  min-height: 5.5rem;
+}
+
+.dock--ask .dock__square { width: 12px; height: 30px; }
+
+/* 02 — the preview panel. The square fills it, then hollows out to an
+   outline and the preview underneath is what you were looking at all along. */
+.dock__panel {
+  position: relative;
+  width: 100%;
+  max-width: 34rem;
+  aspect-ratio: 16 / 10;
+  border: 1px solid #2a313a;
+  background: #0b0e12;
+  overflow: hidden;
+}
+
+/* Hollow at rest, so that with no JavaScript this reads as a preview panel
+   with a blue border rather than a solid blue block covering its own label.
+   The travelling square arrives filled and hollows out to match. */
+.dock--build .dock__square {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  background: transparent;
+  border: 2px solid var(--blue);
+}
+
+/* 03 — the square at its largest. The button has no background of its own:
+   the blue behind the word is the travelling square, docked. */
+.dock--approve .dock__slot { max-width: 34rem; }
+
+.dock__approve {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 13rem;
+  min-height: 3.5rem;
+  padding: 0 var(--space-5);
+  font-family: var(--sq-display);
+  font-size: var(--text-lg);
+}
+
+.dock--approve .dock__square {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+}
+
+/* Above the flyer, or the square would dock on top of its own label. */
+.dock__approve-label {
+  position: relative;
+  z-index: 6;
+  color: var(--on-dark);
+}
+
+/* 04 — the live dot, at the size it will keep forever once it reaches the
+   masthead and becomes the period in the small mark. */
+.dock--live .dock__slot { max-width: 34rem; }
+
+.dock__live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.dock--live .dock__square { width: 10px; height: 10px; }
+
+/* ------------------------------------------------------------ the flyer */
+
+/* Once the island mounts it owns the square, so the four static ones step
+   aside. They keep their space — the layout must not shift when JS arrives. */
+[data-flying] .dock__square,
+[data-flying] .lockup--hero .lockup__dot {
+  opacity: 0;
+}
+
+.flyer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--blue);
+  z-index: 5;
+  pointer-events: none;
+  will-change: transform, width, height;
+}
+
+/* ============================================================ the field */
+
+/* The canvas sits exactly where the CSS grid is. When it mounts it fades the
+   static grid out and takes over; if it never mounts, the CSS grid is the
+   design as drawn. Never the other way round — the ground is not allowed to
+   depend on a script. */
+.hero-sq__field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+
+/* Set by the canvas once it is actually drawing — an attribute on the hero
+   itself rather than :has() on the island, because the island is wrapped in an
+   <astro-island> element and the relationship is easier to get wrong than to
+   just state. */
+.hero-sq[data-field="on"] .hero-sq__grid {
+  opacity: 0;
+  transition: opacity 700ms linear;
+}
+
+/* ============================================================= the echoes */
+
+/* Where the square just was. Pure trail — never interactive, never a second
+   object: they only appear while it is moving and vanish the moment it docks,
+   so at rest there is still exactly one blue square on screen. */
+.flyer--ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--blue);
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* ==================================================== scroll-driven type
+ *
+ * Headings and copy arrive as the section does, driven by a view timeline
+ * rather than an observer. Browsers without scroll-driven animations skip the
+ * whole block and render everything at rest, which is the composition anyway.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .dock__n {
+      animation: dock-label linear both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 26%;
+    }
+
+    /* Per word, so the line assembles instead of sliding in as one block. */
+    .dock__h .w {
+      display: inline-block;
+      animation: dock-word linear both;
+      animation-timeline: view();
+      animation-range: entry calc(6% + var(--w) * 3%) cover calc(24% + var(--w) * 3%);
+    }
+
+    .dock__p,
+    .dock__slot {
+      animation: dock-body linear both;
+      animation-timeline: view();
+      animation-range: entry 14% cover 34%;
+    }
+
+    /* The lockup hands the page over: it recedes as the first step arrives,
+       rather than simply scrolling off the top. */
+    @supports (animation-timeline: scroll()) {
+      .lockup--hero {
+        animation: hero-recede linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 88vh;
+      }
+
+      .hero-sq__path {
+        animation: hero-path linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 60vh;
+      }
+    }
+  }
+}
+
+@keyframes dock-label {
+  from { opacity: 0; transform: translateX(-14px); }
+}
+
+@keyframes dock-word {
+  from { opacity: 0; transform: translateY(0.5em) rotate(1.5deg); }
+}
+
+@keyframes dock-body {
+  from { opacity: 0; transform: translateY(22px); }
+}
+
+@keyframes hero-recede {
+  to { transform: translateY(-7vh) scale(0.93); opacity: 0.3; }
+}
+
+@keyframes hero-path {
+  to { opacity: 0; transform: scaleY(1.8); }
+}
+
+/* ========================================================= leaving the stage
+ *
+ * A paper plane that wipes up over the dark as the last step scrolls away.
+ * With no scroll-driven animation support it is simply drawn — a paper band
+ * between the dark stage and the light page, which is the composition anyway.
+ */
+.stage-out {
+  height: 46svh;
+  background: var(--paper);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .stage-out {
+      clip-path: inset(100% 0 0 0);
+      animation: stage-out linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 62%;
+    }
+  }
+}
+
+@keyframes stage-out {
+  to { clip-path: inset(0 0 0 0); }
+}

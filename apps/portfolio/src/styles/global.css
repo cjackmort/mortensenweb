@@ -1812,3 +1812,15 @@ img {
     transform: none;
   }
 }
+
+/* The period of the "M." mark, carried into the masthead wordmark. On the home
+   page it is also a destination: the travelling blue square flies into this
+   spot at the end of the change-loop sequence and stays there. */
+.brand__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--blue);
+  margin-left: 0.3em;
+  vertical-align: baseline;
+}

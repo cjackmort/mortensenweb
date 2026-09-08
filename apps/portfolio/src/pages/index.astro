@@ -1,18 +1,20 @@
 ---
 import Base from "../layouts/Base.astro";
 import Marquee from "../components/Marquee.astro";
-import Loop from "../components/Loop.astro";
+import Lockup from "../components/Lockup.astro";
+import SquareFlight from "../react/SquareFlight";
+import HeroField from "../react/HeroField";
+import "../styles/home.css";
 import PlanCard from "../components/PlanCard.astro";
 import {
   PLANS,
-  CHEAPEST_PLAN,
   dollars,
   BUILD_PRICE_CENTS,
   BUILD_WITH_CARE_CENTS,
   BUILD_DISCOUNT_CENTS,
   BUILD_COMMITMENT_MONTHS,
 } from "@mortensenweb/plans";
-import { SITE, LOOP } from "../data/site";
+import { SITE } from "../data/site";
 
 const soldPlans = PLANS.filter((p) => p.key !== "care-unlimited");
 
@@ -51,54 +53,23 @@ const schema = [
 ---
 
 <Base path="/" schema={schema}>
+  {/* Jost only here: it is the home page's display face, and loading it on
+      /pricing/ would cost those pages a font they never set. */}
+  <link
+    slot="head"
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400&display=swap"
+  />
+
   {/* ------------------------------------------------------------ hero */}
-  <section class="hero">
-    <div class="hero__dots" aria-hidden="true"></div>
-    <div class="hero__dots-lit" aria-hidden="true"></div>
-    <div class="wrap">
-      <div class="hero__status">
-        <span class="eyebrow">Small-business websites</span>
-        <span class="eyebrow">Built, hosted, looked after</span>
-        <span class="eyebrow">{dollars(BUILD_WITH_CARE_CENTS)} build with a care plan · from {dollars(CHEAPEST_PLAN.monthlyCents)}/mo</span>
-      </div>
-
-      <div class="hero__grid">
-        <div>
-          <h1 class="hero__title">
-            <span class="line"><span style="--i:0">A website that</span></span>
-            <span class="line"><span style="--i:1">stays <em>current</em></span></span>
-            <span class="line"><span style="--i:2">after it launches.</span></span>
-          </h1>
-          <p class="lede hero__lede">
-            Most small businesses do not need a bigger website. They need one
-            that loads fast, says the right thing, and does not quietly go
-            stale the month after it goes live. We design it around what you
-            sell — then you ask for changes in a portal, approve a preview on
-            your phone, and it's live.
-          </p>
-          <div class="btn-row hero__actions">
-            <a class="btn btn--primary" href="/contact/" data-umami-event="cta: start a project">
-              Start a project <span class="arrow">→</span>
-            </a>
-            <a class="btn btn--ghost" href="/work/">See the work</a>
-          </div>
-        </div>
-
-        <div class="hero__index">
-          <p class="eyebrow" style="margin-bottom: .75rem">How a change happens</p>
-          <ol>
-            {
-              LOOP.map((step) => (
-                <li>
-                  <span class="n">{step.n}</span>
-                  <a href="#how">{step.title}</a>
-                </li>
-              ))
-            }
-          </ol>
-        </div>
-      </div>
-    </div>
+  <section class="hero-sq sq">
+    <div class="hero-sq__grid" aria-hidden="true"></div>
+    {/* Answers to the pointer and to the square as it passes. Falls back
+        to the static grid above it if it never mounts. */}
+    <HeroField client:load />
+    <Lockup />
+    {/* Where the square is about to go, hinted before it moves. */}
+    <div class="hero-sq__path" aria-hidden="true"></div>
   </section>
 
   <Marquee />
@@ -144,7 +115,127 @@ const schema = [
   </section>
 
   {/* ------------------------------------------------------ the loop */}
-  <Loop />
+  {/* --------------------------------------------- the square's journey */}
+  <section class="sq-stage" aria-label="How a change happens">
+    {/* 01 */}
+    <div class="dock dock--ink dock--ask sq" data-dock="1">
+      <div class="dock__inner">
+        <div>
+          <p class="dock__n">01 · You ask</p>
+          <h2 class="dock__h">
+            {
+              "In your own words.".split(" ").map((w, i) => (
+                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
+              ))
+            }
+          </h2>
+          <p class="dock__p">
+            In your portal, however you'd say it out loud. Attach a photo if it
+            helps — a picture of the thing you mean is usually faster than
+            describing it.
+          </p>
+        </div>
+        <div class="dock__slot">
+          <div class="dock__field">
+            <span>Swap the hero photo for the one from Saturday</span>
+            <span class="dock__square"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* 02 */}
+    <div class="dock dock--ink-2 dock--build sq" data-dock="2">
+      <div class="dock__inner">
+        <div>
+          <p class="dock__n">02 · We build it</p>
+          <h2 class="dock__h">
+            {
+              "On a copy, not your live site.".split(" ").map((w, i) => (
+                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
+              ))
+            }
+          </h2>
+          <p class="dock__p">
+            The change is made, checked — every link, every image — and put up
+            at a private address. Usually within the hour.
+          </p>
+        </div>
+        <div class="dock__slot">
+          <div class="dock__panel">
+            <p class="dock__n" style="padding: 1rem 1.25rem; margin: 0">
+              preview · a private address
+            </p>
+            <span class="dock__square"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* 03 — the square at its largest: it *is* the approve button. This
+        stage stays dark the whole way through, because a blue plane here
+        would be a blue surface that is not the square, and the page only
+        has one rule. */}
+    <div class="dock dock--ink dock--approve sq" data-dock="3">
+      <div class="dock__inner">
+        <div>
+          <p class="dock__n">03 · You approve</p>
+          <h2 class="dock__h">
+            {
+              "One tap, on your phone.".split(" ").map((w, i) => (
+                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
+              ))
+            }
+          </h2>
+          <p class="dock__p">
+            You get an email with the preview and a picture of the change.
+            Looks right? Approve it. Not quite? Say what's off — it doesn't
+            cost another change.
+          </p>
+        </div>
+        <div class="dock__slot">
+          <span class="dock__approve">
+            <span class="dock__square"></span>
+            <span class="dock__approve-label">Approve</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {/* 04 */}
+    <div class="dock dock--ink-2 dock--live sq" data-dock="4">
+      <div class="dock__inner">
+        <div>
+          <p class="dock__n">04 · It's live</p>
+          <h2 class="dock__h">
+            {
+              "And we check that it is.".split(" ").map((w, i) => (
+                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
+              ))
+            }
+          </h2>
+          <p class="dock__p">
+            We publish, fetch your live site to confirm it actually serves the
+            change, and tell you. Then it shows up in your visitor numbers like
+            everything else.
+          </p>
+        </div>
+        <div class="dock__slot">
+          <span class="dock__live">
+            <span class="dock__square"></span> Live
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {/* The stage ends by handing the page back to daylight: paper wipes up
+        over the dark as you leave the last step, so the change in ground
+        reads as a deliberate act rather than a seam between two designs. */}
+    <div class="stage-out" aria-hidden="true"></div>
+
+    <SquareFlight client:idle />
+  </section>
+
 
   {/* ------------------------------------------------------- numbers */}
   <section class="section section--sunk">
