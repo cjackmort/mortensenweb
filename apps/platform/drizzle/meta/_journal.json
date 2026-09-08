@@ -134,6 +134,13 @@
       "when": 1788556000000,
       "tag": "0018_site_preview_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0019_media_library",
+      "breakpoints": true
     }
   ]
 }

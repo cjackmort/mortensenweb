@@ -457,3 +457,56 @@ export const ledgerCategoryEnum = pgEnum("ledger_category", [
   "fees",
   "other",
 ]);
+
+// ---- Media library --------------------------------------------------------
+
+/**
+ * Lifecycle of an uploaded image.
+ *
+ * `uploading` and `ready` are deliberately far apart. Between them sit two
+ * things the browser cannot be trusted to have done: the bytes must actually be
+ * in storage and match the checksum the client declared, and the derivatives
+ * must exist. An asset is only offered for attachment at `ready`, so "the
+ * browser said the upload succeeded" is never sufficient to make something
+ * usable.
+ *
+ * `quarantined` is separate from `failed` because they need opposite handling:
+ * a failure is ours to retry, a quarantine is a deliberate refusal that a retry
+ * must not undo.
+ */
+export const mediaAssetStatusEnum = pgEnum("media_asset_status", [
+  "uploading",
+  "processing",
+  "ready",
+  "failed",
+  "quarantined",
+]);
+
+/**
+ * What a derivative is for.
+ *
+ * `thumb` and `preview` serve the library UI. The `web_*` sizes are what a
+ * built site would reference. They are generated from the original every time
+ * and never written back over it — the original is immutable once stored.
+ */
+export const mediaDerivativeKindEnum = pgEnum("media_derivative_kind", [
+  "thumb",
+  "preview",
+  "web_sm",
+  "web_md",
+  "web_lg",
+]);
+
+/**
+ * A chunked upload session.
+ *
+ * Netlify caps a function request body at roughly 4.5 MB once binary content is
+ * base64-encoded, and Netlify Blobs offers no presigned upload URL — so an
+ * original-resolution photo cannot arrive in one request by any route. It
+ * arrives in parts, and this tracks the session that owns them.
+ */
+export const mediaUploadStatusEnum = pgEnum("media_upload_status", [
+  "pending",
+  "completed",
+  "aborted",
+]);

@@ -234,6 +234,42 @@ export interface NewChangeRequestInput {
   allowanceId?: string;
   /** How this change is paid for, decided at submission. See the enum. */
   billing?: "included" | "overage" | "courtesy";
+  /**
+   * Minted by the browser and resent with every retry of one submission.
+   *
+   * See `findRequestByIdempotencyKey`: this is what makes a double-tap or a
+   * network retry find the request it already created instead of making a
+   * second one and spending a second change.
+   */
+  idempotencyKey?: string;
+}
+
+/**
+ * Find a request already created under this key, if any.
+ *
+ * Checked before the allowance is claimed, so a retry costs nothing. It cannot
+ * close the race on its own — two genuinely simultaneous submissions can both
+ * miss here — which is why the unique index on
+ * `(organization_id, idempotency_key)` exists and why `createChangeRequest`
+ * catches its violation. This is the fast path; the index is the guarantee.
+ */
+export async function findRequestByIdempotencyKey(
+  db: Database,
+  ctx: TenantContext,
+  key: string,
+) {
+  const rows = await db
+    .select()
+    .from(changeRequests)
+    .where(
+      and(
+        eq(changeRequests.organizationId, ctx.organizationId),
+        eq(changeRequests.idempotencyKey, key),
+      ),
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 export async function createChangeRequest(
@@ -266,11 +302,32 @@ export async function createChangeRequest(
       status: "submitted",
       allowanceId: input.allowanceId ?? null,
       billing: input.billing ?? "included",
+      idempotencyKey: input.idempotencyKey ?? null,
+    })
+    // The unique index on (organization_id, idempotency_key) decides the race.
+    // Two submissions arriving milliseconds apart both pass the lookup and both
+    // reach here; exactly one insert succeeds, and the other returns no row.
+    // The caller reads that as "someone else already created this" and goes
+    // looking for it, rather than creating a duplicate and charging for it.
+    // The `where` is required, not decorative: the unique index is partial
+    // (`WHERE idempotency_key IS NOT NULL`), and Postgres will not infer a
+    // partial index as the conflict arbiter unless the statement repeats its
+    // predicate. Without it every insert fails with 42P10 — including the
+    // ordinary ones carrying no key at all, which is how this first showed up.
+    .onConflictDoNothing({
+      target: [changeRequests.organizationId, changeRequests.idempotencyKey],
+      where: sql`idempotency_key IS NOT NULL`,
     })
     .returning();
 
   const created = inserted[0];
-  if (!created) throw new Error("Insert returned no row.");
+  if (!created) {
+    if (input.idempotencyKey) {
+      const existing = await findRequestByIdempotencyKey(db, ctx, input.idempotencyKey);
+      if (existing) return { ...existing, duplicate: true as const };
+    }
+    throw new Error("Insert returned no row.");
+  }
 
   await db.insert(requestEvents).values({
     requestId: created.id,
@@ -281,7 +338,7 @@ export async function createChangeRequest(
     visibility: "client_visible",
   });
 
-  return created;
+  return { ...created, duplicate: false as const };
 }
 
 /** Sites belonging to this tenant. */

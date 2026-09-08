@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -121,6 +122,18 @@ export const clients = pgTable(
      * maintained twice.
      */
     isInternal: boolean("is_internal").notNull().default(false),
+
+    /**
+     * How much media this client may store, in bytes.
+     *
+     * Null means the platform default (`DEFAULT_STORAGE_QUOTA_BYTES` in
+     * `lib/media/constants`). A column rather than a plan attribute because the
+     * cases that need raising it are individual — a photographer, an artist
+     * with a large catalogue — and waiting for a new plan tier to serve one
+     * client is how a limit becomes a support ticket instead of a setting.
+     */
+    mediaQuotaBytes: bigint("media_quota_bytes", { mode: "number" }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

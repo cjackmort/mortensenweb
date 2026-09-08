@@ -12,6 +12,10 @@ import {
   getEntitlements,
 } from "@/db/repositories/client/entitlements";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
+import {
+  listAssets,
+  listFolderOptions,
+} from "@/db/repositories/client/media-assets";
 import { RequestProgress } from "@/components/request-progress";
 import { RequestTimeline } from "@/components/request-timeline";
 import { isCancellable, stageIndex } from "@/lib/requests/status";
@@ -54,15 +58,26 @@ export default async function ClientRequestsPage() {
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [sites, requests, entitlements, allowance, previews] = await Promise.all(
-    [
-      listSites(db, ctx),
-      listChangeRequests(db, ctx, { limit: 50 }),
-      getEntitlements(db, ctx),
-      getAllowance(db, ctx),
-      listPreviewsAwaitingDecision(db, ctx),
-    ],
-  );
+  const [
+    sites,
+    requests,
+    entitlements,
+    allowance,
+    previews,
+    pickableAssets,
+    pickableFolders,
+  ] = await Promise.all([
+    listSites(db, ctx),
+    listChangeRequests(db, ctx, { limit: 50 }),
+    getEntitlements(db, ctx),
+    getAllowance(db, ctx),
+    listPreviewsAwaitingDecision(db, ctx),
+    // Bounded. A client with a thousand images should not have all of them
+    // serialised into this page — the library itself is where you browse, and
+    // the picker is for reaching for something recent.
+    listAssets(db, ctx, { readyOnly: true, limit: 120 }),
+    listFolderOptions(db, ctx),
+  ]);
 
   const timelines = await listRequestTimelines(
     db,
@@ -107,6 +122,20 @@ export default async function ClientRequestsPage() {
         <RequestForm
           sites={sites.map((s) => ({ publicId: s.publicId, name: s.name }))}
           locked={locked}
+          /* Only `ready` images are offered. One still processing has no
+             thumbnail and could not be used by an agent, so offering it would
+             be inviting a client to choose something that will be refused at
+             submit. */
+          assets={pickableAssets.map((asset) => ({
+            publicId: asset.publicId,
+            title: asset.title ?? asset.originalFilename,
+            filename: asset.originalFilename,
+            width: asset.width,
+            height: asset.height,
+            hasThumbnail: asset.hasThumbnail,
+            folderPublicId: asset.folderPublicId,
+          }))}
+          folders={pickableFolders}
           allowance={
             allowance
               ? {

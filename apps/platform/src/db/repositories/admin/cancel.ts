@@ -15,6 +15,7 @@ import {
   type Repo,
 } from "@/lib/github/rest";
 import { refundChange } from "@/db/repositories/client/entitlements";
+import { releaseUsage } from "@/db/repositories/client/request-assets";
 import { isCancellable, isTooLateToCancel } from "@/lib/requests/status";
 
 /**
@@ -131,6 +132,11 @@ export async function cancelChangeRequest(
       .set({ status: "cancelled", finishedAt: new Date() })
       .where(eq(agentJobs.id, job.id));
   }
+
+  // The images this request had claimed are free again. Left as `pending` they
+  // would tell the client an image is spoken for by a change that will never
+  // happen, and the library would go on refusing to delete it.
+  await releaseUsage(db, request.id);
 
   // Always refunded, by policy: a client who changes their mind has not had a
   // change made, and charging them for one would be charging for nothing. The

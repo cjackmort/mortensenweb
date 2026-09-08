@@ -11,3 +11,4 @@ export * from "./sites";
 export * from "./clients";
 export * from "./prospects";
 export * from "./operations";
+export * from "./media";

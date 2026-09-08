@@ -2497,3 +2497,478 @@ button.link:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   Media library
+   ==========================================================================
+
+   Two columns on a desktop, one on a phone. The sidebar collapses above the
+   grid rather than beside it, because a folder list squeezed into 30% of a
+   360px screen is unreadable and the grid is what someone came for.
+   ========================================================================== */
+
+.media-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .media-layout {
+    grid-template-columns: 17rem minmax(0, 1fr);
+  }
+}
+
+.media-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.media-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* ---- Folders ---------------------------------------------------------- */
+
+.media-folder {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  /* Comfortable on a phone without making the desktop list feel sparse. */
+  min-height: var(--tap);
+}
+
+.media-folder:hover {
+  background: var(--surface-sunk);
+}
+
+.media-folder.is-current {
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.media-folder-new {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.media-folder-new input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.media-folder-new button {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.media-folder-tools {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.media-folder-tools form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.media-folder-tools input,
+.media-folder-tools select {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.media-folder-tools button {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+/* ---- Upload ----------------------------------------------------------- */
+
+.media-drop {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+  background: var(--surface-sunk);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.media-drop.is-dragging {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.media-queue {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.media-queue-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+}
+
+.media-queue-head,
+.media-queue-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.media-queue-foot {
+  margin-top: 0.4rem;
+}
+
+.media-queue-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.media-queue-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+}
+
+/* Progress. Driven by parts the server confirmed, never by bytes handed to
+   the network - a bar that reaches 100% while an upload is stalled is worse
+   than no bar at all. */
+.media-bar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.media-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 200ms ease;
+}
+
+/* ---- Grid ------------------------------------------------------------- */
+
+.media-search {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.media-search input {
+  flex: 1;
+  min-width: 12rem;
+  margin: 0;
+}
+
+.media-search button[type="submit"] {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.media-bulk {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-wash);
+  font-size: 0.88rem;
+}
+
+.media-bulk button,
+.media-bulk select {
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.media-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.media-tile {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.media-tile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
+}
+
+/* The checkbox sits above the tile's own button rather than inside it -
+   nesting an input in a button is invalid HTML and leaves the checkbox
+   unclickable in several browsers. */
+.media-tile-pick {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin: 0;
+}
+
+.media-tile-pick input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.media-tile-body {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.media-tile-media {
+  aspect-ratio: 1 / 1;
+  background: var(--surface-sunk);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.media-tile-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-tile-placeholder {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.media-tile-name {
+  display: block;
+  padding: 0.45rem 0.55rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-tile-meta {
+  display: block;
+  padding: 0.1rem 0.55rem 0.55rem;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+}
+
+.media-tile .pill {
+  margin: 0 0.55rem 0.55rem;
+}
+
+/* ---- Detail ----------------------------------------------------------- */
+
+.media-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 48rem) {
+  .media-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.media-detail-preview {
+  background: var(--surface-sunk);
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  min-height: 12rem;
+}
+
+.media-detail-preview img {
+  max-width: 100%;
+  max-height: 22rem;
+  object-fit: contain;
+  display: block;
+}
+
+.media-detail-facts {
+  min-width: 0;
+}
+
+/* ---- Picker, on the request form --------------------------------------- */
+
+.media-picker {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.media-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.media-picker-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.media-picker-tile {
+  position: relative;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-sunk);
+}
+
+.media-picker-tile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
+}
+
+.media-picker-tile img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+
+.media-picker-tile input {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+.media-picker-tile span {
+  display: block;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-picker-confirm {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-wash);
+  font-size: 0.85rem;
+}
+
+/* ---- Media library on a phone ------------------------------------------
+
+   The single-line "input + button" rows collapse to two lines here rather
+   than fighting for horizontal space.
+
+   They have to. `form > button:only-of-type` already gives a lone submit
+   `width: 100%` on narrow screens — deliberately, because it is the primary
+   action and thumbs are imprecise — and at specificity (0,1,2) it outranks
+   the (0,1,1) of `.media-folder-new button`. The result was a full-width
+   "Add" button beside a 26px-wide text field.
+
+   Wrapping is the better answer anyway: a full-width field and a full-width
+   button below it is easier to hit than two cramped halves. */
+@media (max-width: 40rem) {
+  .media-folder-new,
+  .media-folder-tools form,
+  .media-search {
+    flex-wrap: wrap;
+  }
+
+  .media-folder-new input,
+  .media-folder-tools input,
+  .media-folder-tools select,
+  .media-search input {
+    flex: 1 1 100%;
+  }
+
+  /* Bulk actions are already wrapped; give the controls room to be tapped. */
+  .media-bulk select,
+  .media-bulk button {
+    flex: 1 1 auto;
+    min-height: var(--tap);
+  }
+}
+
+/* Above that width the rows stay on one line, and the button sizes to its
+   label. The attribute selector lifts specificity to (0,2,1) so it wins
+   against the narrow-screen rule's (0,1,2) at every width. */
+.media-folder-new button[type="submit"],
+.media-folder-tools button[type="submit"],
+.media-search button[type="submit"] {
+  width: auto;
+}

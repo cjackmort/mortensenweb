@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import { findDeployForCommit, verifyUrlServes } from "@/lib/netlify/api";
 import { notifyClientOfRequest } from "@/lib/notify/request";
+import { markUsagePublished } from "@/db/repositories/client/request-assets";
 
 /**
  * Following a merged change to the point it is actually on the website.
@@ -175,6 +176,17 @@ export async function advanceShippedChanges(
         body: "We've checked your website and the change is there.",
         visibility: "client_visible",
       });
+
+      // The library's "where is this used" answer, and for the same reason as
+      // the notification above: the site has been fetched and serves the
+      // change, so saying an image is on the website is now a fact rather than
+      // a prediction.
+      await markUsagePublished(
+        db,
+        row.requestId,
+        row.siteId ?? null,
+        row.productionUrl ?? "Your website",
+      );
 
       // Only now, when the site has actually been fetched and served the
       // change — never on the merge, which is a promise rather than a fact.

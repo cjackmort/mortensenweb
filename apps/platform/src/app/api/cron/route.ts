@@ -8,6 +8,8 @@ import { reverifyPendingPreviews } from "@/db/repositories/admin/webhooks";
 import { reverifyLiveSites } from "@/db/repositories/admin/launch";
 import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
 import { expireStaleShares } from "@/db/repositories/admin/maintenance";
+import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
+import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
@@ -92,6 +94,18 @@ export async function POST(request: Request): Promise<Response> {
     ["shippedChanges", () => advanceShippedChanges(db)],
     ["liveSiteProblems", () => reverifyLiveSites(db)],
     ["sharesExpired", () => expireStaleShares(db)],
+    // Media derivatives. The upload route nudges this after a completion, so
+    // the usual path is seconds; this is the safety net for a nudge that did
+    // not land and the retry path for a job that failed and backed off.
+    //
+    // Bounded at three per tick deliberately. Resizing a 40 MB original is the
+    // most expensive thing on this endpoint, and a backlog draining over
+    // several ticks is much better than one run being killed halfway through
+    // and leaving every asset it touched at `processing`.
+    ["mediaDerivatives", () => runDerivativeJobs(db, 3)],
+    // Abandoned uploads. A client who closed a tab mid-upload leaves parts and
+    // a placeholder holding quota, and nothing else will ever finish them.
+    ["mediaUploadsSwept", () => sweepExpiredUploads(db)],
   ];
 
   for (const [name, run] of jobs) {
