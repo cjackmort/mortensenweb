@@ -8,6 +8,7 @@ import { getInternalClient } from "@/db/repositories/admin/clients";
 import {
   cancelInternalChangeRequest,
   createInternalChangeRequest,
+  dispatchInternalChangeRequest,
   type NewInternalRequestInput,
 } from "@/db/repositories/admin/internal-requests";
 
@@ -113,4 +114,50 @@ export async function cancelInternalRequestAction(
 
   if (!outcome.ok) return { ok: false, message: outcome.message };
   return { ok: true, message: "Cancelled." };
+}
+
+export type InternalDispatchResult =
+  | { ok: true; message: string; issueUrl?: string }
+  | { ok: false; message: string };
+
+/**
+ * Start the agent on the agency's own request.
+ *
+ * The operator queue's "Start work" never covered these — that queue filters
+ * the internal client out — so until now the only thing that could move an
+ * internal request was the auto-dispatch flag, which is off by default.
+ */
+export async function startInternalWorkAction(
+  _previous: InternalDispatchResult | null,
+  formData: FormData,
+): Promise<InternalDispatchResult> {
+  const ctx = await requireAdmin();
+  const db = await getDb();
+
+  const internal = await getInternalClient(ctx, db);
+  if (!internal) {
+    return { ok: false, message: "The agency's site isn't linked yet." };
+  }
+
+  const requestPublicId = String(formData.get("requestPublicId") ?? "").trim();
+  if (!requestPublicId) {
+    return { ok: false, message: "No request was specified." };
+  }
+
+  const outcome = await dispatchInternalChangeRequest(
+    ctx,
+    db,
+    internal.organizationId,
+    requestPublicId,
+  );
+
+  revalidatePath("/admin/mortensenweb");
+
+  if (!outcome.ok) return { ok: false, message: outcome.message };
+
+  return {
+    ok: true,
+    message: `Work started — issue #${outcome.issueNumber} opened.`,
+    issueUrl: outcome.issueUrl,
+  };
 }

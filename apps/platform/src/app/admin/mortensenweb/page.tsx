@@ -7,7 +7,7 @@ import { RequestProgress } from "@/components/request-progress";
 import { EventPanels } from "@/components/event-panels";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
-import { getClientDetail, getInternalClient } from "@/db/repositories/admin/clients";
+import { getInternalClient } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import {
   fetchAnalytics,
@@ -19,6 +19,8 @@ import {
 import { demoAnalytics } from "@/lib/analytics/demo";
 import { demoReason } from "@/lib/analytics/resolve";
 import { isCancellable, statusLabel, stageIndex } from "@/lib/requests/status";
+import { listInternalChangeRequests } from "@/db/repositories/admin/internal-requests";
+import { InternalDispatchButton } from "./internal-dispatch-button";
 import { InternalCancelButton, InternalRequestForm } from "./internal-request-form";
 
 export const dynamic = "force-dynamic";
@@ -74,12 +76,15 @@ export default async function MortensenWebPage({
     );
   }
 
-  const detail = await getClientDetail(ctx, db, internal.clientPublicId);
-  const [siteRows] = await Promise.all([
+  // `getClientDetail` used to supply the requests here, but its query carries
+  // no agent-job state — which is exactly what an operator needs on this tab to
+  // tell "nobody has started this" from "the run is under way". Nothing else on
+  // the page used it, so it is one fewer round trip as well.
+  const [siteRows, requests] = await Promise.all([
     listSitesWithAnalytics(ctx, db, internal.organizationId),
+    listInternalChangeRequests(ctx, db, internal.organizationId),
   ]);
   const site = siteRows[0] ?? null;
-  const { requests } = detail;
 
   const umamiReady = isUmamiConfigured();
   const state = site?.umamiWebsiteId
@@ -230,11 +235,46 @@ export default async function MortensenWebPage({
                   </span>
                 </div>
                 <RequestProgress status={r.status} stage={stageIndex(r.status)} />
-                {isCancellable(r.status) && (
-                  <div style={{ marginTop: "0.5rem" }}>
+
+                {/* Whether the agent has actually been handed this.
+                    Without it, "submitted because nobody has started it" and
+                    "submitted because the run is under way" render the same,
+                    and only one of them is waiting for a person. */}
+                <p className="muted" style={{ margin: "0.4rem 0", fontSize: "0.8rem" }}>
+                  {r.agentDispatchedAt ? (
+                    <>
+                      Sent to the agent{" "}
+                      {new Date(r.agentDispatchedAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                      {r.agentFinishedAt ? " — finished" : " — still running"}
+                      {r.agentPrUrl && (
+                        <>
+                          {" · "}
+                          <a href={r.agentPrUrl} target="_blank" rel="noopener noreferrer">
+                            pull request
+                          </a>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    "Not sent to the agent yet."
+                  )}
+                </p>
+
+                <div className="actions" style={{ marginTop: "0.5rem" }}>
+                  <InternalDispatchButton
+                    requestPublicId={r.publicId}
+                    status={r.status}
+                  />
+                  {isCancellable(r.status) && (
                     <InternalCancelButton requestPublicId={r.publicId} />
-                  </div>
-                )}
+                  )}
+                </div>
+
                 {!isCancellable(r.status) && (
                   <span className="muted" style={{ fontSize: "0.8rem" }}>
                     {statusLabel(r.status)}
