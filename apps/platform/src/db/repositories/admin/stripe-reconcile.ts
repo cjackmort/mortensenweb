@@ -1,7 +1,13 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/client";
-import { clients, payments, subscriptions, webhookDeliveries } from "@/db/schema";
+import {
+  auditLog,
+  clients,
+  payments,
+  subscriptions,
+  webhookDeliveries,
+} from "@/db/schema";
 import {
   collectedCents,
   portalStatusFor,
@@ -314,6 +320,83 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       error: error instanceof Error ? error.message : "unknown",
     };
   }
+}
+
+/**
+ * How often a scheduled pass is worth doing.
+ *
+ * The cron tick runs every few minutes because the jobs beside this one are
+ * about a client waiting. Reconciliation is not: it is a net for lost
+ * webhooks, and webhooks are retried by Stripe for three days on their own.
+ * Running a full comparison every tick would burn rate limit to discover
+ * nothing, so it runs hourly and the retries cover the gap.
+ */
+const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+
+export type ScheduledReconcileResult =
+  | { ran: false; reason: "not_configured" | "too_soon" }
+  | ({ ran: true } & ReconcileResult);
+
+/**
+ * The scheduled entry point.
+ *
+ * Gated on when the last pass finished, which is read from `audit_log` rather
+ * than held in memory — a serverless function does not survive between ticks,
+ * so an in-process timestamp would gate nothing and this would run every time.
+ *
+ * That same row is the persisted result: what was checked, what was repaired,
+ * and what needs a human. `reconcileStripe` reports a failure as a failure, and
+ * this records it as one, so a run that could not reach Stripe is visible
+ * afterwards instead of looking like a clean pass with nothing to report.
+ *
+ * ## On overlapping runs
+ *
+ * The interval gate is what keeps two passes apart, and it is not a lock: two
+ * ticks landing in the same instant could both read a stale timestamp and both
+ * proceed. That is tolerable here and would not be if the work were not
+ * idempotent — every write this job makes sets a value read from Stripe, so a
+ * duplicate pass writes the same values a second time and changes nothing. It
+ * is wasteful, not harmful. A real lock would be worth adding if this ever
+ * grew a non-idempotent step.
+ */
+export async function runScheduledReconcile(
+  db: Database,
+): Promise<ScheduledReconcileResult> {
+  if (!stripeConfigured()) return { ran: false, reason: "not_configured" };
+
+  const since = new Date(Date.now() - RECONCILE_INTERVAL_MS);
+  const recent = await db
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.action, "stripe.reconciled"),
+        gte(auditLog.createdAt, since),
+      ),
+    )
+    .limit(1);
+
+  if (recent.length > 0) return { ran: false, reason: "too_soon" };
+
+  const result = await reconcileStripe(db);
+
+  await db.insert(auditLog).values({
+    action: "stripe.reconciled",
+    entityType: "stripe",
+    entityId: null,
+    metadata: {
+      ok: result.ok,
+      error: result.error,
+      checkedSubscriptions: result.checkedSubscriptions,
+      checkedInvoices: result.checkedInvoices,
+      repaired: result.findings.filter((f) => f.repaired).length,
+      needsReview: result.findings.filter((f) => !f.repaired).length,
+      // Bounded so one bad pass cannot write an unbounded blob into the log.
+      findings: result.findings.slice(0, 50),
+    },
+  });
+
+  return { ran: true, ...result };
 }
 
 /**

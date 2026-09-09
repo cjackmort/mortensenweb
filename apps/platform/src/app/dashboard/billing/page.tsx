@@ -11,8 +11,10 @@ import {
   formatCurrency,
 } from "@/lib/payments/venmo";
 import { isSquareConfigured } from "@/lib/payments/square";
+import { getStripeBillingPanel } from "@/db/repositories/client/stripe-billing";
 import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
+import { StripePanel } from "./stripe-panel";
 import { UnlockPanel } from "./unlock-panel";
 
 export const dynamic = "force-dynamic";
@@ -49,11 +51,29 @@ export default async function BillingPage() {
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [overview, entitlements, canRecur] = await Promise.all([
+  const [overview, entitlements, canRecur, stripePanel] = await Promise.all([
     getBillingOverview(db, ctx),
     getEntitlements(db, ctx),
     recurringAvailable(db, ctx),
+    getStripeBillingPanel(db, ctx),
   ]);
+
+  /**
+   * Which plan the "set up automatic payment" button buys.
+   *
+   * Their own plan, never a default. Falling back to a house plan would let a
+   * client subscribe to a tier nobody put them on, at a price nobody quoted
+   * them — and they would have authorised it, which makes it hard to undo
+   * gracefully. No plan means no offer, and a conversation instead.
+   *
+   * `entitlements.planKey` returns the *comp* plan key for a complimentary
+   * client, which must never reach checkout. Three things stop it: the panel
+   * only renders the offer in the `not_subscribed` state, the repository
+   * refuses a client with `comp_plan_id`, and `comp-unlimited` has no price to
+   * resolve. The layering is deliberate — charging a comped client is the one
+   * failure here with no technical remedy.
+   */
+  const offerPlanKey = entitlements?.planKey ?? null;
 
   // The unlock panel is for a client who has never paid. Once they have, the
   // ordinary "amount due" flow takes over — showing both would offer someone
@@ -90,6 +110,27 @@ export default async function BillingPage() {
         </div>
 
         <Standing overview={overview} />
+
+        {/* Card subscriptions. Hidden entirely when Stripe has no credentials
+            in this environment, so the Square and Venmo paths below are
+            unaffected by it being switched off. */}
+        {stripePanel.available && (
+          <StripePanel
+            state={stripePanel.status.state}
+            label={stripePanel.status.label}
+            detail={stripePanel.status.detail}
+            needsAction={stripePanel.status.needsAction}
+            planName={stripePanel.planName}
+            monthlyPriceCents={stripePanel.monthlyPriceCents}
+            currency={stripePanel.currency}
+            paidThrough={stripePanel.paidThrough?.toISOString() ?? null}
+            nextChargeOn={stripePanel.nextChargeOn?.toISOString() ?? null}
+            nextChargeCents={stripePanel.nextChargeCents}
+            history={stripePanel.history}
+            canManage={stripePanel.canManage}
+            offerPlanKey={offerPlanKey}
+          />
+        )}
 
         {showUnlock && (
           <UnlockPanel

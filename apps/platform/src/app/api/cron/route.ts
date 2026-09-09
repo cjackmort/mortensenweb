@@ -8,6 +8,7 @@ import { reverifyPendingPreviews } from "@/db/repositories/admin/webhooks";
 import { reverifyLiveSites } from "@/db/repositories/admin/launch";
 import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
 import { expireStaleShares } from "@/db/repositories/admin/maintenance";
+import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
@@ -92,7 +93,13 @@ export async function POST(request: Request): Promise<Response> {
     ["shippedChanges", () => advanceShippedChanges(db)],
     ["liveSiteProblems", () => reverifyLiveSites(db)],
     ["sharesExpired", () => expireStaleShares(db)],
+    // Last, and self-gated to roughly hourly. It is a net for lost Stripe
+    // webhooks rather than something a client is waiting on, so it yields the
+    // tick's budget to the jobs above and skips most runs on its own.
+    ["stripeReconciled", () => runScheduledReconcile(db)],
   ];
+
+  const failed: string[] = [];
 
   for (const [name, run] of jobs) {
     try {
@@ -101,12 +108,19 @@ export async function POST(request: Request): Promise<Response> {
       results[name] = {
         error: error instanceof Error ? error.message : "unknown",
       };
+      failed.push(name);
       console.error(`[cron] ${name} failed`, error);
     }
   }
 
   return NextResponse.json({
+    // Still 200, and `ok` still means "the endpoint ran" — flipping it would
+    // change what every existing caller understands by it. `degraded` is the
+    // honest signal beside it: a run where a job threw is not a healthy run,
+    // and reporting one as healthy is how a broken job goes unnoticed.
     ok: true,
+    degraded: failed.length > 0,
+    failedJobs: failed,
     ranForMs: Date.now() - started,
     ...results,
   });

@@ -206,13 +206,22 @@ to pay.
 | Paid so far | $250 build + $50 first retainer |
 | Stripe customer | none — the workbook's "Stripe Customer Email" cell is empty |
 
-**$50 is not the `care-lite` price.** It coincides with it. `client.json`
-records the rate as deliberately bespoke: *"set to roughly cover the
-operator's fixed monthly hosting costs … should NOT be treated as the going
-rate or used as the anchor for the next client."* Enrolling him on
-`care_lite_monthly_v1` charges the right amount but silently binds him to
-care-lite's **one change a month** — an allowance he never agreed to. Decide
-his entitlement before enrolling him, not after.
+**Decided: he goes on `care-lite`.** Operator's call, 2026-09-08. No bespoke
+`friends-family` plan or price is created.
+
+Worth knowing that $50 only *coincides* with the care-lite price. `client.json`
+records the rate as deliberately bespoke: *"set to roughly cover the operator's
+fixed monthly hosting costs … should NOT be treated as the going rate or used
+as the anchor for the next client."* Reusing care-lite is the simpler option
+and charges the right amount; the trade is that it also applies care-lite's
+terms.
+
+**The consequence to be comfortable with before enrolling him:** care-lite
+includes **one content change a month**, and a second change in the same month
+bills **$25**. He has made no change requests since going live — the four in
+his log are all from build week — so this has not bitten yet. If he turns out
+to be a two-or-three-changes-a-month client, either raise his plan or grant a
+comp override; do not let the first he hears of the limit be an invoice.
 
 ### Migrating Mitch — the order matters
 

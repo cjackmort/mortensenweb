@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import {
+  auditLog,
   clients,
   organizations,
   payments,
@@ -53,10 +54,16 @@ vi.mock("@/lib/payments/stripe", async () => {
             if (!found) throw new Error(`no such subscription ${id}`);
             return found;
           },
+          list: async () => ({ data: [...stripeState.subscriptions.values()] }),
         },
         customers: {
           retrieve: async (id: string) =>
             stripeState.customers.get(id) ?? { deleted: true },
+        },
+        // The reconciliation pass reads these. Empty is the right default:
+        // the gating test is about whether it runs at all, not what it finds.
+        invoices: {
+          list: async () => ({ data: [] }),
         },
       }) as never,
   };
@@ -64,6 +71,9 @@ vi.mock("@/lib/payments/stripe", async () => {
 
 const { processStripeEvent } = await import(
   "@/db/repositories/admin/stripe-webhooks"
+);
+const { runScheduledReconcile } = await import(
+  "@/db/repositories/admin/stripe-reconcile"
 );
 
 
@@ -168,6 +178,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Fresh tenant per test so nothing leaks between them.
+  await db.delete(auditLog);
   await db.delete(payments);
   await db.delete(webhookDeliveries);
   await db.delete(subscriptions);
@@ -578,5 +589,44 @@ describe("refunds and disputes", () => {
       .where(eq(webhookDeliveries.event, "charge.refunded"))
       .limit(1);
     expect(delivery[0]!.status).toBe("needs_review");
+  });
+});
+
+describe("scheduled reconciliation", () => {
+  it("runs once, then gates itself until the interval has passed", async () => {
+    // The cron tick fires every few minutes. A full Stripe comparison on every
+    // one of them burns rate limit to discover nothing, and the gate is the
+    // only thing preventing it.
+    const first = await runScheduledReconcile(db);
+    expect(first.ran).toBe(true);
+
+    const second = await runScheduledReconcile(db);
+    expect(second.ran).toBe(false);
+    if (!second.ran) expect(second.reason).toBe("too_soon");
+  });
+
+  it("persists the outcome so a run is visible afterwards", async () => {
+    await runScheduledReconcile(db);
+
+    const rows = await db
+      .select({ metadata: auditLog.metadata })
+      .from(auditLog)
+      .where(eq(auditLog.action, "stripe.reconciled"))
+      .limit(1);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.metadata).toMatchObject({ ok: true });
+  });
+
+  it("does not run at all when Stripe is unconfigured", async () => {
+    const saved = process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_SECRET_KEY;
+    try {
+      const result = await runScheduledReconcile(db);
+      expect(result.ran).toBe(false);
+      if (!result.ran) expect(result.reason).toBe("not_configured");
+    } finally {
+      process.env.STRIPE_SECRET_KEY = saved;
+    }
   });
 });
