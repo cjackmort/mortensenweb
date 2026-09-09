@@ -62,8 +62,8 @@ function formatDay(iso: string): string {
  *
  * `gradientId` exists because SVG gradient ids are document-global: two charts
  * on one page sharing an id means the second silently paints with the first
- * one's fill. Every instance needs its own, and the default is only safe
- * because there is exactly one full-size chart per page today.
+ * one's fill. The dashboard now draws two, so the second passes its own id;
+ * the default is the first one's, and any third chart needs one of its own.
  */
 export type ChartMetric = "both" | "visits" | "pageviews";
 
@@ -87,6 +87,17 @@ export function TimeSeriesChart({
   const showVisits = metric !== "pageviews" && hasVisits;
   const showPageviews = metric !== "visits";
   const visitAt = (p: SeriesPoint) => p.visits ?? 0;
+
+  /*
+   * Nothing to draw, so nothing is drawn.
+   *
+   * The dashboard's first chart asks for `visits` alone, and some builds of the
+   * provider's pageviews endpoint send no per-day session series at all. Every
+   * line was then suppressed but the frame was not: a grid, an axis running 0
+   * to 1, and no data — which reads as a real chart of a site nobody visited
+   * rather than as a figure we never received.
+   */
+  if (!showVisits && !showPageviews) return null;
 
   const W = 720;
   const H = 220;
@@ -130,6 +141,20 @@ export function TimeSeriesChart({
   const areaKey: "visits" | "pageviews" = showVisits ? "visits" : "pageviews";
   const areaPath = `${path(areaKey)} L${x(series.length - 1)},${pad.top + plotH} L${x(0)},${pad.top + plotH} Z`;
 
+  /*
+   * What this chart actually plots, said out loud.
+   *
+   * Two charts now sit side by side on the dashboard, and both used to carry
+   * the label "Visitors and pageviews" — so a screen-reader user heard the same
+   * sentence twice with no way to tell which was which, and the visits chart
+   * announced itself as *visitors*. Those are the two figures this whole change
+   * exists to stop conflating, so getting it wrong in the accessible name would
+   * undo the fix for exactly the people who cannot see the heading above it.
+   */
+  const drawn = [showVisits && "visits", showPageviews && "page views"]
+    .filter(Boolean)
+    .join(" and ");
+
   const ticks = [0, max / 2, max];
   // At most six date labels, so they never collide on a narrow screen.
   const step = Math.max(1, Math.ceil(series.length / 6));
@@ -140,7 +165,7 @@ export function TimeSeriesChart({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`Visitors and pageviews over the last ${series.length} days`}
+        aria-label={`Daily ${drawn} over the last ${series.length} days`}
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
