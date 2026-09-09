@@ -968,6 +968,17 @@ input[aria-invalid="true"] {
   margin: -0.75rem 0 1rem;
 }
 
+/* The same quiet aside, but not tied to a form field: it sits under a button
+   or inline in a table cell, so it carries no margin of its own. */
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+p.hint {
+  margin: 0.5rem 0 0;
+}
+
 button,
 .button {
   display: inline-flex;

@@ -11,12 +11,15 @@ import { expireStaleShares } from "@/db/repositories/admin/maintenance";
 import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
 import { reconcileStorageReservations } from "@/db/repositories/client/media-quota";
+import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
  * The scheduled work.
  *
- * Six jobs that have to run whether or not anyone is looking:
+ * Ten jobs that have to run whether or not anyone is looking. The first six
+ * are the loop's own; jobs 7-9 keep the media library's storage honest and
+ * job 10 is the net under Stripe's webhooks:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -40,6 +43,14 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      client was left reading "Not on your site yet" about a change that was
  *      live. This is the other half of the loop's last mile: confirm the deploy
  *      for the merge commit, then confirm the site actually serves.
+ *   7. **Media derivatives.** The safety net for an upload whose nudge did not
+ *      land, and the retry path for a resize that failed and backed off.
+ *   8. **Abandoned uploads.** A tab closed mid-upload leaves parts and a
+ *      placeholder holding quota that nothing else will ever finish.
+ *   9. **Storage counters.** Recomputed from what is actually stored, so an
+ *      interrupted release does not slowly cost a client room.
+ *  10. **Stripe reconciliation.** Self-gated to roughly hourly; a net for lost
+ *      webhooks rather than something a client is waiting on.
  *
  * ## Authentication
  *
@@ -112,7 +123,13 @@ export async function POST(request: Request): Promise<Response> {
     // trust: any interruption between a release and the write that should have
     // followed is corrected here rather than slowly costing a client room.
     ["storageReconciled", () => reconcileStorageReservations(db)],
+    // Last, and self-gated to roughly hourly. It is a net for lost Stripe
+    // webhooks rather than something a client is waiting on, so it yields the
+    // tick's budget to the jobs above and skips most runs on its own.
+    ["stripeReconciled", () => runScheduledReconcile(db)],
   ];
+
+  const failed: string[] = [];
 
   for (const [name, run] of jobs) {
     try {
@@ -121,12 +138,19 @@ export async function POST(request: Request): Promise<Response> {
       results[name] = {
         error: error instanceof Error ? error.message : "unknown",
       };
+      failed.push(name);
       console.error(`[cron] ${name} failed`, error);
     }
   }
 
   return NextResponse.json({
+    // Still 200, and `ok` still means "the endpoint ran" — flipping it would
+    // change what every existing caller understands by it. `degraded` is the
+    // honest signal beside it: a run where a job threw is not a healthy run,
+    // and reporting one as healthy is how a broken job goes unnoticed.
     ok: true,
+    degraded: failed.length > 0,
+    failedJobs: failed,
     ranForMs: Date.now() - started,
     ...results,
   });

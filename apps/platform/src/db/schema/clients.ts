@@ -111,6 +111,27 @@ export const clients = pgTable(
     dunningExemptUntil: timestamp("dunning_exempt_until", {
       withTimezone: true,
     }),
+
+    /**
+     * This client's Stripe customer, when one exists.
+     *
+     * On the client rather than on the subscription because a customer
+     * outlives any single subscription: cancel and resubscribe and the payment
+     * methods, invoice history and billing address should follow the person
+     * rather than restart. Storing it on `subscriptions` would mint a second
+     * customer on every resubscribe and scatter one client's invoices across
+     * them.
+     *
+     * Unique, and that uniqueness is load-bearing. It is what makes the
+     * webhook's customer-to-tenant match single-valued: two clients sharing a
+     * Stripe customer would mean an arriving payment could unlock either, and
+     * the receiver would have no correct way to choose.
+     *
+     * Null is the ordinary state for a client never offered card billing —
+     * most of them, while Square and manual payment remain in use.
+     */
+    stripeCustomerId: text("stripe_customer_id"),
+
     isDemo: boolean("is_demo").notNull().default(false),
     /**
      * The agency's own site, running through this same pipeline. Not a
@@ -169,6 +190,9 @@ export const clients = pgTable(
   (t) => [
     uniqueIndex("clients_public_id_key").on(t.publicId),
     uniqueIndex("clients_organization_key").on(t.organizationId),
+    // Postgres treats NULLs as distinct in a unique index, so the many clients
+    // with no Stripe customer coexist while any real id stays single-valued.
+    uniqueIndex("clients_stripe_customer_key").on(t.stripeCustomerId),
     index("clients_industry_idx").on(t.industry),
   ],
 );
@@ -205,6 +229,20 @@ export const servicePlans = pgTable(
      * task done once per plan, in a dashboard, in five minutes.
      */
     squarePlanVariationId: text("square_plan_variation_id"),
+
+    /**
+     * Stripe price *lookup key* for this plan, when it is sold through Stripe.
+     *
+     * A lookup key and not a price id, for the reason set out in
+     * `lib/payments/stripe.ts`: price ids differ between the sandbox and the
+     * live account, so a stored id makes the same database row wrong in one of
+     * the two environments. A lookup key is identical in both.
+     *
+     * Null means this plan is not sold through Stripe — which is the correct
+     * and permanent state for `comp-unlimited`. A complimentary plan with a
+     * price attached is a plan a comp client could be put through checkout on.
+     */
+    stripePriceLookupKey: text("stripe_price_lookup_key"),
 
     sortOrder: integer("sort_order").notNull().default(0),
     active: boolean("active").notNull().default(true),
@@ -262,6 +300,42 @@ export const subscriptions = pgTable(
       withTimezone: true,
     }),
 
+    /**
+     * The processor's own status word, verbatim.
+     *
+     * `status` above has three values; Stripe has eight. Collapsing
+     * `past_due`, `unpaid` and `trialing` into `active` is right for every
+     * rollup that asks "is this client on the books", and wrong for the
+     * billing page, which has to tell someone their card was declined. Keeping
+     * the raw word means the detailed question is answerable without
+     * re-querying Stripe on every page load.
+     */
+    providerStatus: text("provider_status"),
+
+    /**
+     * Paid through. The end of the period the last settled invoice covers.
+     *
+     * Mirrored from Stripe rather than computed from `billingDay`, because
+     * only Stripe knows about the proration, the coupon, the failed retry that
+     * moved the date, or the three days a dunning attempt bought. Computing it
+     * locally produces a number that is right until the first thing goes
+     * unusually, and then is quietly wrong on the client's billing page.
+     */
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+
+    /**
+     * Set when the client has cancelled but the period they already paid for
+     * has not ended.
+     *
+     * Distinct from `status = 'cancelled'` and the distinction matters: this
+     * client is still entitled to everything they bought, still gets their
+     * changes, and must not be shown a cancelled account. Only the renewal is
+     * gone.
+     */
+    cancelAtPeriodEnd: boolean("cancel_at_period_end")
+      .notNull()
+      .default(false),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -269,6 +343,13 @@ export const subscriptions = pgTable(
   (t) => [
     uniqueIndex("subscriptions_public_id_key").on(t.publicId),
     index("subscriptions_client_idx").on(t.clientId, t.status),
+    // Every webhook arrives keyed by the processor's id and has to find this
+    // row before it can do anything. Unique per processor so a Stripe id and a
+    // Square id can never collide into one match.
+    uniqueIndex("subscriptions_provider_key").on(
+      t.provider,
+      t.providerSubscriptionId,
+    ),
     check("subscriptions_price_non_negative", sql`${t.monthlyPriceCents} >= 0`),
     check(
       "subscriptions_billing_day_range",
@@ -352,6 +433,19 @@ export const payments = pgTable(
     /** Reserved for Stripe. Present now so adding it needs no migration. */
     provider: text("provider"),
     providerReference: text("provider_reference"),
+
+    /**
+     * The processor's hosted receipt or invoice page for this payment.
+     *
+     * Stored rather than fetched when the billing page renders. A payment
+     * history that has to call Stripe once per row to draw itself is slow on a
+     * good day and blank on a bad one, and a client looking at a year of
+     * receipts should not depend on a third party being up.
+     *
+     * Null for cash, Venmo and cheques, which have no hosted anything.
+     */
+    receiptUrl: text("receipt_url"),
+
     idempotencyKey: text("idempotency_key"),
     coversPeriodStart: date("covers_period_start"),
     coversPeriodEnd: date("covers_period_end"),
