@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -8,6 +8,7 @@ import {
   sites,
 } from "@/db/schema";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
+import { BLOCKING_STATUSES } from "@/lib/requests/status";
 
 /**
  * The client's side of "look at it, then apply it".
@@ -63,6 +64,25 @@ export async function listPreviewsAwaitingDecision(
       and(
         eq(changeRequests.organizationId, ctx.organizationId),
         eq(agentJobs.status, "pr_open"),
+        // The request's own status, not just the job's.
+        //
+        // This panel offers three buttons — put it live, ask for changes,
+        // cancel — and all three are dead ends for a request that is already
+        // settled. Without this the card outlives the request: "Cancel this
+        // request" answers "this request is already closed" and the card stays
+        // where it is, which from the client's side is the portal being broken.
+        //
+        // It cannot be left to the job, because the job is a different row with
+        // its own lifecycle. Cancelling closes the newest job, so the ordinary
+        // path happens to drop out of the `pr_open` filter above — but a
+        // request closed any other way (an earlier build of the cancel path, an
+        // operator closing it directly, a second job left behind by a
+        // re-dispatch) leaves a job that still says `pr_open` for ever.
+        //
+        // `BLOCKING_STATUSES` is the same set as `isCancellable`, asserted by a
+        // test, which is exactly the question being asked here: is this still
+        // the client's to decide?
+        inArray(changeRequests.status, [...BLOCKING_STATUSES]),
         // Released by a person, not merely built.
         //
         // Temporary, while the agents are still earning trust: a client should
