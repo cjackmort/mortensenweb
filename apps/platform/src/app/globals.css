@@ -889,6 +889,9 @@ tbody tr:last-child td {
   padding: 0.6rem 0.8rem;
   font-size: 0.9rem;
   margin-bottom: 1rem;
+  /* Some failures carry a second paragraph for whoever has to fix them. A
+     single-line message is unaffected; `pre-wrap` still wraps normally. */
+  white-space: pre-wrap;
 }
 
 /* --------------------------------------------------------- empty state */

@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
+import { mediaFailureMessage } from "@/lib/media/errors";
 import {
   abortUpload,
   completeUpload,
@@ -103,10 +104,11 @@ export async function POST(
       {
         ok: false,
         retryable: true,
-        message:
-          "We could not finish saving that image. This is a problem on our " +
-          "side, not your connection — please try again, and tell us if it " +
-          "keeps happening.",
+        message: mediaFailureMessage(
+          "finish saving that image",
+          error,
+          user.role,
+        ),
       },
       { status: 500 },
     );
