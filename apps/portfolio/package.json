@@ -17,7 +17,7 @@
     "@astrojs/react": "^6.0.5",
     "@astrojs/sitemap": "^3.4.1",
     "@mortensenweb/plans": "*",
-    "astro": "^7.1.1",
+    "astro": "^7.2.8",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
