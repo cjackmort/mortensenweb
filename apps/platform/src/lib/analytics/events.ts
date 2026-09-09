@@ -258,6 +258,22 @@ export function classifyEvent(rawName: string, count: number): ClassifiedEvent {
   };
 }
 
+/**
+ * A backend-confirmed outcome, injected into the registry's grouping.
+ *
+ * The one route into `confirmed_inquiry`, and it does not go through
+ * `classifyEvent` at all — nothing derived from a tracked event can reach this
+ * category, which is the property the whole separation exists to guarantee.
+ *
+ * Callers pass counts they hold themselves: a form provider's submission list,
+ * or a row in our own database. See `lib/analytics/inquiries`.
+ */
+export interface BackendOutcome {
+  id: string;
+  label: string;
+  count: number;
+}
+
 export interface CategorisedEvents {
   category: EventCategory;
   meta: CategoryMeta;
@@ -279,10 +295,30 @@ export interface CategorisedEvents {
  */
 export function categoriseEvents(
   rows: { label: string; value: number }[],
+  /**
+   * Outcomes the backend confirmed, which no click may produce.
+   *
+   * Added after classification rather than fed through it, so there is no code
+   * path by which a tracked event becomes a confirmed enquiry.
+   */
+  backendOutcomes: BackendOutcome[] = [],
 ): CategorisedEvents[] {
   const classified = rows
     .filter((row) => !isPortalEvent(row.label))
     .map((row) => classifyEvent(row.label, row.value));
+
+  const confirmed: ClassifiedEvent[] = backendOutcomes
+    .filter((outcome) => outcome.count > 0)
+    .map((outcome) => ({
+      raw: outcome.id,
+      id: outcome.id,
+      category: "confirmed_inquiry" as const,
+      label: outcome.label,
+      subject: null,
+      count: outcome.count,
+    }));
+
+  classified.push(...confirmed);
 
   const order: EventCategory[] = [
     "confirmed_inquiry",
