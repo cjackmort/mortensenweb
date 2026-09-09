@@ -173,6 +173,18 @@ jobs:
           fi
           npm run db:migrate --workspace apps/platform
 
+      # A green migrate is not evidence. Drizzle applies by a single
+      # `created_at` high-water mark and never compares tags or hashes, so a
+      # migration whose journal `when` sits below the highest already applied
+      # is skipped silently and permanently — success here, a 500 in front of a
+      # client days later. This compares the schema the build was compiled
+      # against with what the database actually has, and fails the release if
+      # anything is missing. Catalogue metadata only; no client data is read.
+      - name: Verify the applied schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:verify-schema --workspace apps/platform
+
       # ---------------------------------------------------------------------
       # Optional: deterministic ordering between migration and deploy.
       #
