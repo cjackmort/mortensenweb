@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { sessionCookieNames } from "@/lib/auth/cookie-name";
 
 /**
  * Proxy (Next 16's name for what was `middleware.ts` — same file, same
@@ -18,10 +19,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * and is then rejected by those. That ordering is intentional.
  */
 
-const SESSION_COOKIES = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-];
+/*
+ * Derived rather than hardcoded, so a development cookie suffix cannot make the
+ * proxy and the auth config disagree about what a session looks like — which
+ * would redirect a signed-in developer to /login forever.
+ */
+const SESSION_COOKIES = sessionCookieNames();
 
 const PUBLIC_PATHS = [
   "/login",

@@ -43,27 +43,50 @@ function formatDay(iso: string): string {
 }
 
 /**
- * Visitors and pageviews over time.
+ * Visits and pageviews over time.
  *
  * Two series on ONE axis — both are counts of the same kind, so a shared scale
  * is honest. A second y-axis would let the two lines cross wherever the scales
  * happened to put them, which invents a relationship that is not in the data.
+ *
+ * Honest, but not always legible: pageviews typically run two to five times
+ * visits, so the visits line sits squashed against the bottom and its trend —
+ * the thing a client actually wants — is the hardest part to read. The answer
+ * is a *metric toggle* rather than a second axis: `metric` renders one series
+ * on its own scale, where a change of twenty percent looks like a change of
+ * twenty percent.
+ *
+ * When the provider sends no per-day visits, the visits series is absent
+ * entirely rather than drawn as zeroes. A flat line along the bottom labelled
+ * "visits" is a silent zero, and this codebase keeps having to remove those.
  *
  * `gradientId` exists because SVG gradient ids are document-global: two charts
  * on one page sharing an id means the second silently paints with the first
  * one's fill. Every instance needs its own, and the default is only safe
  * because there is exactly one full-size chart per page today.
  */
+export type ChartMetric = "both" | "visits" | "pageviews";
+
 export function TimeSeriesChart({
   series,
   labelled = true,
+  metric = "both",
   gradientId = "chart-area-fade",
 }: {
   series: SeriesPoint[];
   labelled?: boolean;
+  /** Which series to draw. One at a time gets its own scale. */
+  metric?: ChartMetric;
   gradientId?: string;
 }) {
   if (series.length === 0) return null;
+
+  // Absent, not zero. `visits: null` means the provider sent no per-day series,
+  // and drawing that as a flat line would be an invented figure.
+  const hasVisits = series.some((p) => p.visits !== null);
+  const showVisits = metric !== "pageviews" && hasVisits;
+  const showPageviews = metric !== "visits";
+  const visitAt = (p: SeriesPoint) => p.visits ?? 0;
 
   const W = 720;
   const H = 220;
@@ -71,18 +94,41 @@ export function TimeSeriesChart({
   const plotW = W - pad.left - pad.right;
   const plotH = H - pad.top - pad.bottom;
 
+  /*
+   * Scaled to what is actually drawn.
+   *
+   * With one series selected the axis belongs to it alone, which is the whole
+   * point of the toggle: on a shared scale a visits line under a pageviews
+   * line is compressed into the bottom fifth of the chart and its shape is
+   * unreadable.
+   */
   const max = niceCeiling(
-    Math.max(1, ...series.map((p) => Math.max(p.pageviews, p.visitors))),
+    Math.max(
+      1,
+      ...series.map((p) =>
+        Math.max(
+          showPageviews ? p.pageviews : 0,
+          showVisits ? visitAt(p) : 0,
+        ),
+      ),
+    ),
   );
 
   const x = (i: number) =>
     pad.left + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = (v: number) => pad.top + plotH - (v / max) * plotH;
 
-  const path = (key: "visitors" | "pageviews") =>
-    series.map((p, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(p[key])}`).join(" ");
+  const path = (key: "visits" | "pageviews") =>
+    series
+      .map((p, i) => {
+        const value = key === "visits" ? visitAt(p) : p.pageviews;
+        return `${i === 0 ? "M" : "L"}${x(i)},${y(value)}`;
+      })
+      .join(" ");
 
-  const areaPath = `${path("visitors")} L${x(series.length - 1)},${pad.top + plotH} L${x(0)},${pad.top + plotH} Z`;
+  // The filled area follows whichever series is the primary one on screen.
+  const areaKey: "visits" | "pageviews" = showVisits ? "visits" : "pageviews";
+  const areaPath = `${path(areaKey)} L${x(series.length - 1)},${pad.top + plotH} L${x(0)},${pad.top + plotH} Z`;
 
   const ticks = [0, max / 2, max];
   // At most six date labels, so they never collide on a narrow screen.
@@ -136,8 +182,12 @@ export function TimeSeriesChart({
         )}
 
         <path d={areaPath} className="chart-area" fill={`url(#${gradientId})`} />
-        <path d={path("pageviews")} className="chart-line chart-series-2" />
-        <path d={path("visitors")} className="chart-line chart-series-1" />
+        {showPageviews && (
+          <path d={path("pageviews")} className="chart-line chart-series-2" />
+        )}
+        {showVisits && (
+          <path d={path("visits")} className="chart-line chart-series-1" />
+        )}
 
         {/* Direct label on the final point: the value people actually look for,
             available without hovering, which phones cannot do. */}
@@ -145,24 +195,37 @@ export function TimeSeriesChart({
           <>
             <circle
               cx={x(series.length - 1)}
-              cy={y(last.visitors)}
+              cy={y(showVisits ? visitAt(last) : last.pageviews)}
               r={4}
-              className="chart-dot chart-series-1"
+              className={`chart-dot ${showVisits ? "chart-series-1" : "chart-series-2"}`}
             />
             <title>
-              {`Most recent day: ${last.visitors} visitors, ${last.pageviews} pageviews`}
+              {`Most recent day: ${
+                hasVisits ? `${visitAt(last)} visits, ` : ""
+              }${last.pageviews} page views`}
             </title>
           </>
         )}
       </svg>
 
       <figcaption className="chart-legend">
-        <span>
-          <i className="swatch chart-series-1" aria-hidden="true" /> Visitors
-        </span>
-        <span>
-          <i className="swatch chart-series-2" aria-hidden="true" /> Pageviews
-        </span>
+        {showVisits && (
+          <span>
+            <i className="swatch chart-series-1" aria-hidden="true" /> Visits
+          </span>
+        )}
+        {showPageviews && (
+          <span>
+            <i className="swatch chart-series-2" aria-hidden="true" /> Page views
+          </span>
+        )}
+        {/* Said out loud rather than left as a missing line. A client comparing
+            this with last month needs to know the series is absent, not zero. */}
+        {!hasVisits && (
+          <span className="muted">
+            Per-day visits were not returned for this period.
+          </span>
+        )}
       </figcaption>
     </figure>
   );
@@ -340,16 +403,17 @@ export function SeriesTable({ series }: { series: SeriesPoint[] }) {
           <thead>
             <tr>
               <th>Day</th>
-              <th>Visitors</th>
-              <th>Pageviews</th>
+              <th>Visits</th>
+              <th>Page views</th>
             </tr>
           </thead>
           <tbody>
             {series.map((p) => (
               <tr key={p.date}>
                 <td data-label="Day">{formatDay(p.date)}</td>
-                <td data-label="Visitors">{p.visitors}</td>
-                <td data-label="Pageviews">{p.pageviews}</td>
+                {/* An em dash, not a zero: the provider sent no figure. */}
+                <td data-label="Visits">{p.visits ?? "—"}</td>
+                <td data-label="Page views">{p.pageviews}</td>
               </tr>
             ))}
           </tbody>

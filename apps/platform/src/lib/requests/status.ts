@@ -231,7 +231,19 @@ const STAGE_OF: Record<ChangeRequestStatus, number> = {
   merged: 3,
   deployed: 3,
   verified: 4,
-  closed: 4,
+  /*
+   * `closed` is NOT a success, and used to be mapped to stage 4.
+   *
+   * Only two code paths set it, and both mean the change did not ship:
+   * `cancelChangeRequest` when a client or operator calls it off, and the
+   * admin close/dismiss path. `verified` is the sole terminal state that means
+   * the change reached the site and was checked.
+   *
+   * Mapped to 4, a cancelled request rendered at "Confirmed live" with the
+   * line "Live on your site and checked." — telling a client that something
+   * they cancelled was published. It is off-track, like `rejected`.
+   */
+  closed: -1,
   // Off-track states have no position on the track; see `isOffTrack`.
   rejected: -1,
   failed: -1,
@@ -268,8 +280,11 @@ export function effectSummary(status: string): string {
     case "deployed":
       return "This is live on your site now. We're giving it a final check.";
     case "verified":
-    case "closed":
       return "Live on your site and checked.";
+    // Never "live": nothing was published. Neutral rather than apologetic —
+    // cancelling is a normal thing to do and not a failure.
+    case "closed":
+      return "This one was called off. Nothing changed on your site.";
     case "changes_requested":
       return "We need something from you before this can go ahead.";
     case "needs_operator":

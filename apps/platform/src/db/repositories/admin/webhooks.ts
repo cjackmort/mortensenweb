@@ -278,7 +278,11 @@ async function handlePullRequest(
         actorType: "system",
         kind: merged ? "change_applied" : "change_abandoned",
         body: merged
-          ? "Your change is live on your website."
+          // Not "live": merging puts the change on the default branch and the
+          // deploy has not run yet, let alone been checked. The progress track
+          // says "Published" here for the same reason, and a timeline event
+          // claiming more than the track would contradict it on the same screen.
+          ? "Your change is approved and publishing to your site now."
           : "We closed this change without applying it.",
         visibility: "client_visible",
       });

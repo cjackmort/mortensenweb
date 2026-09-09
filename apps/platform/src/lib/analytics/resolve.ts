@@ -3,8 +3,10 @@ import type { Database } from "@/db/client";
 import type { TenantContext } from "@/db/repositories/context";
 import { analyticsConnections, sites } from "@/db/schema";
 import { demoAnalytics } from "./demo";
+import type { AnalyticsFilters } from "./filters";
 import {
   fetchAnalytics,
+  isValidRange,
   isUmamiConfigured,
   type AnalyticsState,
   type AnalyticsSummary,
@@ -38,8 +40,22 @@ export interface ResolvedAnalytics {
 export async function resolveClientAnalytics(
   db: Database,
   ctx: TenantContext,
-  days: RangeDays,
+  /**
+   * A day count, or the full filter set.
+   *
+   * Both accepted so the admin pages, which have no filter UI, keep working
+   * unchanged. Whichever arrives, the website id still comes from the join
+   * below — never from the caller — which is what keeps a filter from ever
+   * reaching another tenant's data.
+   */
+  rangeOrFilters: RangeDays | AnalyticsFilters,
 ): Promise<ResolvedAnalytics> {
+  const days: RangeDays =
+    typeof rangeOrFilters === "number"
+      ? rangeOrFilters
+      : isValidRange(rangeOrFilters.range)
+        ? rangeOrFilters.range
+        : 30;
   // The site and its analytics connection in one round trip. This used to be
   // `listSites` followed by a second query for the connection — two HTTPS
   // calls to Neon in sequence, on the page every client lands on. The join is
@@ -65,7 +81,7 @@ export async function resolveClientAnalytics(
 
   let state: AnalyticsState;
   if (websiteId) {
-    state = await fetchAnalytics(websiteId, days);
+    state = await fetchAnalytics(websiteId, rangeOrFilters);
   } else if (!isUmamiConfigured()) {
     state = { kind: "not_configured" };
   } else {

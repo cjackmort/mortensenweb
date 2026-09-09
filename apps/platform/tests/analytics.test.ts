@@ -88,7 +88,7 @@ describe("demo analytics", () => {
     const a = demoAnalytics("site-abc", 30);
     const b = demoAnalytics("site-abc", 30);
     expect(a.visitors).toBe(b.visitors);
-    expect(a.series.map((p) => p.visitors)).toEqual(b.series.map((p) => p.visitors));
+    expect(a.series.map((p) => p.visits)).toEqual(b.series.map((p) => p.visits));
   });
 
   it("differs per site, so two clients do not see identical traffic", () => {

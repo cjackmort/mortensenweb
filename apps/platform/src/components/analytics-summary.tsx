@@ -4,6 +4,12 @@ import {
   type AnalyticsState,
   type AnalyticsSummary,
 } from "@/lib/analytics/umami";
+import {
+  formatDuration,
+  formatPercent,
+  METRIC_DESCRIPTIONS,
+  METRIC_LABELS,
+} from "@/lib/analytics/metrics";
 import { demoReason } from "@/lib/analytics/resolve";
 
 /**
@@ -13,13 +19,6 @@ import { demoReason } from "@/lib/analytics/resolve";
  * page can never disagree — including the demo banner, whose wording is the
  * part most likely to drift and the part it matters most to get identical.
  */
-
-export function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return s === 0 ? `${m}m` : `${m}m ${s}s`;
-}
 
 export function Stat({
   label,
@@ -83,7 +82,16 @@ export function Delta({
   comparedTo,
 }: {
   change: number | null;
-  higherIsBetter: boolean;
+  /**
+   * Colours the change arrow.
+   *
+   * Optional, and absent on purpose for average visit duration and single-page
+   * share. Neither has an obviously good direction — a longer visit can mean
+   * someone could not find what they came for, and a single-page visit can be
+   * a visitor who found the phone number immediately. Where it is unset the
+   * arrow states the direction without judging it.
+   */
+  higherIsBetter?: boolean;
   comparedTo: string;
 }) {
   if (change === null) return null;
@@ -102,10 +110,16 @@ export function Delta({
   }
 
   const rising = change > 0;
+  // No verdict when the caller did not claim one.
+  const neutral = higherIsBetter === undefined;
   const good = rising === higherIsBetter;
 
   return (
-    <span className={`delta ${good ? "delta-better" : "delta-worse"}`}>
+    <span
+      className={`delta ${
+        neutral ? "delta-flat" : good ? "delta-better" : "delta-worse"
+      }`}
+    >
       <span className="delta-arrow" aria-hidden="true">
         {rising ? "↑" : "↓"}
       </span>
@@ -132,7 +146,8 @@ function Metric({
   value: string;
   note: string;
   change: number | null;
-  higherIsBetter: boolean;
+  /** Forwarded to `Delta`. Omit where the metric carries no verdict. */
+  higherIsBetter?: boolean;
   comparedTo: string;
   spark?: number[];
   sparkId?: string;
@@ -161,15 +176,28 @@ function Metric({
 }
 
 /**
- * The four headline numbers, in plain language rather than analytics jargon.
+ * The headline numbers, in plain language rather than analytics jargon.
  *
- * Only two of the four get a sparkline, and that asymmetry is deliberate.
- * Visitors and pageviews have a real per-day series behind them; typical visit
- * length and bounce rate do not — the analytics API returns them only as
- * period totals. Drawing a line for those would mean inventing the daily
- * values it passes through, which is exactly the kind of plausible fiction the
- * demo banner exists to prevent. They keep their change arrow, which is a fact
- * we actually have.
+ * Only two get a sparkline, and that asymmetry is deliberate. Visits and page
+ * views have a real per-day series behind them; average visit duration and
+ * single-page share do not — the API returns those only as period totals.
+ * Drawing a line for them would mean inventing the daily values it passes
+ * through.
+ *
+ * ## No metric here is framed as good or bad
+ *
+ * Two of these labels were corrected. "Typical visit" implied a median it was
+ * not; it is a mean, and it says so. "Left straight away" claimed to know
+ * *why* someone left — but a visitor who lands on the contact page, reads the
+ * phone number and rings it produces exactly that shape, and it is the best
+ * outcome the site can produce. "Single-page visits" describes the measurement
+ * and stops there.
+ *
+ * For the same reason `higherIsBetter` is gone from the last two. A longer
+ * visit is not self-evidently better — it can mean someone could not find
+ * what they came for — and the brief is explicit that longer visits, more
+ * pageviews and lower bounce must not be presented as business success. The
+ * arrow states the direction; it no longer colours it as a verdict.
  */
 export function StatRow({
   data,
@@ -184,19 +212,31 @@ export function StatRow({
   return (
     <div className="metrics">
       <Metric
-        label="Visitors"
+        label={METRIC_LABELS.visitors}
         value={data.visitors.toLocaleString("en-US")}
-        note="people, not visits"
+        note={METRIC_DESCRIPTIONS.visitors}
         change={previous ? percentChange(data.visitors, previous.visitors) : null}
         higherIsBetter
         comparedTo={comparedTo}
-        spark={data.series.map((p) => p.visitors)}
-        sparkId="spark-visitors"
       />
       <Metric
-        label="Page views"
+        label={METRIC_LABELS.visits}
+        value={data.visits.toLocaleString("en-US")}
+        note={METRIC_DESCRIPTIONS.visits}
+        change={previous ? percentChange(data.visits, previous.visits) : null}
+        higherIsBetter
+        comparedTo={comparedTo}
+        // Only drawn when the provider actually sent a per-day series; `visits`
+        // is null otherwise, and a sparkline of zeroes would be a fiction.
+        spark={
+          data.hasVisitSeries ? data.series.map((p) => p.visits ?? 0) : undefined
+        }
+        sparkId="spark-visits"
+      />
+      <Metric
+        label={METRIC_LABELS.pageviews}
         value={data.pageviews.toLocaleString("en-US")}
-        note="pages opened"
+        note={METRIC_DESCRIPTIONS.pageviews}
         change={previous ? percentChange(data.pageviews, previous.pageviews) : null}
         higherIsBetter
         comparedTo={comparedTo}
@@ -204,24 +244,21 @@ export function StatRow({
         sparkId="spark-pageviews"
       />
       <Metric
-        label="Typical visit"
-        value={formatDuration(data.avgSecondsOnSite)}
-        note="time on the site"
+        label={METRIC_LABELS.avgVisitSeconds}
+        value={formatDuration(data.avgVisitSeconds)}
+        note={METRIC_DESCRIPTIONS.avgVisitSeconds}
         change={
           previous
-            ? percentChange(data.avgSecondsOnSite, previous.avgSecondsOnSite)
+            ? percentChange(data.avgVisitSeconds, previous.avgVisitSeconds)
             : null
         }
-        higherIsBetter
         comparedTo={comparedTo}
       />
       <Metric
-        label="Left straight away"
-        value={`${Math.round(data.bounceRate * 100)}%`}
-        note="saw one page only"
-        // The one figure where a rise is bad news.
+        label={METRIC_LABELS.bounceRate}
+        value={formatPercent(data.bounceRate)}
+        note={METRIC_DESCRIPTIONS.bounceRate}
         change={previous ? percentChange(data.bounceRate, previous.bounceRate) : null}
-        higherIsBetter={false}
         comparedTo={comparedTo}
       />
     </div>
