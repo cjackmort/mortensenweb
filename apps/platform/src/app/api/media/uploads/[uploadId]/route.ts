@@ -89,7 +89,27 @@ export async function POST(
     if (error instanceof NotFoundError) {
       return Response.json({ ok: false, message: "Not found." }, { status: 404 });
     }
-    throw error;
+
+    // As in the part route: rethrowing renders an HTML error page the uploader
+    // cannot read, and it reports the result as a dropped connection. This is
+    // the heavier of the two — it reads every part back and writes the
+    // assembled original — so it is the more important one to be able to see.
+    console.error(
+      `[media] completing upload ${uploadId} failed`,
+      error instanceof Error ? error.stack ?? error.message : error,
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        retryable: true,
+        message:
+          "We could not finish saving that image. This is a problem on our " +
+          "side, not your connection — please try again, and tell us if it " +
+          "keeps happening.",
+      },
+      { status: 500 },
+    );
   }
 }
 

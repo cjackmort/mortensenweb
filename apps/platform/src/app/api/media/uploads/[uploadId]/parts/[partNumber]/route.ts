@@ -68,6 +68,31 @@ export async function PUT(
     if (error instanceof NotFoundError) {
       return Response.json({ ok: false, message: "Not found." }, { status: 404 });
     }
-    throw error;
+
+    // Anything else used to be rethrown, which is how this route came to lie.
+    //
+    // An unhandled throw here renders Next's HTML error page. The uploader
+    // cannot parse that, falls back to its generic message, and tells the
+    // client "the connection dropped part-way" — a specific claim about their
+    // network, made about a failure that happened entirely on the server. It
+    // sends everyone, including whoever is debugging it, to the wrong place.
+    //
+    // The full error goes to the function log. What comes back names the step
+    // that failed and nothing else: enough to tell a storage failure from a
+    // database one without putting an exception in front of a client.
+    console.error(
+      `[media] part ${index} of upload ${uploadId} failed`,
+      error instanceof Error ? error.stack ?? error.message : error,
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        message:
+          "We could not save that part. This is a problem on our side, not " +
+          "your connection — please try again, and tell us if it keeps happening.",
+      },
+      { status: 500 },
+    );
   }
 }
