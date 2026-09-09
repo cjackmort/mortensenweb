@@ -6,18 +6,30 @@
 # there reaches this site on its next request without this file changing.
 #
 # Gated on the `claude` label so a human opening an ordinary issue never starts
-# a billed run by accident. One run per issue: the portal creates the issue
-# with its labels attached, so `opened` and `labeled` can both fire within a
-# second — without the concurrency group that is two runs racing to open two
-# pull requests for one request.
+# a billed run by accident.
+#
+# **One run per issue, and the trigger is what guarantees it.** The portal
+# creates the issue with three labels attached, so GitHub fires four events —
+# `opened`, then `labeled` once per label. Listening to `opened` and `labeled`
+# meant four workflow runs for one request. The concurrency group did not save
+# us: `cancel-in-progress: false` *queues* the duplicates rather than dropping
+# them, so a second full agent run started the moment the first finished.
+# Measured on one request: two runs of 4m40s and 13m24s, both billed, both
+# producing nothing.
+#
+# Listening only for the `claude` label, and only when that is the label that
+# was just added, fires exactly once however many other labels the portal
+# attaches.
 # =============================================================================
 
 name: Portal change request
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
 
+# Still here as a backstop, not as the deduplication. Two runs for one issue
+# must never both open a pull request, whatever fires them.
 concurrency:
   group: portal-request-${{ github.event.issue.number }}
   cancel-in-progress: false
@@ -32,7 +44,9 @@ permissions:
 
 jobs:
   implement:
-    if: contains(github.event.issue.labels.*.name, 'claude')
+    # The label that was just added, not merely present. `contains(...)` is true
+    # on every one of the portal's labelling events; this is true on exactly one.
+    if: github.event.label.name == 'claude'
     uses: cjackmort/mortensenweb/.github/workflows/client-change.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
