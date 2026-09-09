@@ -74,13 +74,33 @@ jobs:
       # anything structural — the full budget and AGENT_MODEL_LARGE. Both
       # variables default to the same model so that, until they are set, the
       # only thing the label changes is the turn budget.
+      # Read from the API, not from the event that triggered the caller.
+      #
+      # The portal attaches three labels, and GitHub fires a `labeled` event per
+      # label. Whichever one starts the run carries whatever labels existed at
+      # *that* instant, so a request labelled `size:small` can arrive here with
+      # that label missing and silently take the large budget. Seen in
+      # production: a hero-image change given 40 turns instead of 25, which it
+      # then exhausted.
+      #
+      # `inputs.labels` is kept as the fallback so a client repository still on
+      # the older caller keeps working.
       - name: Choose the budget
         id: budget
         env:
-          LABELS: ${{ inputs.labels }}
+          GH_TOKEN: ${{ github.token }}
+          FALLBACK_LABELS: ${{ inputs.labels }}
+          ISSUE: ${{ inputs.issue_number }}
           MODEL_SMALL: ${{ vars.AGENT_MODEL_SMALL || 'claude-opus-5' }}
           MODEL_LARGE: ${{ vars.AGENT_MODEL_LARGE || 'claude-opus-5' }}
         run: |
+          LABELS="$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || true)"
+          if [ -z "$LABELS" ]; then
+            echo "Could not read labels from the API; using the event's."
+            LABELS="$FALLBACK_LABELS"
+          fi
+          echo "Sizing from: $LABELS"
+
           if [[ ",$LABELS," == *",size:small,"* ]]; then
             echo "model=$MODEL_SMALL" >> "$GITHUB_OUTPUT"
             echo "turns=25" >> "$GITHUB_OUTPUT"
