@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { sessionCookieNames } from "@/lib/auth/cookie-name";
 
 /**
  * Proxy (Next 16's name for what was `middleware.ts` — same file, same
@@ -18,10 +19,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * and is then rejected by those. That ordering is intentional.
  */
 
-const SESSION_COOKIES = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-];
+/*
+ * Derived rather than hardcoded, so a development cookie suffix cannot make the
+ * proxy and the auth config disagree about what a session looks like — which
+ * would redirect a signed-in developer to /login forever.
+ */
+const SESSION_COOKIES = sessionCookieNames();
 
 const PUBLIC_PATHS = [
   "/login",
@@ -47,6 +50,16 @@ const PUBLIC_PATHS = [
   // anything it did not mint. Without this entry the runner would follow a
   // redirect to /login and quietly receive an HTML page instead of an image.
   "/api/attachments",
+  // Signed media-library links, for the same reason and with the same shape:
+  // an Actions runner fetching the originals a request selected. The handler
+  // 404s on anything it did not mint, and the signed payload carries a prefix
+  // so an attachment token cannot resolve here.
+  //
+  // Note this is `/api/media/agent` specifically, not `/api/media` — the rest
+  // of the media API is session-authenticated and must stay behind the
+  // redirect. Widening this entry to `/api/media` would expose every upload
+  // endpoint to an unauthenticated caller.
+  "/api/media/agent",
   // The scheduler. It calls this from a Netlify scheduled function, which
   // carries no session and cannot be given one — the endpoint authenticates
   // itself with CRON_SECRET, compared in constant time, and refuses outright

@@ -158,3 +158,92 @@ export async function attachmentUrl(
 
   return `${base.replace(/\/$/, "")}/api/attachments/${token}`;
 }
+
+// ---------------------------------------------------------------------------
+// Media library originals
+// ---------------------------------------------------------------------------
+
+/**
+ * The same construction, for a media library asset.
+ *
+ * A separate function rather than a `kind` parameter on the one above, because
+ * the thing that must not happen is a token minted for one table being accepted
+ * by a route that reads the other. `MEDIA_PREFIX` goes *inside* the signed
+ * payload, so a token for a request attachment and a token for a media asset
+ * are not interchangeable even though both are 26-character public ids under
+ * the same secret. Without the prefix they would be, and either route would
+ * happily resolve the other's id against its own table.
+ *
+ * ## Why the agent gets the original
+ *
+ * It is generating the site's own optimised assets, and doing that from a
+ * thumbnail produces a soft image on a real screen. The original is the only
+ * correct input. That is also why these links must never end up in published
+ * markup — they expire, and a page referencing one would silently lose its
+ * image. The issue body says so explicitly where the agent will read it.
+ */
+const MEDIA_PREFIX = "media";
+
+export async function signMediaAssetToken(
+  assetPublicId: string,
+  { ttlMinutes = DEFAULT_TTL_MINUTES }: { ttlMinutes?: number } = {},
+): Promise<string | null> {
+  const secret = signingSecret();
+  if (!secret) return null;
+
+  const expiresAt = Date.now() + ttlMinutes * 60_000;
+  const payload = `${MEDIA_PREFIX}.${assetPublicId}.${expiresAt}`;
+  const signature = await sign(payload, secret);
+
+  return `${base64UrlEncode(new TextEncoder().encode(payload))}.${base64UrlEncode(signature)}`;
+}
+
+export type MediaTokenCheck =
+  | { ok: true; assetPublicId: string }
+  | { ok: false; reason: "malformed" | "bad_signature" | "expired" | "not_configured" };
+
+export async function verifyMediaAssetToken(token: string): Promise<MediaTokenCheck> {
+  const secret = signingSecret();
+  if (!secret) return { ok: false, reason: "not_configured" };
+
+  const parts = token.split(".");
+  if (parts.length !== 2) return { ok: false, reason: "malformed" };
+
+  const payloadBytes = base64UrlDecode(parts[0]!);
+  const providedSignature = base64UrlDecode(parts[1]!);
+  if (!payloadBytes || !providedSignature) return { ok: false, reason: "malformed" };
+
+  const payload = new TextDecoder().decode(payloadBytes);
+  const expected = await sign(payload, secret);
+
+  // Signature before expiry, for the same reason as above: answering "expired"
+  // for a payload we never signed confirms to a forger that their guess parsed.
+  if (!constantTimeEqual(providedSignature, expected)) {
+    return { ok: false, reason: "bad_signature" };
+  }
+
+  const segments = payload.split(".");
+  if (segments.length !== 3 || segments[0] !== MEDIA_PREFIX) {
+    return { ok: false, reason: "malformed" };
+  }
+
+  const expiresAt = Number(segments[2]);
+  if (!Number.isFinite(expiresAt)) return { ok: false, reason: "malformed" };
+  if (expiresAt < Date.now()) return { ok: false, reason: "expired" };
+
+  return { ok: true, assetPublicId: segments[1]! };
+}
+
+/** Absolute URL for one library original. Null when signing is unavailable. */
+export async function mediaAssetUrl(
+  assetPublicId: string,
+  options: { ttlMinutes?: number } = {},
+): Promise<string | null> {
+  const base = process.env.AUTH_URL;
+  if (!base) return null;
+
+  const token = await signMediaAssetToken(assetPublicId, options);
+  if (!token) return null;
+
+  return `${base.replace(/\/$/, "")}/api/media/agent/${token}`;
+}

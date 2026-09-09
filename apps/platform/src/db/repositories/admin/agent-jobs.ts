@@ -6,6 +6,8 @@ import {
   changeRequests,
   dispatchQuotas,
   repositoryConnections,
+  mediaAssets,
+  requestAssets,
   requestAttachments,
   requestEvents,
   sites,
@@ -24,7 +26,8 @@ import {
   sizeLabel,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
-import { attachmentUrl } from "@/lib/storage/signed-links";
+import { attachmentUrl, mediaAssetUrl } from "@/lib/storage/signed-links";
+import { snapshotRequestAssets } from "@/db/repositories/client/request-assets";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -223,6 +226,18 @@ export interface AttachmentLink {
   url: string;
   title: string | null;
   caption: string | null;
+  /**
+   * Context the agent needs to place an image well, and which it previously
+   * had no way to know.
+   *
+   * Dimensions let it decide whether a photo can carry a full-width hero or
+   * belongs beside text — the alternative is downloading it to find out, or
+   * guessing. The folder path carries the client's own organisation of their
+   * work: "Winter Series" beside a painting says something a filename does not.
+   */
+  width?: number | null;
+  height?: number | null;
+  folderPath?: string | null;
 }
 
 async function attachmentLinksFor(
@@ -252,6 +267,62 @@ async function attachmentLinksFor(
       // "Attachment 1" gave the agent nothing to match a request against.
       title: row.title?.trim() || row.filename?.trim() || null,
       caption: row.caption?.trim() || null,
+    });
+  }
+
+  return links.length > 0 ? links : undefined;
+}
+
+/**
+ * Signed links for the media-library images a request selected.
+ *
+ * `snapshotRequestAssets` runs first and is the whole point of the ordering:
+ * the titles, descriptions, dimensions and folder paths handed to the agent are
+ * frozen at this moment. A client who reorganises their library afterwards
+ * changes nothing about a job already dispatched — which is what stops tidying
+ * up from silently rewriting a brief someone is already working from.
+ *
+ * The links themselves point at originals, because the agent is producing the
+ * site's own optimised assets and a thumbnail is the wrong input for that.
+ */
+async function mediaAssetLinksFor(
+  db: Database,
+  requestId: string,
+): Promise<AttachmentLink[] | undefined> {
+  await snapshotRequestAssets(db, requestId);
+
+  const rows = await db
+    .select({
+      publicId: mediaAssets.publicId,
+      status: mediaAssets.status,
+      deletedAt: mediaAssets.deletedAt,
+      title: requestAssets.snapshotTitle,
+      description: requestAssets.snapshotDescription,
+      folderPath: requestAssets.snapshotFolderPath,
+      width: requestAssets.snapshotWidth,
+      height: requestAssets.snapshotHeight,
+      position: requestAssets.position,
+    })
+    .from(requestAssets)
+    .innerJoin(mediaAssets, eq(mediaAssets.id, requestAssets.assetId))
+    .where(eq(requestAssets.requestId, requestId))
+    .orderBy(requestAssets.position);
+
+  const links: AttachmentLink[] = [];
+  for (const row of rows) {
+    // Deleted or not-yet-ready assets are skipped rather than linked. A link
+    // guaranteed to 404 wastes the agent's run and makes a deliberate refusal
+    // look like a broken system.
+    if (row.deletedAt !== null || row.status !== "ready") continue;
+    const url = await mediaAssetUrl(row.publicId);
+    if (!url) continue;
+    links.push({
+      url,
+      title: row.title,
+      caption: row.description,
+      width: row.width,
+      height: row.height,
+      folderPath: row.folderPath,
     });
   }
 
@@ -374,8 +445,29 @@ async function runDispatch(
   // A signing failure yields no links rather than broken ones: an issue whose
   // attachment section 404s is worse than one that plainly has no photos,
   // because the agent will describe what it could not see rather than asking.
+  // Both sources, in one list: images chosen from the media library, and any
+  // photos attached inline by the older request form. The agent does not need
+  // to know which route an image took to get here, and a request made during
+  // the transition can legitimately carry both.
+  //
+  // Media assets come first because they carry dimensions and folder context,
+  // so the better-described images are the ones the agent reads about first.
+  const mediaLinks = input.attachmentUrls
+    ? undefined
+    : await mediaAssetLinksFor(db, request.id);
+  const legacyLinks = input.attachmentUrls
+    ? undefined
+    : await attachmentLinksFor(db, request.id);
+
   const attachmentUrls =
-    input.attachmentUrls ?? (await attachmentLinksFor(db, request.id));
+    input.attachmentUrls ??
+    (() => {
+      const combined = [
+        ...(mediaLinks ?? []),
+        ...(legacyLinks ?? []),
+      ];
+      return combined.length > 0 ? combined : undefined;
+    })();
 
   // Anything the client added since sending. Empty on a first dispatch;
   // on a re-dispatch after "ask for changes" it is often the whole point.

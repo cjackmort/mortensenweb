@@ -76,6 +76,10 @@ gha-creds-*.json
 # ---- Local attachment storage (development driver only) ----
 .attachments/
 
+# Local media-library storage. The development driver writes originals and
+# derivatives here; production uses Netlify Blobs and this never exists.
+.media/
+
 # ---- Self-hosted Umami host (infra/umami) ----
 # Real values live only on the VPS. This repo is public.
 infra/umami/.env

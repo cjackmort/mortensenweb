@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
-import {
-  MAX_ATTACHMENTS_PER_REQUEST,
-  MAX_ATTACHMENT_BYTES,
-} from "@/lib/storage";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { statusLabel } from "@/lib/requests/status";
-import { downscaleImage } from "@/lib/images/downscale";
 import { submitChangeRequest, type RequestSubmission } from "./actions";
+import {
+  AssetPicker,
+  type PickableAsset,
+  type PickableFolder,
+} from "./asset-picker";
 
 /**
  * The change-request form.
@@ -92,75 +92,146 @@ function AllowanceMeter({ allowance }: { allowance: AllowanceSummary }) {
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+/** Where an unsent draft lives between visits. Per browser, per client. */
+const DRAFT_KEY = "mw.request-draft.v1";
+
+interface Draft {
+  title: string;
+  description: string;
+  assetPublicIds: string[];
+  idempotencyKey: string;
+}
+
+function loadDraft(): Draft | null {
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Draft>;
+    if (typeof parsed.idempotencyKey !== "string") return null;
+    return {
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      description: typeof parsed.description === "string" ? parsed.description : "",
+      assetPublicIds: Array.isArray(parsed.assetPublicIds)
+        ? parsed.assetPublicIds.filter((x): x is string => typeof x === "string")
+        : [],
+      idempotencyKey: parsed.idempotencyKey,
+    };
+  } catch {
+    // A private window, cleared storage, or a value from an older shape. A
+    // missing draft is the ordinary case, not an error worth surfacing.
+    return null;
+  }
+}
+
+function newIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
 export function RequestForm({
   sites,
   allowance,
   locked,
+  assets,
+  folders,
 }: {
   sites: SiteOption[];
   allowance: AllowanceSummary | null;
   /** True until the first payment clears. The form is replaced, not disabled. */
   locked: boolean;
+  /** Ready images from the media library, to choose from. */
+  assets: PickableAsset[];
+  folders: PickableFolder[];
 }) {
   const [state, formAction, pending] = useActionState<
     RequestSubmission | null,
     FormData
   >(submitChangeRequest, null);
 
-  const [previews, setPreviews] = useState<
-    { name: string; url: string; size: number }[]
-  >([]);
   const formRef = useRef<HTMLFormElement>(null);
 
   const exhausted = Boolean(
     state && !state.ok && state.reason === "allowance_exhausted",
   );
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [shrinking, setShrinking] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
 
   /**
-   * Shrink on pick, and put the shrunk files back on the input.
+   * One key per composed request, minted once and kept until it is sent.
    *
-   * The rewritten `DataTransfer` is what makes this work at all: a form
-   * submits whatever the input holds, so downscaling into a variable would
-   * still upload the originals. Replacing `input.files` means the small
-   * versions are what the server action receives.
+   * This is what makes submitting idempotent. A double-tap, a browser retrying
+   * a request it was unsure about, and a client pressing Send again after a
+   * slow response all carry the same value — so the server finds the request it
+   * already created instead of making a second one and charging for it.
+   *
+   * It lives in the draft, so it also survives a reload mid-submit: the case
+   * where someone gives up waiting, refreshes, and sends again.
    */
-  async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(event.target.files ?? []);
-    previews.forEach((p) => URL.revokeObjectURL(p.url));
+  const [idempotencyKey, setIdempotencyKey] = useState("");
+  /** True when this form opened onto text the client had not sent. */
+  const [restored, setRestored] = useState(false);
 
-    if (picked.length === 0) {
-      setPreviews([]);
-      return;
+  /*
+   * Restore an unsent draft.
+   *
+   * This has to be an effect, and it has to set state, which is the one thing
+   * `react-hooks/set-state-in-effect` exists to discourage. The rule is right
+   * in general and does not fit here: `localStorage` does not exist during the
+   * server render, so a lazy `useState` initialiser would either throw on the
+   * server or return different values on the two sides and break hydration.
+   * Reading it after mount and setting state once is the documented way to
+   * bring a browser-only value into React.
+   *
+   * It runs once, on mount, with an empty dependency list — so the "cascading
+   * renders" the rule guards against amount to exactly one extra render on
+   * first paint.
+   */
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) {
+      setTitle(draft.title);
+      setDescription(draft.description);
+      setSelectedAssets(draft.assetPublicIds);
+      setIdempotencyKey(draft.idempotencyKey);
+      setRestored(Boolean(draft.title || draft.description));
+    } else {
+      setIdempotencyKey(newIdempotencyKey());
     }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-    setShrinking(true);
+  // Keep the draft current as they type.
+  //
+  // Losing typed input is the failure this whole change is about, and the
+  // upload path fixes only the version of it caused by request size. A crashed
+  // tab, a phone killing a background page, or a hard refresh are all still
+  // there — and this is what makes those survivable too.
+  useEffect(() => {
+    if (!idempotencyKey) return;
+    if (!title && !description && selectedAssets.length === 0) return;
     try {
-      const results = await Promise.all(picked.map(downscaleImage));
-
-      const transfer = new DataTransfer();
-      results.forEach((r) => transfer.items.add(r.file));
-      if (fileInputRef.current) fileInputRef.current.files = transfer.files;
-
-      setPreviews(
-        results.map((r) => ({
-          name: r.file.name,
-          url: URL.createObjectURL(r.file),
-          size: r.bytes,
-        })),
+      window.localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ title, description, assetPublicIds: selectedAssets, idempotencyKey }),
       );
-    } finally {
-      setShrinking(false);
+    } catch {
+      // Storage full, or blocked. The form still works; only the safety net is
+      // missing, and telling someone about it mid-sentence would not help.
     }
-  }
+  }, [title, description, selectedAssets, idempotencyKey]);
+
+  // Sent successfully: the draft has served its purpose and must not be
+  // restored on the next visit as though it were unsent.
+  useEffect(() => {
+    if (!state?.ok) return;
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Nothing to do, and nothing depends on it.
+    }
+  }, [state?.ok]);
 
   // Locked replaces the form rather than disabling it. A greyed-out form with
   // an explanation underneath still invites someone to fill it in and find out
@@ -229,8 +300,13 @@ export function RequestForm({
           type="button"
           className="secondary"
           onClick={() => {
-            previews.forEach((p) => URL.revokeObjectURL(p.url));
-            setPreviews([]);
+            setTitle("");
+            setDescription("");
+            setSelectedAssets([]);
+            // A new request is a new submission, so it needs its own key —
+            // reusing the sent one would make the next request look like a
+            // retry of the last and be answered with it.
+            setIdempotencyKey(newIdempotencyKey());
             formRef.current?.reset();
             // Reload so the list below picks up the new request.
             window.location.reload();
@@ -247,6 +323,11 @@ export function RequestForm({
       <div className="card-head">
         <h2>Request a change</h2>
       </div>
+
+      {/* Minted once per composed request. The server uses it to recognise a
+          retry, so a double-tap or a network retry cannot create a second
+          request or spend a second change. */}
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
       {/* An exhausted allowance is an offer, not an error. Same information,
           completely different tone — the client has done nothing wrong. */}
@@ -300,6 +381,27 @@ export function RequestForm({
           and the same offer, and showing both says it twice in a row. */}
       {allowance && !exhausted && <AllowanceMeter allowance={allowance} />}
 
+      {/* Said out loud, because text reappearing unannounced reads as a bug
+          rather than as the safety net it is. */}
+      {restored && (
+        <p className="notice">
+          We kept what you were writing last time. Change anything you like, or{" "}
+          <button
+            type="button"
+            className="linklike"
+            onClick={() => {
+              setTitle("");
+              setDescription("");
+              setSelectedAssets([]);
+              setRestored(false);
+            }}
+          >
+            start again
+          </button>
+          .
+        </p>
+      )}
+
       <label htmlFor="title">What would you like changed?</label>
       <input
         id="title"
@@ -309,6 +411,8 @@ export function RequestForm({
         required
         minLength={3}
         maxLength={200}
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
       />
 
       <label htmlFor="description">Tell us what you want</label>
@@ -317,6 +421,8 @@ export function RequestForm({
         name="description"
         rows={7}
         placeholder="Describe it however you'd say it out loud. Where it is, what it should say, what you don't like about it now — as much or as little as you want."
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
       />
       <p className="field-hint">
         No need to be technical. We&rsquo;ll work out the details and send you a
@@ -351,78 +457,21 @@ export function RequestForm({
           and works it out, which is what it is for. `category` defaults to
           `other` server-side and nothing downstream branches on it. */}
 
-      <label htmlFor="photos">Photos (optional)</label>
-      <input
-        id="photos"
-        name="photos"
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
-        multiple
-        onChange={onPick}
-      />
-      {shrinking && (
-        <p className="field-hint">Getting your photos ready…</p>
-      )}
-      <p className="field-hint">
-        Up to {MAX_ATTACHMENTS_PER_REQUEST} images,{" "}
-        {Math.floor(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB each. JPEG, PNG, GIF,
-        or WebP — a photo straight from your phone is fine.
+      <label htmlFor="media-picker-label">Images (optional)</label>
+      <p id="media-picker-label" className="field-hint">
+        Choose from your media library. Photos are uploaded there separately, at
+        full quality, so sending a request never waits on an upload and never
+        fails because of one.
       </p>
 
-      {previews.length > 0 && (
-        <>
-          {/* Naming happens here, beside the thumbnail, rather than in a
-              separate step. The client can see which photo they are naming,
-              and the name is what makes it referable: "put the new one in the
-              gallery" needs something called "new" for the agent to match. */}
-          <p className="field-hint" style={{ marginTop: "0.75rem" }}>
-            Give each photo a name so you can refer to it above — and anything
-            that should appear beside it, like a price.
-          </p>
-          <div className="preview-grid">
-            {previews.map((preview, index) => (
-              <figure key={preview.url} className="preview">
-                {/* Local object URL, not yet uploaded. next/image cannot
-                    optimise a blob: URL, so a plain img is correct here. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview.url} alt="" />
-                <figcaption>
-                  <label
-                    htmlFor={`photo-title-${index}`}
-                    className="visually-hidden"
-                  >
-                    Name for {preview.name}
-                  </label>
-                  <input
-                    id={`photo-title-${index}`}
-                    name={`photoTitle${index}`}
-                    type="text"
-                    placeholder="Name it — e.g. new"
-                    maxLength={80}
-                  />
-                  <label
-                    htmlFor={`photo-caption-${index}`}
-                    className="visually-hidden"
-                  >
-                    Description for {preview.name}
-                  </label>
-                  <input
-                    id={`photo-caption-${index}`}
-                    name={`photoCaption${index}`}
-                    type="text"
-                    placeholder="Optional — $100, hand carved"
-                    maxLength={200}
-                  />
-                  <span>{formatBytes(preview.size)}</span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </>
-      )}
+      <AssetPicker
+        assets={assets}
+        folders={folders}
+        selected={selectedAssets}
+        onChange={setSelectedAssets}
+      />
 
-      <button type="submit" disabled={pending || shrinking}>
+      <button type="submit" disabled={pending}>
         {pending ? "Sending…" : "Send request"}
       </button>
     </form>

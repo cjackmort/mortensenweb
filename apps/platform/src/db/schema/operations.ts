@@ -80,6 +80,22 @@ export const changeRequests = pgTable(
       { onDelete: "set null" },
     ),
 
+    /**
+     * Minted by the browser when the form is first rendered, and resent with
+     * every retry of that same submission.
+     *
+     * This is what makes submitting idempotent. A double-tap, a flaky
+     * connection that retries, or a client pressing Send again because the
+     * first attempt appeared to hang all carry the same key — so the second
+     * arrival finds the first request and returns it, rather than creating a
+     * duplicate and spending a second change from the allowance.
+     *
+     * Unique per organization rather than globally: the key is client-supplied,
+     * and a global unique index would let one tenant deny another a key by
+     * claiming it first.
+     */
+    idempotencyKey: text("idempotency_key"),
+
     isDemo: boolean("is_demo").notNull().default(false),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -94,6 +110,12 @@ export const changeRequests = pgTable(
     index("change_requests_org_time_idx").on(t.organizationId, t.createdAt),
     index("change_requests_org_status_idx").on(t.organizationId, t.status),
     index("change_requests_site_idx").on(t.siteId),
+    // Partial, because most historic rows have no key and NULLs are distinct
+    // anyway — spelling out the predicate keeps the index small and its purpose
+    // legible.
+    uniqueIndex("change_requests_org_idempotency_key")
+      .on(t.organizationId, t.idempotencyKey)
+      .where(sql`idempotency_key IS NOT NULL`),
     check("change_requests_title_not_blank", sql`length(btrim(${t.title})) > 0`),
   ],
 );

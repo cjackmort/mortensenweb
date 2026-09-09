@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "apps/portfolio", "--", "--port", "4321"],
       "port": 4321
+    },
+    {
+      "name": "platform-stripe",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "apps/platform", "--", "--port", "3100"],
+      "port": 3100
     }
   ]
 }

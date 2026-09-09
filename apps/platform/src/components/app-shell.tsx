@@ -39,6 +39,10 @@ const CLIENT_NAV: NavItem[] = [
   // places to look for one answer.
   { href: "/dashboard", label: "Your site" },
   { href: "/dashboard/requests", label: "Requests" },
+  // Between Requests and Billing rather than at the end, because the library is
+  // part of asking for a change — a client uploads photos and then refers to
+  // them — while Billing is a place you go for its own reasons.
+  { href: "/dashboard/media", label: "Media" },
   { href: "/dashboard/billing", label: "Billing" },
 ];
 

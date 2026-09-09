@@ -4,7 +4,7 @@ import { currentUser } from "@/auth";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
 import { RequestProgress } from "@/components/request-progress";
-import { ClickSummary } from "@/components/click-summary";
+import { EventPanels } from "@/components/event-panels";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { getClientDetail, getInternalClient } from "@/db/repositories/admin/clients";
@@ -175,7 +175,13 @@ export default async function MortensenWebPage({
                   <h3>Most viewed pages</h3>
                   <BarList rows={data.topPages} unit="views" />
                 </div>
-                <ClickSummary events={data.events} />
+                <EventPanels
+                  events={data.events}
+                  trackingConfigured={data.events.length > 0}
+                  // An operator should see events the registry has no
+                  // mapping for — that list is how the registry grows.
+                  isAdmin
+                />
               </div>
             </section>
           </>

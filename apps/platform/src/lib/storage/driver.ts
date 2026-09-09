@@ -14,9 +14,28 @@ import type { StorageDriver, StoredObject } from "./index";
  */
 
 const LOCAL_ROOT = process.env.ATTACHMENT_DIR ?? "./.attachments";
+const MEDIA_LOCAL_ROOT = process.env.MEDIA_DIR ?? "./.media";
 
 /** Keys we generate: two hex segments and an extension. Nothing else is valid. */
 const KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f]{32}\.[a-z0-9]{1,5}$/;
+
+/**
+ * Media library keys.
+ *
+ * Structured rather than flat, because these need to be *swept*: an abandoned
+ * upload's parts have to be findable without consulting the database, and a
+ * prefix listing is how that is done. The shapes are
+ *
+ *   `a/<26-char public id>/original.<ext>`
+ *   `a/<26-char public id>/d/<kind>.<ext>`
+ *   `u/<26-char public id>/p/<n>`
+ *
+ * Public identifiers are Crockford base32 from `lib/ids`, so the character
+ * class is deliberately narrow: it admits exactly what `newPublicId` emits and
+ * nothing a filename could contribute.
+ */
+const MEDIA_KEY_PATTERN =
+  /^(a\/[0-9A-HJKMNP-TV-Z]{26}\/(original\.[a-z0-9]{1,5}|d\/[a-z_]{1,12}\.[a-z0-9]{1,5})|u\/[0-9A-HJKMNP-TV-Z]{26}\/p\/[0-9]{1,4})$/;
 
 /**
  * Reject anything that is not a key this system generated.
@@ -26,8 +45,8 @@ const KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f]{32}\.[a-z0-9]{1,5}$/;
  * turns a refactor into a path traversal, and the containment check below is
  * cheap insurance.
  */
-function assertSafeKey(key: string): void {
-  if (!KEY_PATTERN.test(key)) {
+function assertKeyMatches(key: string, pattern: RegExp): void {
+  if (!pattern.test(key)) {
     throw new Error("Refusing to touch a storage key that is not well-formed.");
   }
 }
@@ -43,14 +62,17 @@ function resolveWithin(root: string, key: string): string {
 }
 
 class LocalDiskDriver implements StorageDriver {
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    private readonly keyPattern: RegExp = KEY_PATTERN,
+  ) {}
 
   async put(input: {
     key: string;
     bytes: Uint8Array;
     contentType: string;
   }): Promise<StoredObject> {
-    assertSafeKey(input.key);
+    assertKeyMatches(input.key, this.keyPattern);
     const path = resolveWithin(this.root, input.key);
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, input.bytes);
@@ -64,7 +86,7 @@ class LocalDiskDriver implements StorageDriver {
   async get(
     key: string,
   ): Promise<{ bytes: Uint8Array; contentType: string } | null> {
-    assertSafeKey(key);
+    assertKeyMatches(key, this.keyPattern);
     try {
       const bytes = await readFile(resolveWithin(this.root, key));
       // The authoritative content type lives in the database row, sniffed at
@@ -76,7 +98,7 @@ class LocalDiskDriver implements StorageDriver {
   }
 
   async delete(key: string): Promise<void> {
-    assertSafeKey(key);
+    assertKeyMatches(key, this.keyPattern);
     await rm(resolveWithin(this.root, key), { force: true });
   }
 }
@@ -93,6 +115,16 @@ class LocalDiskDriver implements StorageDriver {
  * metadata round-tripped through storage would reintroduce exactly the trust
  * the upload validator exists to remove.
  */
+/**
+ * Is this the real site, or a preview of it?
+ *
+ * Netlify sets `CONTEXT` to `production`, `deploy-preview`, `branch-deploy` or
+ * `dev`. Only the first may touch the durable stores.
+ */
+function isProductionContext(): boolean {
+  return process.env.CONTEXT === "production";
+}
+
 class NetlifyBlobsDriver implements StorageDriver {
   private store: Promise<{
     set: (key: string, value: ArrayBuffer | Uint8Array) => Promise<unknown>;
@@ -100,9 +132,33 @@ class NetlifyBlobsDriver implements StorageDriver {
     delete: (key: string) => Promise<unknown>;
   }>;
 
-  constructor() {
+  /**
+   * Production writes to the global store; everything else writes to a
+   * deploy-scoped one.
+   *
+   * This is a data-safety boundary, not tidiness. `getStore` is global: it is
+   * shared by every deploy of the site, including deploy previews and branch
+   * deploys. Left as it was, opening a pull request and clicking around its
+   * preview would have written test uploads into the same `media` and
+   * `attachments` stores that hold real clients' photographs — and the sweeper
+   * running in that preview would have been free to delete from them.
+   *
+   * `getDeployStore` is scoped to one deploy and is removed when that deploy
+   * is, so a preview cleans up after itself and can touch nothing real. The
+   * cost is that a new commit means a new deploy and therefore an empty store,
+   * which is the right trade for a throwaway environment.
+   *
+   * Production must stay on the global store: an asset has to outlive the
+   * deploy that received it.
+   */
+  constructor(
+    storeName: string,
+    private readonly keyPattern: RegExp = KEY_PATTERN,
+  ) {
     this.store = import("@netlify/blobs").then((m) =>
-      m.getStore({ name: "attachments", consistency: "strong" }),
+      isProductionContext()
+        ? m.getStore({ name: storeName, consistency: "strong" })
+        : m.getDeployStore({ name: storeName, consistency: "strong" }),
     ) as never;
   }
 
@@ -111,7 +167,7 @@ class NetlifyBlobsDriver implements StorageDriver {
     bytes: Uint8Array;
     contentType: string;
   }): Promise<StoredObject> {
-    assertSafeKey(input.key);
+    assertKeyMatches(input.key, this.keyPattern);
     const store = await this.store;
     await store.set(input.key, input.bytes);
     return {
@@ -124,7 +180,7 @@ class NetlifyBlobsDriver implements StorageDriver {
   async get(
     key: string,
   ): Promise<{ bytes: Uint8Array; contentType: string } | null> {
-    assertSafeKey(key);
+    assertKeyMatches(key, this.keyPattern);
     const store = await this.store;
     const buffer = await store.get(key, { type: "arrayBuffer" });
     if (!buffer) return null;
@@ -135,7 +191,7 @@ class NetlifyBlobsDriver implements StorageDriver {
   }
 
   async delete(key: string): Promise<void> {
-    assertSafeKey(key);
+    assertKeyMatches(key, this.keyPattern);
     const store = await this.store;
     await store.delete(key);
   }
@@ -157,7 +213,7 @@ export function storageDriver(): StorageDriver {
   if (cached) return cached;
 
   if (process.env.NETLIFY) {
-    cached = new NetlifyBlobsDriver();
+    cached = new NetlifyBlobsDriver("attachments");
     return cached;
   }
 
@@ -171,6 +227,72 @@ export function storageDriver(): StorageDriver {
 
   cached = new LocalDiskDriver(LOCAL_ROOT);
   return cached;
+}
+
+let cachedMedia: StorageDriver | undefined;
+
+/**
+ * The media library's own store.
+ *
+ * Separate from `attachments` rather than sharing it, for two reasons that both
+ * matter later. Retention differs — a request attachment belongs to one request
+ * and a library asset outlives every request that used it — and so does the key
+ * shape, which the media sweeper depends on being able to list by prefix. One
+ * store holding two key conventions is a store nobody can safely enumerate.
+ */
+export function mediaDriver(): StorageDriver {
+  if (cachedMedia) return cachedMedia;
+
+  if (process.env.NETLIFY) {
+    cachedMedia = new NetlifyBlobsDriver("media", MEDIA_KEY_PATTERN);
+    return cachedMedia;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "No production storage driver is configured. The media library requires " +
+        "Netlify Blobs — the local disk driver is development only and would " +
+        "lose originals when the instance recycles.",
+    );
+  }
+
+  cachedMedia = new LocalDiskDriver(MEDIA_LOCAL_ROOT, MEDIA_KEY_PATTERN);
+  return cachedMedia;
+}
+
+/** Testing hook: drop both cached drivers. */
+export function resetStorageDrivers(): void {
+  cached = undefined;
+  cachedMedia = undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Media keys
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an original lives.
+ *
+ * Derived from the asset's public id rather than random, so the object for an
+ * asset is findable from the row and vice versa — which is what makes an
+ * orphan sweep possible in either direction. Written exactly once.
+ */
+export function originalKey(assetPublicId: string, extension: string): string {
+  return `a/${assetPublicId}/original.${extension}`;
+}
+
+/** Where one derivative lives. Overwritten freely; the original never is. */
+export function derivativeKey(
+  assetPublicId: string,
+  kind: string,
+  extension: string,
+): string {
+  return `a/${assetPublicId}/d/${kind}.${extension}`;
+}
+
+/** Where one part of an in-flight upload lives, until it is assembled. */
+export function uploadPartKey(uploadPublicId: string, partNumber: number): string {
+  return `u/${uploadPublicId}/p/${partNumber}`;
 }
 
 /**

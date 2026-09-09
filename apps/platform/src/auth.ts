@@ -1,6 +1,10 @@
 import { cache } from "react";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import {
+  secureSessionCookieName,
+  sessionCookieName,
+} from "@/lib/auth/cookie-name";
 import { getDb } from "@/db/client";
 import { ipFromHeaders } from "@/lib/auth/client-ip";
 import { authenticate, resolveSession } from "@/lib/auth/session";
@@ -44,6 +48,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/login",
+  },
+  /*
+   * The session cookie's name, which is standard in production and may carry a
+   * development-only suffix otherwise.
+   *
+   * Cookies ignore the port, so two dev servers on localhost share a jar and
+   * hand each other sessions encrypted under different secrets. See
+   * `lib/auth/cookie-name` — production always gets the standard names and the
+   * `__Secure-` prefix, whatever the environment says.
+   */
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? secureSessionCookieName()
+          : sessionCookieName(),
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
   trustHost: true,
   providers: [

@@ -121,7 +121,16 @@ export interface IssueInput {
    * request written in the client's own words — "put the new one in the
    * gallery" needs something called "new" to point at.
    */
-  attachmentUrls?: { url: string; title: string | null; caption: string | null }[];
+  attachmentUrls?: {
+    url: string;
+    title: string | null;
+    caption: string | null;
+    /** The original's pixel size, where known. Drives the resolution warning. */
+    width?: number | null;
+    height?: number | null;
+    /** Where the client files this image in their own library. */
+    folderPath?: string | null;
+  }[];
   /** Paths the request is expected to touch, if the operator narrowed it. */
   allowedPaths?: string[];
   /**
@@ -235,12 +244,30 @@ export function renderIssueBody(input: IssueInput): string {
       "**These are the client's own photos and they are meant to be used.**",
       "Download each one into the repository's image directory and commit it,",
       "then reference it by its local path. Do not leave the download URL in",
-      "the markup — it expires.",
+      "the markup — it expires, and a page referencing an expired link loses",
+      "its image silently some time after the change has been approved.",
+      "",
+      "These links serve the **original** file, at full resolution, so generate",
+      "the site's own optimised sizes from them rather than shipping the",
+      "original as-is. Where a size is given below, it is the original's — check",
+      "it against the width you intend to render at, and say so in the pull",
+      "request if a photo is too small rather than upscaling it.",
+      "",
+      "If a download answers **413**, the file is larger than one response may",
+      "carry. The body says how many bytes it is and how many fit; fetch it in",
+      "pieces with a `Range: bytes=start-end` header and join them. Do not",
+      "commit a partial file — a truncated image looks fine in a diff and broken",
+      "on the page.",
       "",
       ...input.attachmentUrls.flatMap((a, index) => {
         const name = a.title ?? `Photo ${index + 1}`;
         const said = a.caption ? ` — the client says: ${a.caption}` : "";
-        return [`- **${name}**${said} — [download](${a.url})`];
+        // Dimensions and the client's own filing tell the agent where a photo
+        // belongs. "Winter Series" beside a painting carries intent a filename
+        // never does, and the pixel size decides whether it can carry a hero.
+        const size = a.width && a.height ? ` — ${a.width}x${a.height}` : "";
+        const folder = a.folderPath ? ` — filed under \`${a.folderPath}\`` : "";
+        return [`- **${name}**${said}${size}${folder} — [download](${a.url})`];
       }),
       "",
     );

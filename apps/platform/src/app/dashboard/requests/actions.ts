@@ -9,8 +9,13 @@ import {
   addRequestNote,
   createChangeRequest,
   findOpenRequestForSite,
+  findRequestByIdempotencyKey,
   getChangeRequestOrThrow,
 } from "@/db/repositories/client/change-requests";
+import {
+  attachAssetsToRequest,
+  validateAssetSelection,
+} from "@/db/repositories/client/request-assets";
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
 import { NotFoundError } from "@/db/repositories/context";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
@@ -26,16 +31,30 @@ import {
 } from "@/lib/storage";
 
 /**
- * Submitting a change request, with photos.
+ * Submitting a change request.
  *
- * The important behaviour here is what happens when one photo is rejected: the
- * request is still created, and the rejection is reported per-file. A client who
- * has typed three paragraphs on a phone and attached four photos, one of which
- * is a PDF, must not lose the other five minutes of work. Losing typed input to
- * a validation error is the fastest way to make someone stop using the portal.
+ * ## Photos do not travel through here any more
  *
- * Every file is validated by inspecting its bytes — see `lib/storage`. Nothing
- * here trusts the browser's declared content type or the submitted filename.
+ * They used to, and that was the bug. Netlify caps a function request body at
+ * about 4.5 MB once binary content is base64-encoded, so a client attaching
+ * photos could push the submission past a limit enforced at the platform edge —
+ * before any of this code ran. Nothing logged it, no validation message fired,
+ * and everything they had typed went with it.
+ *
+ * Images are now uploaded separately to the media library, in parts, and a
+ * submission carries their identifiers. Whatever the client attached, this
+ * request body is a few hundred bytes of text.
+ *
+ * The legacy `photos` field is still read, so a client on a cached page from
+ * before this deploy still gets their request saved rather than an error.
+ *
+ * ## Submitting is idempotent
+ *
+ * `idempotencyKey` is minted by the browser when the form is first rendered and
+ * resent with every retry. A double-tap, a browser retrying a request it was
+ * unsure about, or a client pressing Send again after a slow response all carry
+ * the same key — and find the request that already exists rather than creating
+ * a second one and spending a second change from the allowance.
  */
 
 export type RequestSubmission =
@@ -46,6 +65,12 @@ export type RequestSubmission =
       rejected: string[];
       /** Null when the plan is unlimited. Drives the "2 left this month" line. */
       remaining: number | null;
+      /**
+       * True when this call found a request an earlier attempt had already
+       * created. The UI treats it as success — because it is — and says
+       * "already sent" rather than pretending to have sent a second one.
+       */
+      duplicate?: boolean;
     }
   /**
    * The allowance is spent. Distinguished from a plain failure because the UI
@@ -108,6 +133,40 @@ export async function submitChangeRequest(
 
   if (files.length > MAX_ATTACHMENTS_PER_REQUEST) {
     return { ok: false, message: REJECTION_MESSAGES.too_many };
+  }
+
+  // Images chosen from the media library. Identifiers only — the bytes are
+  // already in storage.
+  const assetPublicIds = formData
+    .getAll("assetPublicIds")
+    .map((entry) => String(entry).trim())
+    .filter(Boolean);
+
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim();
+
+  // The cheap path: this exact submission already succeeded, and what arrived
+  // is a retry. Answered before the allowance is touched, so a retry is free.
+  if (idempotencyKey) {
+    const existing = await findRequestByIdempotencyKey(db, ctx, idempotencyKey);
+    if (existing) {
+      return {
+        ok: true,
+        publicId: existing.publicId,
+        attached: assetPublicIds.length,
+        rejected: [],
+        remaining: null,
+        duplicate: true,
+      };
+    }
+  }
+
+  // Validated before the allowance is claimed and before the request row
+  // exists. An image still processing is a reason to ask the client to wait a
+  // moment — not a reason to have already charged them for a change and then
+  // have to hand it back.
+  const selection = await validateAssetSelection(db, ctx, assetPublicIds);
+  if (!selection.ok) {
+    return { ok: false, reason: "invalid", message: selection.message };
   }
 
   // Gate one: has the commercial relationship started at all? Checked before
@@ -185,6 +244,7 @@ export async function submitChangeRequest(
       priority: priority as never,
       sitePublicId: sitePublicId || undefined,
       allowanceId: claim.allowanceId,
+      idempotencyKey: idempotencyKey || undefined,
     });
   } catch (error) {
     // The allowance was claimed and the request was not created. Give it back —
@@ -194,33 +254,72 @@ export async function submitChangeRequest(
     throw error;
   }
 
-  // Photos are attached after the request exists, and a failure on one is
-  // reported rather than thrown — the request itself is already saved.
+  // Another submission carrying the same key won the race between our lookup
+  // above and the insert. It created the request; this one must not be charged
+  // for it, so the change claimed a moment ago goes straight back.
+  if (created.duplicate) {
+    await refundChange(db, claim.allowanceId);
+    return {
+      ok: true,
+      publicId: created.publicId,
+      attached: selection.assets.length,
+      rejected: [],
+      remaining: claim.remaining,
+      duplicate: true,
+    };
+  }
+
+  const rejected: string[] = [];
+  let attached = 0;
+
+  // Library images: identifiers into rows that already exist, so this is one
+  // insert and cannot fail on the network or on storage.
+  if (selection.assets.length > 0) {
+    const linked = await attachAssetsToRequest(
+      db,
+      ctx,
+      created.id,
+      selection.assets.map((a) => a.publicId),
+    );
+    if (linked.ok) {
+      attached += linked.attached;
+    } else {
+      // The request is saved and the client is told plainly. They can add the
+      // images by replying to it rather than starting over.
+      rejected.push(linked.message);
+    }
+  }
+
+  // The legacy inline path, kept working for a client on a page cached from
+  // before this deploy. New submissions send no files at all.
   //
-  // Uploaded in parallel rather than one after another. Each attachment is a
-  // round trip to blob storage, and six of them in series against a ten-second
-  // function budget is most of the budget spent waiting. Sequentially this was
-  // timing out and the client saw a connection error having lost everything
-  // they typed.
-  const results = await Promise.all(
-    files.map(async (file, position) => {
+  // Each attachment is wrapped individually. Previously these ran inside a
+  // bare `Promise.all`, so a storage failure on any one of them rejected the
+  // whole action *after* the request had been created and the allowance spent —
+  // the client saw a generic error page, and their change had in fact been
+  // charged for and saved. A per-file catch is what makes that impossible.
+  for (const [position, file] of files.entries()) {
+    try {
       const check = await validateImageUpload(file);
       if (!check.ok) {
-        return { ok: false as const, note: `${file.name}: ${REJECTION_MESSAGES[check.reason]}` };
+        rejected.push(`${file.name}: ${REJECTION_MESSAGES[check.reason]}`);
+        continue;
       }
       await attachImageToRequest(db, ctx, created.publicId, check.upload, {
-        // The name and description typed beside this thumbnail. Indexed by
-        // position, which matches because the form renders one pair of fields
-        // per picked file and the input's `files` list is what was submitted.
         title: String(formData.get(`photoTitle${position}`) ?? ""),
         caption: String(formData.get(`photoCaption${position}`) ?? ""),
       });
-      return { ok: true as const };
-    }),
-  );
-
-  const rejected = results.filter((r) => !r.ok).map((r) => r.note!);
-  const attached = results.filter((r) => r.ok).length;
+      attached += 1;
+    } catch (error) {
+      console.warn("[request] attachment failed", {
+        request: created.publicId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      rejected.push(
+        `${file.name}: we could not save this photo. Your request was saved — reply to it to add the photo again.`,
+      );
+    }
+  }
 
   // Automatic dispatch is deliberately NOT done here any more.
   //
