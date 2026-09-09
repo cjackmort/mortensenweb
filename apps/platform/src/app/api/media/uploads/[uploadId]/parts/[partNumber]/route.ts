@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { storeUploadPart } from "@/db/repositories/client/media-uploads";
 import { UPLOAD_PART_BYTES } from "@/lib/media/constants";
+import { mediaFailureMessage } from "@/lib/media/errors";
 
 /**
  * One part of one file.
@@ -88,9 +89,7 @@ export async function PUT(
     return Response.json(
       {
         ok: false,
-        message:
-          "We could not save that part. This is a problem on our side, not " +
-          "your connection — please try again, and tell us if it keeps happening.",
+        message: mediaFailureMessage("save that part", error, user.role),
       },
       { status: 500 },
     );
