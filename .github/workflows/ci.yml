@@ -70,6 +70,65 @@ jobs:
           npm run build --workspace apps/portfolio
           node agent/verify/check.mjs apps/portfolio/dist
 
+  migrate-preview:
+    name: Apply migrations to the preview database
+    needs: verify
+    # Pull requests only. A deploy preview is built for every one of them, and
+    # without this its database has no tables from the branch under review — so
+    # the preview 500s on exactly the pages the reviewer opened it to look at.
+    #
+    # Production migrations remain on the `migrate` job below, on push to main,
+    # behind the `production` environment. Nothing here can reach that database
+    # unless someone puts the production connection string in the preview
+    # secret, which is why the guard below refuses when the two match.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Queue rather than race: two pushes to the same pull request must not run
+    # migrations against one database at the same time.
+    concurrency:
+      group: migrate-preview-${{ github.ref }}
+      cancel-in-progress: false
+
+    # A separate environment from `production`, so the two connection strings
+    # cannot be confused and the preview one can be scoped to pull requests.
+    environment: preview
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Migrate the preview database
+        env:
+          # Must hold the same connection string as the `deploy-preview`
+          # context's DATABASE_URL in Netlify, or the preview will be built
+          # against a database this job never migrated.
+          PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          PRODUCTION_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$PREVIEW_DATABASE_URL" ]; then
+            echo "::warning::PREVIEW_DATABASE_URL is not set, so the deploy preview"                  "has no schema from this branch. Add it as a secret on the"                  "'preview' environment, pointing at a throwaway Neon branch."
+            exit 0
+          fi
+
+          # The one mistake that would matter. A typo, or someone reusing the
+          # production string "just to get the preview working", would apply an
+          # unreviewed migration to real client data on every pull request.
+          if [ -n "$PRODUCTION_DATABASE_URL" ]              && [ "$PREVIEW_DATABASE_URL" = "$PRODUCTION_DATABASE_URL" ]; then
+            echo "::error::PREVIEW_DATABASE_URL is the production connection string."                  "Refusing. Point it at a Neon branch created for previews."
+            exit 1
+          fi
+
+          DATABASE_URL="$PREVIEW_DATABASE_URL"             npm run db:migrate --workspace apps/platform
+
   migrate:
     name: Apply migrations to Neon
     needs: verify
@@ -113,6 +172,18 @@ jobs:
             exit 1
           fi
           npm run db:migrate --workspace apps/platform
+
+      # A green migrate is not evidence. Drizzle applies by a single
+      # `created_at` high-water mark and never compares tags or hashes, so a
+      # migration whose journal `when` sits below the highest already applied
+      # is skipped silently and permanently — success here, a 500 in front of a
+      # client days later. This compares the schema the build was compiled
+      # against with what the database actually has, and fails the release if
+      # anything is missing. Catalogue metadata only; no client data is read.
+      - name: Verify the applied schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:verify-schema --workspace apps/platform
 
       # ---------------------------------------------------------------------
       # Optional: deterministic ordering between migration and deploy.
