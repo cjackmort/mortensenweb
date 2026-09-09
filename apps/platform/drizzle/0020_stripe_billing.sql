@@ -8,6 +8,37 @@
 -- migration state two other branches are also building on; it is not folded
 -- into a billing migration.
 --
+-- ## Why 0020 and not 0019
+--
+-- `feat/media-library` also wrote an 0019 (`0019_media_library`). The clash
+-- that matters is not the filename — it is the journal's `when`, which is the
+-- only thing Drizzle's migrator actually reads:
+--
+--     order by created_at desc limit 1
+--     if (!last || Number(last.created_at) < migration.folderMillis) { apply }
+--
+-- One high-water mark, no tag comparison, no hash comparison. A migration
+-- whose `when` is below the highest already applied is skipped **silently and
+-- permanently** — CI reports success and the columns never appear.
+--
+-- This migration originally carried `when: 1788899600000`, below the media
+-- library's `1789000000000`. Reproduced against real Postgres: merging media
+-- first and this second left `clients.stripe_customer_id` missing with no
+-- error anywhere. It is now `1789100000000`, above media's, so it applies
+-- whether or not media has already moved the mark.
+--
+-- That fixes this direction only. If this branch is ever merged *before* the
+-- media library, the media migration becomes the one below the mark and is
+-- skipped instead. The rule is general and belongs to whoever merges second:
+-- **check the journal's highest `when` on main and set yours above it.**
+-- Merging both through one integration branch, so a single migrate run applies
+-- them together, avoids the question entirely and is the preferred route.
+--
+-- Safe to renumber because it had never been applied anywhere: not on `main`,
+-- so CI never ran it against Neon, and this worktree has no `.pglite` — the
+-- only databases it ever touched were the in-memory ones the tests create and
+-- discard.
+--
 -- Additive only. Every column is nullable or carries a default, so this
 -- applies to a populated database without a lock-heavy rewrite and without a
 -- backfill, and rolling it back is dropping columns nothing else reads.

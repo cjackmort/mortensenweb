@@ -35,7 +35,7 @@ Worth stating plainly, because it was not what it looked like:
 
 | Thing | Status |
 |---|---|
-| `drizzle-kit generate` is broken on `main` | **Unresolved.** `0014_square_venom` and `0015_internal_client_flag` both descend from the 0013 snapshot — two branches generated from the same parent and both were merged. Migrations 0016–0018 were hand-written to work around it, and so is 0019. Repairing the lineage is a separate change; it touches migration state other branches build on. |
+| `drizzle-kit generate` is broken on `main` | **Unresolved.** `0014_square_venom` and `0015_internal_client_flag` both descend from the 0013 snapshot — two branches generated from the same parent and both were merged. Migrations 0016–0018 were hand-written to work around it, and so is 0020. Repairing the lineage is a separate change; it touches migration state other branches build on. |
 | Two client rosters disagree | The agency-side `clients/_registry.json` (in the `Website Business` repo) lists 9 clients, 8 of them demos. The portal database is seeded separately. Neither is derived from the other. **The portal database is the source of truth for billing**; the registry is a deployment record. |
 | Allowance periods vs Stripe periods | See [Billing periods](#billing-periods). Not a defect — a decision that needed making. |
 
@@ -251,6 +251,78 @@ Square or Venmo, so:
 
 ---
 
+## Migration ordering — read before merging anything
+
+This branch's migration is **`0020_stripe_billing`**. It started as `0019` and
+was renumbered, because `feat/media-library` also wrote an `0019`.
+
+The filename clash is cosmetic. The dangerous part is the journal's `when`,
+because it is the only thing Drizzle's migrator reads:
+
+```js
+// drizzle-orm/pg-core/dialect.js
+order by created_at desc limit 1
+if (!last || Number(last.created_at) < migration.folderMillis) { apply }
+```
+
+One high-water mark. No tag comparison, no hash comparison. **A migration
+whose `when` sits below the highest already applied is skipped silently and
+permanently** — CI goes green, the columns never appear, and the first symptom
+is a 500 in production.
+
+Reproduced against real Postgres, applying one migration then the other:
+
+| Merge order | `when` values | Outcome |
+|---|---|---|
+| media → stripe | 1789000000000 → 1788899600000 | **stripe skipped** — `clients.stripe_customer_id` missing |
+| stripe → media | 1788899600000 → 1789000000000 | both applied |
+| both, one migrate run | — | both applied |
+
+Stripe's `when` is now `1789100000000`, above media's `1789000000000`, so the
+media-then-stripe order is safe. Re-running the same reproduction confirms it —
+**and confirms the problem simply moved**: with stripe now higher, merging
+stripe *first* leaves the media library skipped instead.
+
+### The rule
+
+A one-sided fix cannot make both orders safe. Either:
+
+1. **Merge both through one integration branch** so a single migrate run
+   applies them together. Proven safe in all three cases above, and the
+   preferred route — `integration/media-and-analytics` already exists.
+2. **Or whoever merges second checks the highest `when` on `main` and sets
+   theirs above it**, as a deliberate step before merging.
+
+Do not rely on the numbers being tidy. `0020` sorting after `0019` is not what
+makes this work; the timestamp is.
+
+### What the two migrations touch
+
+They are fully commutative — no shared object except the `clients` table, and
+even there the columns are disjoint. Neither drops or rewrites anything.
+
+| | Stripe `0020` | Media `0019` |
+|---|---|---|
+| `clients` | `stripe_customer_id` | `media_quota_bytes`, `media_reserved_bytes` |
+| `service_plans` | `stripe_price_lookup_key` | — |
+| `subscriptions` | `provider_status`, `current_period_end`, `cancel_at_period_end` | — |
+| `payments` | `receipt_url` | — |
+| `change_requests` | — | `idempotency_key` |
+| New tables | none | `media_*`, `request_assets` |
+
+### Applied state, verified before renumbering
+
+- **Not on `main`** — `main`'s journal tops out at idx 18, and CI's `migrate`
+  job runs only on `push` to `main`. Neither migration has ever run against
+  Neon.
+- **No `.pglite` in this worktree**, so this migration has only ever been
+  applied to the in-memory databases the tests create and discard.
+
+That is what made renumbering safe. It would **not** have been safe had either
+been applied to production, and no applied migration history was rewritten.
+
+---
+
 ## Two Stripe integrations
 
 There are now two, they read the same account, and they are not connected:
@@ -294,7 +366,7 @@ so far runs against the sandbox account `Mortensen Web Co. sandbox`
    list above. Copy its signing secret.
 4. **Set `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET`** in the
    Netlify production environment.
-5. **Run migration 0019** against the production database.
+5. **Run migration 0020** against the production database — after checking the ordering rule in [Migration ordering](#migration-ordering--read-before-merging-anything).
 6. **Decide Mitch's change allowance**, then migrate him in the order set out
    in [Migrating Mitch](#migrating-mitch--the-order-matters) — telling him to
    stop sending Venmo *before* he enrols, not after.
@@ -320,7 +392,7 @@ three days, so anything missed during a short outage arrives on its own.
 pause the subscriptions there. Do **not** delete the endpoint — deleting loses
 the delivery history you would need to reconcile afterwards.
 
-**Undo the schema.** Migration 0019 is additive only; nothing outside the
+**Undo the schema.** Migration 0020 is additive only; nothing outside the
 Stripe paths reads its columns.
 
 ```sql
