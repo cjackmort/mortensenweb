@@ -74,7 +74,21 @@ async function fileChecksum(file: File): Promise<string> {
     .join("");
 }
 
-async function readError(response: Response, fallback: string): Promise<string> {
+/**
+ * What to say when the response carried no message of its own.
+ *
+ * Split by status because the two causes are opposite and the wrong one wastes
+ * the reader's time: a gateway or network failure is worth retrying and may be
+ * theirs to fix, a 5xx is ours and never is.
+ */
+export function fallbackFor(status: number): string {
+  if (status >= 500) {
+    return "Something went wrong on our side saving that part. Please try again, and tell us if it keeps happening.";
+  }
+  return "The connection dropped part-way. Retrying will send only what is missing.";
+}
+
+export async function readError(response: Response, fallback: string): Promise<string> {
   try {
     const body = (await response.json()) as { message?: string };
     return body.message ?? fallback;
@@ -194,10 +208,13 @@ export async function uploadFile(
         return emit({
           phase: "failed",
           retryable: true,
-          error: await readError(
-            put,
-            "The connection dropped part-way. Retrying will send only what is missing.",
-          ),
+          // The fallback only claims a dropped connection for the statuses that
+          // can actually mean one. A 5xx is the server failing, and saying
+          // "the connection dropped" about it points the client — and whoever
+          // is debugging — at their own network instead of at us. The server
+          // sends a readable message for every failure it handles; this is for
+          // the ones it could not.
+          error: await readError(put, fallbackFor(put.status)),
         });
       }
 
