@@ -65,6 +65,23 @@ export default async function AdminRequestsPage() {
           }))}
         />
 
+        {/* The schedule reclaims an overdue run within five minutes, so in a
+            working system this is never on screen. When it is, the run needs
+            reclaiming by hand — and if it keeps appearing, nothing is running
+            the loop, which also means previews are not being verified and
+            shipped changes are not being confirmed live. Worth saying out
+            loud rather than leaving an operator to notice a stuck row. */}
+        {open.some((r) => r.agentOverdue) && (
+          <p className="notice notice-danger">
+            An agent run has passed its timeout and has not been reclaimed. The
+            five-minute schedule should have done that automatically — if this
+            keeps happening, check that the <code>scheduled-tick</code> function
+            is running, because the same schedule verifies previews and confirms
+            shipped changes. Use <strong>Mark failed</strong> below to release
+            the request in the meantime.
+          </p>
+        )}
+
         {escalations.length > 0 && (
           <section className="card">
             <div className="card-head">
@@ -217,6 +234,7 @@ function RequestTable({
                 <DispatchButton
                   requestPublicId={r.publicId}
                   status={r.status}
+                  overdue={Boolean(r.agentOverdue)}
                 />
               </td>
             </tr>

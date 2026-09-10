@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -681,45 +681,138 @@ export async function expireStalledJobs(db: Database): Promise<number> {
     );
 
   for (const job of stalled) {
-    await db
-      .update(agentJobs)
-      .set({
-        status: "timed_out",
-        error: "No result reported before the timeout.",
-        finishedAt: now,
-      })
-      .where(eq(agentJobs.id, job.id));
-
-    if (!job.requestId) continue;
-
-    await db
-      .update(changeRequests)
-      .set({ status: "failed", updatedAt: now })
-      .where(eq(changeRequests.id, job.requestId));
-
-    await db.insert(requestEvents).values({
-      requestId: job.requestId,
-      actorType: "system",
-      kind: "agent_timed_out",
-      body: "Automation did not finish in time; this needs a look.",
-      visibility: "internal",
-    });
-
-    // A failure on our side is not a change the client received, so it is not
-    // one they used. Cancelling already refunds by policy; a timeout is the
-    // same situation without the client having asked for it.
-    if (job.allowanceId) {
-      await refundChange(db, job.allowanceId);
-      await db
-        .update(changeRequests)
-        .set({ allowanceId: null })
-        .where(eq(changeRequests.id, job.requestId));
-    }
-
-    await notifyClientOfRequest(db, job.requestId, "snag");
+    await reclaimJob(db, job, now, "system");
   }
 
   return stalled.length;
+}
+
+/**
+ * Put one stalled job, and the request behind it, back into a state a person
+ * can act on.
+ *
+ * Extracted from `expireStalledJobs` so the operator can do by hand exactly
+ * what the schedule does unattended — the same writes, the same refund, the
+ * same client notification. Two code paths that "both fail a job" would drift,
+ * and the manual one is used precisely when the automatic one is already not
+ * working, which is the worst moment to discover a difference.
+ */
+async function reclaimJob(
+  db: Database,
+  job: { id: string; requestId: string | null; allowanceId: string | null },
+  now: Date,
+  actor: "system" | "admin",
+): Promise<void> {
+  await db
+    .update(agentJobs)
+    .set({
+      status: "timed_out",
+      error:
+        actor === "admin"
+          ? "Reclaimed by an operator after the timeout passed."
+          : "No result reported before the timeout.",
+      finishedAt: now,
+    })
+    .where(eq(agentJobs.id, job.id));
+
+  if (!job.requestId) return;
+
+  await db
+    .update(changeRequests)
+    .set({ status: "failed", updatedAt: now })
+    .where(eq(changeRequests.id, job.requestId));
+
+  await db.insert(requestEvents).values({
+    requestId: job.requestId,
+    actorType: actor === "admin" ? "admin" : "system",
+    kind: "agent_timed_out",
+    body: "Automation did not finish in time; this needs a look.",
+    visibility: "internal",
+  });
+
+  // A failure on our side is not a change the client received, so it is not
+  // one they used. Cancelling already refunds by policy; a timeout is the
+  // same situation without the client having asked for it.
+  if (job.allowanceId) {
+    await refundChange(db, job.allowanceId);
+    await db
+      .update(changeRequests)
+      .set({ allowanceId: null })
+      .where(eq(changeRequests.id, job.requestId));
+  }
+
+  await notifyClientOfRequest(db, job.requestId, "snag");
+}
+
+export type ReclaimOutcome =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "not_overdue"; message: string };
+
+/**
+ * The operator's copy of the watchdog, for one request.
+ *
+ * The watchdog is an automation and automations stop. When this one did, a
+ * request sat on "being worked on" for eight hours with no control offered
+ * anywhere: the queue hides "Start work" once a request is dispatched, and
+ * hides "Close" too, because closing would not stop a run that is genuinely in
+ * flight. Correct for a live run, a trap for a dead one — there was no way out
+ * of it from the interface at all.
+ *
+ * Still refuses a run that has not passed its timeout. This reclaims something
+ * already declared late; it is not a kill switch for work in progress, which
+ * would leave a live agent writing to a branch nobody is watching.
+ */
+export async function reclaimStalledRequest(
+  _ctx: AdminContext,
+  db: Database,
+  requestPublicId: string,
+): Promise<ReclaimOutcome> {
+  const now = new Date();
+
+  const rows = await db
+    .select({
+      id: agentJobs.id,
+      requestId: agentJobs.requestId,
+      timeoutAt: agentJobs.timeoutAt,
+      status: agentJobs.status,
+      allowanceId: changeRequests.allowanceId,
+    })
+    .from(agentJobs)
+    .innerJoin(changeRequests, eq(changeRequests.id, agentJobs.requestId))
+    .where(eq(changeRequests.publicId, requestPublicId))
+    .orderBy(desc(agentJobs.createdAt))
+    .limit(1);
+
+  const job = rows[0];
+  if (!job) {
+    return {
+      ok: false,
+      reason: "not_found",
+      message: "There is no agent run against this request.",
+    };
+  }
+
+  if (!["queued", "dispatched", "running"].includes(job.status)) {
+    return {
+      ok: false,
+      reason: "not_overdue",
+      message: `That run already finished as "${job.status}".`,
+    };
+  }
+
+  if (!job.timeoutAt || job.timeoutAt.getTime() > now.getTime()) {
+    return {
+      ok: false,
+      reason: "not_overdue",
+      message:
+        "That run has not passed its timeout yet. Give it until then — " +
+        "reclaiming a live run leaves the agent writing to a branch nobody " +
+        "is watching.",
+    };
+  }
+
+  await reclaimJob(db, job, now, "admin");
+  return { ok: true };
 }
 
 /** Look up a job by the marker embedded in an issue or PR body. */

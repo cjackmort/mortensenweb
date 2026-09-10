@@ -3,9 +3,11 @@
 import { useActionState } from "react";
 import {
   closeRequestAction,
+  reclaimStalledRequestAction,
   startAutomatedWork,
   type CloseResult,
   type DispatchResult,
+  type ReclaimResult,
 } from "./actions";
 
 /**
@@ -23,9 +25,12 @@ import {
 export function DispatchButton({
   requestPublicId,
   status,
+  overdue,
 }: {
   requestPublicId: string;
   status: string;
+  /** The latest run is past its timeout and still claims to be going. */
+  overdue: boolean;
 }) {
   const [state, action, pending] = useActionState<
     DispatchResult | null,
@@ -35,6 +40,10 @@ export function DispatchButton({
     CloseResult | null,
     FormData
   >(closeRequestAction, null);
+  const [reclaimState, reclaimAction, reclaiming] = useActionState<
+    ReclaimResult | null,
+    FormData
+  >(reclaimStalledRequestAction, null);
 
   // Mirrors DISPATCHABLE in the repository layer. Kept narrow on purpose: the
   // real gate is server-side, and this only decides whether to offer a button
@@ -53,8 +62,15 @@ export function DispatchButton({
   if (closeState?.ok) {
     return <span className="muted">Closed</span>;
   }
+  if (reclaimState?.ok) {
+    return <span className="pill pill-warning">Marked failed</span>;
+  }
 
-  if (!dispatchable && !closable) {
+  // The gap this closes: a dispatched request offers neither button, so a run
+  // the watchdog never reclaimed left the operator with nothing to click. The
+  // control appears only once the run is genuinely late — the server checks
+  // the same thing, and refuses a run still inside its timeout.
+  if (!dispatchable && !closable && !overdue) {
     return <span className="muted">&mdash;</span>;
   }
 
@@ -70,6 +86,24 @@ export function DispatchButton({
             />
             <button type="submit" className="small" disabled={pending}>
               {pending ? "Sending…" : "Start work"}
+            </button>
+          </form>
+        )}
+
+        {overdue && !dispatchable && (
+          <form action={reclaimAction}>
+            <input
+              type="hidden"
+              name="requestPublicId"
+              value={requestPublicId}
+            />
+            <button
+              type="submit"
+              className="small secondary"
+              disabled={reclaiming}
+              title="This run passed its timeout and the schedule has not reclaimed it."
+            >
+              {reclaiming ? "Reclaiming…" : "Mark failed"}
             </button>
           </form>
         )}
@@ -97,7 +131,7 @@ export function DispatchButton({
         )}
       </div>
 
-      {[state, closeState].map(
+      {[state, closeState, reclaimState].map(
         (r, i) =>
           r &&
           !r.ok && (
