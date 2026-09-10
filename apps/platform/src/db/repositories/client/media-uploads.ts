@@ -332,11 +332,44 @@ export async function storeUploadPart(
   }
 
   const key = uploadPartKey(session.publicId, partNumber);
-  await mediaDriver().put({
-    key,
-    bytes,
-    contentType: "application/octet-stream",
-  });
+
+  // The object store is the one step here that talks to something outside this
+  // process, and when it fails it used to throw past every handler into an HTML
+  // error page — leaving the asset at `uploading` for ever and the client
+  // looking at a tile that says "Preparing…" and never will.
+  //
+  // `media_assets.failure_reason` exists for this and nothing wrote to it.
+  // Recording the reason turns a stuck tile into one that says what happened,
+  // and makes the cause legible to an operator without a function log.
+  try {
+    await mediaDriver().put({
+      key,
+      bytes,
+      contentType: "application/octet-stream",
+    });
+  } catch (error) {
+    const reason =
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+
+    await db
+      .update(mediaAssets)
+      .set({
+        status: "failed",
+        failureReason: reason.slice(0, 500),
+        updatedAt: new Date(),
+      })
+      .where(eq(mediaAssets.id, session.assetId));
+
+    console.error(
+      `[media] storing part ${partNumber} of upload ${session.publicId} failed`,
+      error instanceof Error ? (error.stack ?? error.message) : error,
+    );
+
+    return {
+      ok: false,
+      message: "We could not save that part to storage.",
+    };
+  }
 
   await db
     .insert(mediaUploadParts)
