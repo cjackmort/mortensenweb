@@ -97,6 +97,53 @@ export async function main() {
   for (const row of counts) console.log(`  ${row.t.padEnd(18)} ${row.n}`);
   console.log("");
 
+  // Which repository each site is wired to, and whether the agent can act on
+  // it. A live client whose repository holds no caller workflow will have the
+  // portal open an issue that nothing ever answers: the request goes to
+  // `dispatched`, no run starts, and it sits there until the watchdog fails it.
+  // Nothing on screen distinguishes that from a run in progress.
+  //
+  // Repository coordinates and the site's own public domain only — both are
+  // infrastructure rather than client information.
+  const repos = (await sql.query(
+    `select s.public_id                as site_public_id,
+            coalesce(s.primary_domain, '(none)') as domain,
+            s.status::text             as site_status,
+            rc.owner                   as owner,
+            rc.name                    as name,
+            rc.default_branch          as branch,
+            (rc.installation_id is not null)::text as installed,
+            c.is_internal::text        as internal
+       from sites s
+       left join repository_connections rc on rc.site_id = s.id
+       left join clients c on c.organization_id = s.organization_id
+      order by c.is_internal, s.created_at`,
+    [],
+  )) as unknown as {
+    site_public_id: string;
+    domain: string;
+    site_status: string;
+    owner: string | null;
+    name: string | null;
+    branch: string | null;
+    installed: string | null;
+    internal: string | null;
+  }[];
+
+  console.log("sites and their repositories");
+  for (const r of repos) {
+    const repo = r.owner && r.name ? `${r.owner}/${r.name}@${r.branch}` : "(no repository connected)";
+    const flags = [
+      r.internal === "true" ? "internal" : null,
+      r.installed === "true" ? null : "NO APP INSTALL",
+    ].filter(Boolean);
+    console.log(
+      `  ${r.domain.padEnd(34)} ${r.site_status.padEnd(10)} ${repo}` +
+        (flags.length ? `  [${flags.join(", ")}]` : ""),
+    );
+  }
+  console.log("");
+
   // Always printed, and printed first, because "no open requests" is an
   // answer that can mean two very different things: there genuinely are none,
   // or this is not the database the portal is reading. A histogram of every
