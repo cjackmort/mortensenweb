@@ -65,6 +65,7 @@ export async function GET(
       contentType: mediaAssets.contentType,
       status: mediaAssets.status,
       filename: mediaAssets.originalFilename,
+      checksumSha256: mediaAssets.checksumSha256,
     })
     .from(mediaAssets)
     .where(
@@ -84,6 +85,7 @@ export async function GET(
 
   let key: string | null = null;
   let contentType: string | null = null;
+  let derivativeIdentity: string | null = null;
 
   if (variant === "original") {
     key = asset.storageKey;
@@ -93,6 +95,7 @@ export async function GET(
       .select({
         storageKey: mediaDerivatives.storageKey,
         contentType: mediaDerivatives.contentType,
+        byteSize: mediaDerivatives.byteSize,
       })
       .from(mediaDerivatives)
       .where(
@@ -104,6 +107,12 @@ export async function GET(
       .limit(1);
     key = derivativeRows[0]?.storageKey ?? null;
     contentType = derivativeRows[0]?.contentType ?? null;
+    // Identity for the cache validator. The storage key alone is not enough:
+    // a derivative can be regenerated under the same key, and a browser holding
+    // the old one would keep it for ever. Size moves when the bytes do.
+    derivativeIdentity = derivativeRows[0]
+      ? `${derivativeRows[0].storageKey}-${derivativeRows[0].byteSize}`
+      : null;
   }
 
   if (!key) return NOT_FOUND();
@@ -130,6 +139,11 @@ export async function GET(
     // is safe and makes the grid feel instant on a second visit. `private`
     // keeps it in the one browser that authenticated for it and out of any
     // shared proxy — these are one tenant's images.
+    // The original is content-addressed: its checksum *is* the identity, so a
+    // browser holding it can be told 304 without the bytes moving. A derivative
+    // has no checksum stored, so key plus size stands in.
+    etag: variant === "original" ? asset.checksumSha256 : derivativeIdentity,
+    ifNoneMatch: request.headers.get("if-none-match"),
     cacheControl:
       variant === "original"
         ? "private, no-store"

@@ -95,6 +95,20 @@ export interface ServeOptions {
   /** `attachment` for downloads, `inline` for images the library displays. */
   disposition: string;
   cacheControl: string;
+  /**
+   * A validator for this exact body, if the caller can name one.
+   *
+   * Without it `must-revalidate` is a full re-download every time the cache
+   * expires: the browser asks again, there is nothing to compare, and the whole
+   * image comes back. A library of thumbnails re-sent once an hour is the
+   * single largest avoidable use of bandwidth in the portal.
+   *
+   * Quoted here rather than at every call site, so a caller passes an identity
+   * and not a header.
+   */
+  etag?: string | null;
+  /** The request's `If-None-Match`, so an unchanged body answers 304. */
+  ifNoneMatch?: string | null;
   rangeHeader: string | null;
 }
 
@@ -105,8 +119,28 @@ export interface ServeOptions {
  * 413 knows what to do about it, rather than only discovering ranges are
  * available by guessing.
  */
+/**
+ * Does the request's `If-None-Match` cover this entity?
+ *
+ * The header is a comma-separated list, may be `*`, and may carry weak
+ * validators prefixed `W/`. Comparing the raw header against one tag would
+ * silently miss every browser that sends more than one, which is a cache that
+ * looks enabled and never hits.
+ */
+function matchesEtag(ifNoneMatch: string, etag: string): boolean {
+  const candidates = ifNoneMatch.split(",").map((value) => value.trim());
+  if (candidates.includes("*")) return true;
+
+  // Weak comparison is the correct one for cache revalidation: `W/"x"` and
+  // `"x"` identify the same bytes for this purpose.
+  const normalise = (value: string) => value.replace(/^W\//, "");
+  return candidates.some((value) => normalise(value) === normalise(etag));
+}
+
 export function serveBytes(options: ServeOptions): Response {
   const size = options.bytes.byteLength;
+
+  const etag = options.etag ? `"${options.etag}"` : null;
 
   const baseHeaders: Record<string, string> = {
     "Content-Type": options.contentType,
@@ -116,7 +150,15 @@ export function serveBytes(options: ServeOptions): Response {
     "X-Content-Type-Options": "nosniff",
     "X-Robots-Tag": "noindex, nofollow",
     "Referrer-Policy": "no-referrer",
+    ...(etag ? { ETag: etag } : {}),
   };
+
+  // Answered before the range is even parsed, which is what the specification
+  // asks for and also what makes this worth having: a matching validator means
+  // no body at all, whatever was requested.
+  if (etag && options.ifNoneMatch && matchesEtag(options.ifNoneMatch, etag)) {
+    return new Response(null, { status: 304, headers: baseHeaders });
+  }
 
   const parsed = parseRange(options.rangeHeader, size);
 
