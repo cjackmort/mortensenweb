@@ -23,6 +23,17 @@ import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Assembling the parts is the slow step of an upload: every part is read back
+ * from the object store, hashed, and written out as one object. At the 3 MB
+ * part size a 32 MB original is eleven reads plus a write, and the platform
+ * default of ten seconds is not obviously enough for that.
+ *
+ * Netlify may cap this below what is asked for depending on plan; asking for
+ * more than the default costs nothing where it cannot be granted.
+ */
+export const maxDuration = 60;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ uploadId: string }> },

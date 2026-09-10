@@ -31,23 +31,36 @@ export const UPLOAD_PART_BYTES = 3 * 1024 * 1024;
 /**
  * The largest original we will store.
  *
- * **Derived from what can be served back, not from what can be uploaded.**
- * Chunking means the upload side could take almost any size, and Netlify Blobs
- * stores up to 5 GB — but a function may return at most 20 MB in one streamed
- * response, so a larger original would be a file the library accepted and could
- * never hand back. That failure would surface much later, as an agent run or a
- * client download that quietly produced nothing.
+ * **No longer tied to what one response can carry.** It used to be defined as
+ * `MAX_SERVEABLE_BYTES` exactly, on the reasoning that accepting a file we
+ * could never hand back would fail much later and much less clearly — as an
+ * agent run or a download that quietly produced nothing.
  *
- * `MAX_SERVEABLE_BYTES` is therefore the governing number and this is defined
- * from it, so the two cannot drift apart in a later edit.
+ * That reasoning held while a whole-object request was the only way to read an
+ * original. It is not: `lib/media/serve.ts` answers Range requests, and refuses
+ * an oversized whole-object read with a 413 that names the size, names the
+ * per-response limit, and gives the literal `Range` header to retry with. The
+ * agent's instructions carry the same guidance. So the failure is loud and
+ * self-correcting rather than silent, which is what the coupling was protecting
+ * against.
  *
- * A 48-megapixel phone photo is 15-25 MB, so this does exclude the largest of
- * them. Raising it means either raising what one response can carry — which is
- * not ours to raise — or making every consumer fetch in ranges, which the
- * serving layer already supports but the agent's tooling does not use by
- * default. Stated in the UI rather than discovered at the end of an upload.
+ * 32 MB, and the number is a judgement rather than a platform limit:
+ *
+ *  - a 48-megapixel phone photo is 15-25 MB, and a high-resolution scan of
+ *    artwork is the case this exists for — a client hit the old ceiling with a
+ *    16.9 MB photograph
+ *  - assembly holds the whole file in memory in one function invocation, and
+ *    32 MB is comfortably inside the 1024 MB a Netlify function has
+ *  - a derivative pass decodes it, which costs several times the file size in
+ *    memory; 32 MB stays well clear, 100 MB would not
+ *  - at a 3 MB part size this is 11 parts, nowhere near the 2000-part cap
+ *
+ * Netlify Blobs itself stores up to 5 GB, so the store was never the
+ * constraint. Raising this further is defensible but should come with the
+ * completion route's timeout measured against real files first — assembling
+ * more parts is the slow step, not receiving them.
  */
-export const MAX_ORIGINAL_BYTES = MAX_SERVEABLE_BYTES;
+export const MAX_ORIGINAL_BYTES = 32 * 1024 * 1024;
 
 /** How many files one browser session may have in flight. Keeps a phone sane. */
 export const MAX_CONCURRENT_UPLOADS = 3;

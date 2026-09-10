@@ -22,6 +22,13 @@ import { mediaFailureMessage } from "@/lib/media/errors";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * One part is a single object-store write, so this is comfortably inside the
+ * default — stated anyway so the whole upload path has a deliberate budget
+ * rather than three different implicit ones.
+ */
+export const maxDuration = 30;
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ uploadId: string; partNumber: string }> },
