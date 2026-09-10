@@ -144,6 +144,53 @@ export async function main() {
   }
   console.log("");
 
+  // The media library's own state.
+  //
+  // An upload writes rows in a fixed order: the asset and the session first,
+  // then one blob per part with a row recording it, then the assembled
+  // original. Where it stops says which step is failing — and in particular,
+  // whether a single part has *ever* been stored. Zero parts against many
+  // upload sessions means the object store write fails every time rather than
+  // failing on size or on a particular file.
+  const media = (await sql.query(
+    `select
+       (select count(*)::text from media_assets)                       as assets,
+       (select count(*)::text from media_assets where status = 'ready') as ready,
+       (select count(*)::text from media_assets where status = 'uploading') as uploading,
+       (select count(*)::text from media_assets where status = 'processing') as processing,
+       (select count(*)::text from media_assets where status = 'failed')     as failed,
+       (select count(*)::text from media_uploads)                      as sessions,
+       (select count(*)::text from media_upload_parts)                 as parts,
+       (select count(*)::text from media_derivatives)                  as derivatives,
+       (select coalesce(max(byte_size), 0)::text from media_assets)    as largest,
+       (select count(*)::text from media_assets where storage_key is not null) as with_key`,
+    [],
+  )) as unknown as Record<string, string>[];
+
+  const m = media[0]!;
+  console.log("media library");
+  console.log(`  assets            ${m.assets}  (ready ${m.ready}, uploading ${m.uploading}, processing ${m.processing}, failed ${m.failed})`);
+  console.log(`  upload sessions   ${m.sessions}`);
+  console.log(`  parts stored      ${m.parts}`);
+  console.log(`  derivatives       ${m.derivatives}`);
+  console.log(`  assets with a storage key ${m.with_key}`);
+  console.log(`  largest byte_size ${(Number(m.largest) / 1024 / 1024).toFixed(1)} MB`);
+
+  if (Number(m.sessions) > 0 && Number(m.parts) === 0) {
+    console.log(
+      "\n  DIAGNOSIS: sessions were created and not one part was ever stored." +
+        "\n  The part route writes the blob before it writes the row, so the" +
+        "\n  object store write is failing on every call — not on size, and not" +
+        "\n  on a particular file.",
+    );
+  } else if (Number(m.parts) > 0 && Number(m.ready) === 0) {
+    console.log(
+      "\n  DIAGNOSIS: parts are being stored but nothing reaches `ready`," +
+        "\n  so the failure is in assembling the original, not in the upload.",
+    );
+  }
+  console.log("");
+
   // Always printed, and printed first, because "no open requests" is an
   // answer that can mean two very different things: there genuinely are none,
   // or this is not the database the portal is reading. A histogram of every
