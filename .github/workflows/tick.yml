@@ -1,0 +1,82 @@
+# =============================================================================
+# The scheduled loop, from somewhere we can see.
+#
+# Netlify's scheduled function is the primary driver and this is a second one
+# pointed at the same endpoint. Redundancy here is deliberate rather than
+# belt-and-braces habit: the loop is what verifies previews, confirms shipped
+# changes reached the live site, reclaims dead agent runs and sweeps abandoned
+# uploads. When it stopped, nothing said so — requests simply sat on "being
+# worked on", and the first report came from a person eight hours later.
+#
+# `scheduled-tick` had gone quiet because Netlify bundles a function once and
+# keeps that artifact while its contents are unchanged, so its Node runtime was
+# frozen at whatever bundled it and was eventually retired. Nothing about that
+# failure was visible from the outside, and nothing about it was ours to fix.
+# This path is: the run history is in Actions, a failure is a red run, and the
+# schedule is in a file rather than in a platform's cache.
+#
+# Running both is safe. Every job behind `/api/cron` is idempotent — that is a
+# property each one holds individually, not something the caller arranges — so
+# an overlapping or repeated tick is a no-op, not a double-execution.
+#
+# GitHub's cron is best-effort and can be late by ten minutes or more under
+# load, which is fine for a backstop and is why it is not the primary.
+# =============================================================================
+
+name: Scheduled tick
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  # So it can be run by hand while diagnosing, without waiting for the cron.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    name: Call the portal's scheduled endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # Queue rather than overlap. The jobs tolerate it, but two ticks racing
+    # makes the run history harder to read than it needs to be.
+    concurrency:
+      group: scheduled-tick
+      cancel-in-progress: false
+
+    steps:
+      - name: Tick
+        env:
+          # Repository secret. Must match CRON_SECRET in the Netlify
+          # environment, which is what the endpoint compares against in
+          # constant time. Absent, this job explains itself and stops.
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PORTAL_URL: ${{ vars.PORTAL_URL || 'https://portal.mortensenweb.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::CRON_SECRET is not set on this repository, so the" \
+                 "fallback scheduler is doing nothing. Netlify's scheduled" \
+                 "function is then the only thing running the loop. Add the" \
+                 "same value the Netlify environment uses."
+            exit 0
+          fi
+
+          # --fail-with-body so a non-2xx fails the job *and* still prints what
+          # the endpoint said. Without the body, a 401 is indistinguishable
+          # from a 500 in the run log, and those need different fixes.
+          echo "Calling ${PORTAL_URL}/api/cron"
+          curl --fail-with-body --silent --show-error \
+            --max-time 120 \
+            -X POST \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "${PORTAL_URL%/}/api/cron" | tee response.json
+          echo
+
+          # `ok` only means the endpoint ran. `degraded` is the honest signal
+          # beside it, and a tick where jobs threw must not read as green.
+          if grep -q '"degraded":true' response.json; then
+            echo "::error::The tick ran but some jobs failed. See failedJobs above."
+            exit 1
+          fi

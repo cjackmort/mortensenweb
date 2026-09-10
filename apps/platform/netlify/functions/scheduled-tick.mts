@@ -24,7 +24,17 @@
  * worst case adds five; at thirty it would eat the entire budget.
  *
  * The jobs are all idempotent — that is a property of each one, not something
- * this file arranges — so an overlapping or repeated run is harmless.
+ * this file arranges — so an overlapping or repeated run is harmless. That is
+ * also what makes the GitHub Actions fallback in `.github/workflows/tick.yml`
+ * safe to run alongside this one: two schedules, neither of which has to be
+ * trusted on its own.
+ *
+ * ## Reading this function's log
+ *
+ * The log viewer opens in Real-time, which streams only lines that arrive
+ * while you are watching — an empty pane there says nothing about whether the
+ * function has been running. Change the range to a past window before drawing
+ * any conclusion. An hour was lost to that.
  */
 
 export default async function handler(): Promise<Response> {
@@ -52,7 +62,17 @@ export default async function handler(): Promise<Response> {
     return new Response(body, { status: response.status });
   }
 
-  console.info("[scheduled-tick]", body);
+  // A run where jobs threw is not a healthy run, and logging it at info level
+  // put it alongside every successful tick — invisible unless someone read the
+  // JSON. `degraded` is the endpoint's own word for it; this reflects it in the
+  // log level so filtering by error surfaces it.
+  const degraded = body.includes('"degraded":true');
+  if (degraded) {
+    console.error("[scheduled-tick] some jobs failed", body);
+  } else {
+    console.info("[scheduled-tick]", body);
+  }
+
   return new Response(body, { status: 200 });
 }
 
