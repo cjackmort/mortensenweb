@@ -63,6 +63,40 @@ export async function main() {
     [],
   )) as unknown as Row[];
 
+  // Which database this actually is.
+  //
+  // The previous run reported every change request as closed while the portal
+  // had one open on screen. That is not a disagreement about state, it is a
+  // disagreement about *which database* — and the only way to tell is to make
+  // each connection identify itself. Names and row counts only; nothing here
+  // is a credential and nothing here is client content.
+  const identity = (await sql.query(
+    `select current_database() as db,
+            current_user       as usr,
+            version()          as version`,
+    [],
+  )) as unknown as { db: string; usr: string; version: string }[];
+
+  const id = identity[0];
+  console.log(`database = ${id?.db}`);
+  console.log(`user     = ${id?.usr}`);
+  console.log(`postgres = ${(id?.version ?? "").split(" ").slice(0, 2).join(" ")}`);
+
+  const counts = (await sql.query(
+    `select 'organizations' as t, count(*)::text as n from organizations
+     union all select 'clients',        count(*)::text from clients
+     union all select 'sites',          count(*)::text from sites
+     union all select 'change_requests',count(*)::text from change_requests
+     union all select 'agent_jobs',     count(*)::text from agent_jobs
+     union all select 'media_assets',   count(*)::text from media_assets
+     union all select 'migrations',     count(*)::text from drizzle.__drizzle_migrations`,
+    [],
+  )) as unknown as { t: string; n: string }[];
+
+  console.log("\nrow counts");
+  for (const row of counts) console.log(`  ${row.t.padEnd(18)} ${row.n}`);
+  console.log("");
+
   // Always printed, and printed first, because "no open requests" is an
   // answer that can mean two very different things: there genuinely are none,
   // or this is not the database the portal is reading. A histogram of every
