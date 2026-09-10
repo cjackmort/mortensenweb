@@ -189,6 +189,24 @@ export async function main() {
         "\n  so the failure is in assembling the original, not in the upload.",
     );
   }
+  // Why, in the storage layer's own words. Empty until a failure is recorded,
+  // which for the assets stuck from before this was added it will be.
+  const reasons = (await sql.query(
+    `select coalesce(failure_reason, '(none recorded)') as reason,
+            count(*)::text as n
+       from media_assets
+      where status in ('failed', 'uploading')
+      group by failure_reason
+      order by count(*) desc
+      limit 10`,
+    [],
+  )) as unknown as { reason: string; n: string }[];
+
+  if (reasons.length > 0) {
+    console.log("  failure reasons on assets that did not finish");
+    for (const r of reasons) console.log(`    ${r.n} x  ${r.reason}`);
+  }
+
   console.log("");
 
   // Always printed, and printed first, because "no open requests" is an
