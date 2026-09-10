@@ -1,0 +1,55 @@
+# =============================================================================
+# Read the production job state, by hand, when something is stuck.
+#
+# `scheduled-tick`'s console output is not captured by Netlify's log pipeline —
+# on the live deploy that function carries none of the observability fields the
+# app function does — so the tick's own report of which job failed is invisible
+# from there. This reads the rows instead.
+#
+# `workflow_dispatch` only. Nothing runs this on a schedule, and it writes
+# nothing: the script issues a single SELECT. It prints public ids and machine
+# states, never titles, descriptions or names, because this output lands in a
+# CI log.
+#
+# Uses the same DATABASE_URL secret the migration job does, in the same way,
+# rather than asking anyone to move a production credential around by hand.
+# =============================================================================
+
+name: Diagnose stuck runs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Report agent jobs that have not settled
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Same gate as the production migration. Adding required reviewers to this
+    # environment makes running it an approval without touching this file.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Diagnose
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set."
+            exit 1
+          fi
+          npx tsx apps/platform/scripts/diagnose-jobs.ts
