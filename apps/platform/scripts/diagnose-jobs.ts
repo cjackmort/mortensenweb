@@ -63,8 +63,30 @@ export async function main() {
     [],
   )) as unknown as Row[];
 
+  // Always printed, and printed first, because "no open requests" is an
+  // answer that can mean two very different things: there genuinely are none,
+  // or this is not the database the portal is reading. A histogram of every
+  // row in the table distinguishes them immediately, and the last run of this
+  // script could not.
+  const histogram = (await sql.query(
+    `select status::text as status, count(*)::text as count
+       from change_requests group by status order by count(*) desc`,
+    [],
+  )) as unknown as { status: string; count: string }[];
+
+  const total = histogram.reduce((sum, r) => sum + Number(r.count), 0);
+  console.log(`change_requests: ${total} row(s) in total`);
+  for (const row of histogram) {
+    console.log(`  ${row.status.padEnd(20)} ${row.count}`);
+  }
+  console.log("");
+
   if (rows.length === 0) {
-    console.log("No open requests.");
+    console.log(
+      total === 0
+        ? "The table is empty — this is not the database the portal is using."
+        : "No open requests: every row is verified, closed, rejected or rolled back.",
+    );
     return;
   }
 
