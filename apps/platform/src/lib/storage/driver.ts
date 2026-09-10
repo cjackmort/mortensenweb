@@ -116,21 +116,63 @@ class LocalDiskDriver implements StorageDriver {
  * the upload validator exists to remove.
  */
 /**
+ * Are we running on Netlify, where Blobs is available?
+ *
+ * **Not `process.env.NETLIFY`.** That one is set in the *build* environment and
+ * is absent from the Functions runtime, so every media upload in production hit
+ * the "no production storage driver is configured" throw below — nine upload
+ * sessions, zero parts stored, every asset stuck on "Preparing…". It looked
+ * like a Blobs failure and was never one: the Blobs driver was never
+ * constructed.
+ *
+ * The markers below are the deploy-context variables Netlify does expose to
+ * functions. `NETLIFY_BLOBS_CONTEXT` is the most precise of them — it is
+ * injected specifically so `getStore` can authenticate without explicit
+ * credentials, so its presence is close to a direct statement that Blobs will
+ * work. The rest are there because one platform release renaming a variable
+ * should degrade to a redundant check rather than to a portal that cannot
+ * store a photograph.
+ *
+ * `NETLIFY` is kept first: it is still correct during a build, which is where
+ * anything that touches storage at build time would run.
+ */
+function onNetlify(): boolean {
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.NETLIFY_BLOBS_CONTEXT ||
+      process.env.DEPLOY_ID ||
+      process.env.SITE_ID ||
+      process.env.URL,
+  );
+}
+
+/**
  * Is this the real site, or a preview of it?
  *
  * Netlify sets `CONTEXT` to `production`, `deploy-preview`, `branch-deploy` or
  * `dev`. Only the first may touch the durable stores.
+ *
+ * When `CONTEXT` is missing entirely — the same class of problem as `NETLIFY`
+ * above — the answer is decided by `NODE_ENV`, and it deliberately favours the
+ * durable store. The two ways to be wrong are not equal: a preview writing into
+ * the global store leaves stray objects an operator can delete, while a
+ * production upload written to a deploy-scoped store disappears the next time
+ * the site deploys, taking a client's original with it.
  */
 function isProductionContext(): boolean {
-  return process.env.CONTEXT === "production";
+  const context = process.env.CONTEXT;
+  if (context) return context === "production";
+  return process.env.NODE_ENV === "production";
+}
+
+interface BlobStore {
+  set: (key: string, value: ArrayBuffer | Uint8Array) => Promise<unknown>;
+  get: (key: string, opts: { type: "arrayBuffer" }) => Promise<ArrayBuffer | null>;
+  delete: (key: string) => Promise<unknown>;
 }
 
 class NetlifyBlobsDriver implements StorageDriver {
-  private store: Promise<{
-    set: (key: string, value: ArrayBuffer | Uint8Array) => Promise<unknown>;
-    get: (key: string, opts: { type: "arrayBuffer" }) => Promise<ArrayBuffer | null>;
-    delete: (key: string) => Promise<unknown>;
-  }>;
+  private store?: Promise<BlobStore>;
 
   /**
    * Production writes to the global store; everything else writes to a
@@ -152,14 +194,26 @@ class NetlifyBlobsDriver implements StorageDriver {
    * deploy that received it.
    */
   constructor(
-    storeName: string,
+    private readonly storeName: string,
     private readonly keyPattern: RegExp = KEY_PATTERN,
-  ) {
-    this.store = import("@netlify/blobs").then((m) =>
+  ) {}
+
+  /**
+   * Resolved on first use, not in the constructor.
+   *
+   * Built eagerly, a driver that is constructed and never used leaves a promise
+   * nobody awaits — and if resolving it rejects, that is an unhandled rejection
+   * with no call site to blame it on. Deferring it means the failure surfaces at
+   * the `put` or `get` that actually wanted the store, which is where the caller
+   * can report it and where the asset's `failure_reason` gets written.
+   */
+  private resolveStore(): Promise<BlobStore> {
+    this.store ??= import("@netlify/blobs").then((m) =>
       isProductionContext()
-        ? m.getStore({ name: storeName, consistency: "strong" })
-        : m.getDeployStore({ name: storeName, consistency: "strong" }),
+        ? m.getStore({ name: this.storeName, consistency: "strong" })
+        : m.getDeployStore({ name: this.storeName, consistency: "strong" }),
     ) as never;
+    return this.store;
   }
 
   async put(input: {
@@ -168,7 +222,7 @@ class NetlifyBlobsDriver implements StorageDriver {
     contentType: string;
   }): Promise<StoredObject> {
     assertKeyMatches(input.key, this.keyPattern);
-    const store = await this.store;
+    const store = await this.resolveStore();
     await store.set(input.key, input.bytes);
     return {
       key: input.key,
@@ -181,7 +235,7 @@ class NetlifyBlobsDriver implements StorageDriver {
     key: string,
   ): Promise<{ bytes: Uint8Array; contentType: string } | null> {
     assertKeyMatches(key, this.keyPattern);
-    const store = await this.store;
+    const store = await this.resolveStore();
     const buffer = await store.get(key, { type: "arrayBuffer" });
     if (!buffer) return null;
     return {
@@ -192,7 +246,7 @@ class NetlifyBlobsDriver implements StorageDriver {
 
   async delete(key: string): Promise<void> {
     assertKeyMatches(key, this.keyPattern);
-    const store = await this.store;
+    const store = await this.resolveStore();
     await store.delete(key);
   }
 }
@@ -212,7 +266,7 @@ let cached: StorageDriver | undefined;
 export function storageDriver(): StorageDriver {
   if (cached) return cached;
 
-  if (process.env.NETLIFY) {
+  if (onNetlify()) {
     cached = new NetlifyBlobsDriver("attachments");
     return cached;
   }
@@ -243,7 +297,7 @@ let cachedMedia: StorageDriver | undefined;
 export function mediaDriver(): StorageDriver {
   if (cachedMedia) return cachedMedia;
 
-  if (process.env.NETLIFY) {
+  if (onNetlify()) {
     cachedMedia = new NetlifyBlobsDriver("media", MEDIA_KEY_PATTERN);
     return cachedMedia;
   }
