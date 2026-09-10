@@ -7,6 +7,7 @@ import { adminContextFrom } from "@/db/repositories/context";
 import {
   closeChangeRequest,
   dispatchChangeRequest,
+  reclaimStalledRequest,
 } from "@/db/repositories/admin/agent-jobs";
 import { holdPreview, releasePreview } from "@/db/repositories/admin/release";
 
@@ -163,4 +164,44 @@ export async function holdPreviewAction(
   const outcome = await holdPreview(adminContextFrom(user), await getDb(), agentJobPublicId, reason);
   revalidatePath("/admin/requests");
   return outcome;
+}
+
+export type ReclaimResult = { ok: boolean; message: string };
+
+/**
+ * Fail a run the watchdog should have failed already.
+ *
+ * The schedule normally does this within five minutes of a run passing its
+ * timeout. When the schedule is not running, a request sits on "being worked
+ * on" indefinitely and the queue offers nothing: no "Start work" (it is
+ * already dispatched) and no "Close" (closing would not stop a live run). This
+ * is the way out, and it performs the identical writes the watchdog would.
+ */
+export async function reclaimStalledRequestAction(
+  _previous: ReclaimResult | null,
+  formData: FormData,
+): Promise<ReclaimResult> {
+  const user = await currentUser();
+  if (!user) return { ok: false, message: "Please sign in again." };
+  if (user.role !== "admin") {
+    return { ok: false, message: "Only an admin can reclaim a run." };
+  }
+
+  const requestPublicId = String(formData.get("requestPublicId") ?? "").trim();
+  if (!requestPublicId) {
+    return { ok: false, message: "No request was specified." };
+  }
+
+  const ctx = adminContextFrom(user);
+  const db = await getDb();
+
+  const outcome = await reclaimStalledRequest(ctx, db, requestPublicId);
+
+  revalidatePath("/admin/requests");
+
+  if (!outcome.ok) return { ok: false, message: outcome.message };
+  return {
+    ok: true,
+    message: "Marked as failed. The client's change has been handed back.",
+  };
 }

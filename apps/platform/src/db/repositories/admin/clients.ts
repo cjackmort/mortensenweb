@@ -386,6 +386,19 @@ export async function listAllChangeRequests(
         select ${agentJobs.prUrl} from ${agentJobs}
         where ${agentJobs.requestId} = ${changeRequests.id}
         order by ${agentJobs.createdAt} desc limit 1)`,
+      // Past its timeout and still claiming to run.
+      //
+      // Doubles as the health check for the schedule itself. `expireStalledJobs`
+      // runs every five minutes and reclaims exactly this, so in a working
+      // system the answer is always false. A true here means either this one
+      // run needs reclaiming by hand, or — if it stays true — that nothing is
+      // running the loop at all, which is worth knowing before a client asks.
+      agentOverdue: sql<boolean>`coalesce((
+        select ${agentJobs.timeoutAt} < now()
+           and ${agentJobs.status} in ('queued', 'dispatched', 'running')
+        from ${agentJobs}
+        where ${agentJobs.requestId} = ${changeRequests.id}
+        order by ${agentJobs.createdAt} desc limit 1), false)`,
       // The client's latest note, if they added one after sending — the
       // thing most likely to change what the operator does next.
       latestNote: sql<string | null>`(
