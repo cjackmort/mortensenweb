@@ -181,15 +181,25 @@ describe("serveBytes", () => {
   });
 });
 
-describe("the upload limit and the serve limit agree", () => {
-  it("never accepts an original larger than one response can return", () => {
-    // The whole point of deriving one from the other. If these ever diverge,
-    // the library would store files it could not hand back — and nothing would
-    // notice until an agent run came up empty.
-    expect(MAX_ORIGINAL_BYTES).toBeLessThanOrEqual(MAX_SERVEABLE_BYTES);
+describe("the upload limit and the serve limit", () => {
+  it("allows an original larger than one response can return", () => {
+    // This assertion used to run the other way, and the reasoning behind it was
+    // sound at the time: storing a file we could not hand back would fail late
+    // and quietly, as an agent run that came up empty.
+    //
+    // What changed is that the failure is neither late nor quiet. A
+    // whole-object read above the ceiling is refused with a 413 naming the
+    // size, the per-response limit and the literal `Range` header to retry
+    // with, and the agent's instructions carry the same guidance. The coupling
+    // was protecting against silence that no longer exists — and it was turning
+    // away a client's 16.9 MB photograph of a painting, which is exactly what
+    // the library is for. See `large-originals.test.ts`.
+    expect(MAX_ORIGINAL_BYTES).toBeGreaterThan(MAX_SERVEABLE_BYTES);
   });
 
   it("stays under Netlify's documented 20 MB streamed-response ceiling", () => {
+    // Unchanged, and the one of the two that is a platform limit rather than a
+    // judgement: this governs a single response and is not ours to raise.
     expect(MAX_SERVEABLE_BYTES).toBeLessThan(20 * 1024 * 1024);
   });
 });
