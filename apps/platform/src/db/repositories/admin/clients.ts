@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   servicePlans,
@@ -67,6 +67,76 @@ export async function getInternalClient(_ctx: AdminContext, db: Database) {
     .where(and(isNull(clients.archivedAt), eq(clients.isInternal, true)))
     .limit(1);
   return row ?? null;
+}
+
+export type DesignateOutcome =
+  | { ok: true; changed: boolean; previousClientPublicId: string | null }
+  | { ok: false; reason: "not_found" | "archived" };
+
+/**
+ * Make a client record the agency's own site — the one the MortensenWeb tab
+ * shows — and archive whichever record was before.
+ *
+ * The flag moves rather than the site. The record that actually holds
+ * mortensenweb.com, with its repository, analytics and request history, can
+ * become the tab without any of that being copied between organizations,
+ * and it leaves the Clients list and every billing rollup, which already
+ * exclude internal clients.
+ *
+ * One statement, so there is never a moment with two internal records (the
+ * tab would pick either) or none. Postgres evaluates every SET expression
+ * against the row as it was, so `is_internal` in the CASE is the old value.
+ */
+export async function designateInternalClient(
+  ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+): Promise<DesignateOutcome> {
+  const [target] = await db
+    .select({
+      organizationId: clients.organizationId,
+      isInternal: clients.isInternal,
+      archivedAt: clients.archivedAt,
+    })
+    .from(clients)
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+
+  if (!target) return { ok: false, reason: "not_found" };
+  if (target.archivedAt) return { ok: false, reason: "archived" };
+  if (target.isInternal) return { ok: true, changed: false, previousClientPublicId: null };
+
+  const previous = await getInternalClient(ctx, db);
+  const now = new Date();
+
+  await db
+    .update(clients)
+    .set({
+      isInternal: sql`${clients.publicId} = ${clientPublicId}`,
+      archivedAt: sql`case when ${clients.isInternal} and ${clients.publicId} <> ${clientPublicId} then ${now} else ${clients.archivedAt} end`,
+      updatedAt: now,
+    })
+    .where(
+      or(
+        and(eq(clients.isInternal, true), isNull(clients.archivedAt)),
+        eq(clients.publicId, clientPublicId),
+      ),
+    );
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: target.organizationId,
+    action: "client.designated_internal",
+    entityType: "client",
+    entityId: clientPublicId,
+    metadata: { previous: previous?.clientPublicId ?? null },
+  });
+
+  return {
+    ok: true,
+    changed: true,
+    previousClientPublicId: previous?.clientPublicId ?? null,
+  };
 }
 
 /**
