@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -107,15 +107,18 @@ async function markDeliveryProcessed(
 }
 
 /**
- * The allowlisted repository behind a node id, or null.
+ * Every allowlisted connection to the repository behind a node id.
  *
- * Returning null for "not allowlisted" as well as "unknown" is deliberate: from
- * the receiver's point of view they mean the same thing — do not act — and
- * distinguishing them in the return type invites a caller to treat one as
- * recoverable.
+ * Empty for "not allowlisted" as well as "unknown", deliberately: from the
+ * receiver's point of view they mean the same thing — do not act.
+ *
+ * All of them, not the first. A repository can back two sites (the agency's
+ * own site is the MortensenWeb tab and a client record), and an event names a
+ * repository, not a site — so which site it concerns comes from the job, via
+ * `connectionFor`, never from whichever row happened to come back first.
  */
-async function allowlistedRepo(db: Database, repoNodeId: string) {
-  const rows = await db
+async function allowlistedConnections(db: Database, repoNodeId: string) {
+  return db
     .select({
       connectionId: repositoryConnections.id,
       owner: repositoryConnections.owner,
@@ -134,10 +137,23 @@ async function allowlistedRepo(db: Database, repoNodeId: string) {
         eq(repositoryConnections.repoNodeId, repoNodeId),
         eq(repositoryConnections.allowlisted, true),
       ),
-    )
-    .limit(1);
+    );
+}
 
-  return rows[0] ?? null;
+type AllowlistedConnection = Awaited<ReturnType<typeof allowlistedConnections>>[number];
+
+/**
+ * The connection a job was dispatched through, among those for this event's
+ * repository. Falls back to the first only for a job that records none, which
+ * is what every lookup did before a repository could back two sites.
+ */
+function connectionFor(
+  connections: AllowlistedConnection[],
+  repositoryConnectionId: string | null,
+): AllowlistedConnection {
+  return (
+    connections.find((c) => c.connectionId === repositoryConnectionId) ?? connections[0]!
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -180,8 +196,8 @@ async function handlePullRequest(
     return { status: "ignored", note: "Payload had no pull request." };
   }
 
-  const repo = await allowlistedRepo(db, nodeId);
-  if (!repo) {
+  const connections = await allowlistedConnections(db, nodeId);
+  if (connections.length === 0) {
     return { status: "rejected", note: "Repository is not allowlisted." };
   }
 
@@ -199,6 +215,7 @@ async function handlePullRequest(
       briefId: agentJobs.briefId,
       status: agentJobs.status,
       clientDecision: agentJobs.clientDecision,
+      repositoryConnectionId: agentJobs.repositoryConnectionId,
     })
     .from(agentJobs)
     .where(eq(agentJobs.publicId, markerId))
@@ -208,6 +225,8 @@ async function handlePullRequest(
   if (!job) {
     return { status: "ignored", note: "Marker did not match a known job." };
   }
+
+  const repo = connectionFor(connections, job.repositoryConnectionId);
 
   const headSha = pr.head?.sha ?? null;
   const action = payload.action ?? "";
@@ -446,8 +465,10 @@ async function handleBuildCompletion(
     return { status: "ignored", note: "Build not finished." };
   }
 
-  const repo = await allowlistedRepo(db, nodeId);
-  if (!repo) return { status: "rejected", note: "Repository is not allowlisted." };
+  const connections = await allowlistedConnections(db, nodeId);
+  if (connections.length === 0) {
+    return { status: "rejected", note: "Repository is not allowlisted." };
+  }
 
   const jobs = await db
     .select({
@@ -455,11 +476,15 @@ async function handleBuildCompletion(
       requestId: agentJobs.requestId,
       previewUrl: agentJobs.previewUrl,
       previewVerifiedAt: agentJobs.previewVerifiedAt,
+      repositoryConnectionId: agentJobs.repositoryConnectionId,
     })
     .from(agentJobs)
     .where(
       and(
-        eq(agentJobs.repositoryConnectionId, repo.connectionId),
+        inArray(
+          agentJobs.repositoryConnectionId,
+          connections.map((c) => c.connectionId),
+        ),
         eq(agentJobs.headSha, headSha),
       ),
     )
@@ -467,6 +492,8 @@ async function handleBuildCompletion(
 
   const job = jobs[0];
   if (!job) return { status: "ignored", note: "No job for this commit." };
+
+  const repo = connectionFor(connections, job.repositoryConnectionId);
 
   if (conclusion !== "success") {
     if (job.requestId) {

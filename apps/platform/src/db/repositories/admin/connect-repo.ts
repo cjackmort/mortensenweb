@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { auditLog, repositoryConnections, sites } from "@/db/schema";
+import { auditLog, clients, repositoryConnections, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { isGithubConfigured } from "@/lib/github/app";
 import { getRepo } from "@/lib/github/rest";
@@ -73,6 +73,22 @@ export interface ConnectInput {
   netlifySiteName?: string;
 }
 
+/** Which of these sites belong to the agency's own client record. */
+async function internalSiteIds(db: Database, siteIds: string[]): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: sites.id })
+    .from(sites)
+    .innerJoin(clients, eq(clients.organizationId, sites.organizationId))
+    .where(
+      and(
+        inArray(sites.id, siteIds),
+        eq(clients.isInternal, true),
+        isNull(clients.archivedAt),
+      ),
+    );
+  return new Set(rows.map((r) => r.id));
+}
+
 export async function connectExistingRepo(
   ctx: AdminContext,
   db: Database,
@@ -125,22 +141,36 @@ export async function connectExistingRepo(
     };
   }
 
-  const existing = await db
+  const holders = await db
     .select({ id: repositoryConnections.id, siteId: repositoryConnections.siteId })
     .from(repositoryConnections)
-    .where(eq(repositoryConnections.repoNodeId, repo.node_id))
-    .limit(1);
+    .where(eq(repositoryConnections.repoNodeId, repo.node_id));
 
-  const prior = existing[0];
-  if (prior && prior.siteId !== site.id) {
-    // One repository, one site. Allowing two would mean a change request for
-    // either could open a pull request against the same code, with each
-    // client's approval merging the other's work.
-    return {
-      ok: false,
-      reason: "already_connected_elsewhere",
-      message: "That repository is already connected to a different site.",
-    };
+  const prior = holders.find((h) => h.siteId === site.id);
+  const elsewhere = holders.filter((h) => h.siteId !== site.id);
+
+  // One repository, one site — except the agency's own. Two clients sharing a
+  // repository would mean either one's approval merging work into the other's
+  // site. The agency's site is the exception because it is both the
+  // MortensenWeb tab and an ordinary client record for testing what a client
+  // sees, and both are the operator.
+  if (elsewhere.length > 0) {
+    const internal = await internalSiteIds(db, [
+      site.id,
+      ...elsewhere.flatMap((h) => (h.siteId ? [h.siteId] : [])),
+    ]);
+    const mayShare =
+      internal.has(site.id) ||
+      elsewhere.every((h) => h.siteId !== null && internal.has(h.siteId));
+
+    if (!mayShare) {
+      return {
+        ok: false,
+        reason: "already_connected_elsewhere",
+        message:
+          "That repository is already connected to a different site. Only the agency's own site (the MortensenWeb tab) can share one.",
+      };
+    }
   }
 
   // A different repository for a site that already has one. The panel offers
