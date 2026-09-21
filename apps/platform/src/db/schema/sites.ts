@@ -169,8 +169,10 @@ export const repositoryConnections = pgTable(
   },
   (t) => [
     uniqueIndex("repository_connections_public_id_key").on(t.publicId),
-    uniqueIndex("repository_connections_owner_name_key").on(t.owner, t.name),
-    uniqueIndex("repository_connections_node_id_key").on(t.repoNodeId),
+    // One site may not hold the same repository twice; two sites may share
+    // one (migration 0021). Which may share is decided in connect-repo.ts.
+    uniqueIndex("repository_connections_node_site_key").on(t.repoNodeId, t.siteId),
+    index("repository_connections_node_id_idx").on(t.repoNodeId),
     index("repository_connections_site_idx").on(t.siteId),
   ],
 );
