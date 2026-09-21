@@ -6,6 +6,10 @@ import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { connectExistingRepo } from "@/db/repositories/admin/connect-repo";
 import { allowlistRepository } from "@/db/repositories/admin/scaffold";
+import {
+  describeTokenInstall,
+  installRepoTokens,
+} from "@/db/repositories/admin/repo-tokens";
 
 /**
  * Connecting a repository that already exists, and authorising work on it.
@@ -107,10 +111,60 @@ export async function setAllowlistAction(
     return { ok: false, message: "No connected repository to change." };
   }
 
+  if (!allow) {
+    return {
+      ok: true,
+      message: "Automated work is switched off. Nothing already in flight is cancelled.",
+    };
+  }
+
+  // Allowing work is when the repository needs the credentials to do it. Without
+  // them the agent and deploy workflows fail on their first step, after the
+  // portal has already told the client the change is under way.
+  let tokens: RepoActionResult;
+  try {
+    tokens = describeTokenInstall(await installRepoTokens(db, ctx.userId, sitePublicId));
+  } catch (error) {
+    console.error("[repo] token install threw", error);
+    tokens = {
+      ok: false,
+      message:
+        "Could not reach GitHub to install its tokens; use “Install tokens from the portal” to retry.",
+    };
+  }
+
   return {
-    ok: true,
-    message: allow
-      ? "Automated work is allowed on this repository."
-      : "Automated work is switched off. Nothing already in flight is cancelled.",
+    ok: tokens.ok,
+    message: `Automated work is allowed on this repository. ${tokens.message}`,
   };
+}
+
+/**
+ * Copy the portal's tokens into the site's repository again.
+ *
+ * For after a token is replaced in the portal's environment — a Claude token
+ * from `claude setup-token` lasts a year — and for a repository allowed before
+ * the portal installed tokens on allowing.
+ */
+export async function installTokensAction(
+  _previous: RepoActionResult | null,
+  formData: FormData,
+): Promise<RepoActionResult> {
+  const user = await requireAdmin();
+  if (!user) return { ok: false, message: "Only an admin can do that." };
+  const ctx = adminContextFrom(user);
+  const db = await getDb();
+
+  const sitePublicId = String(formData.get("sitePublicId") ?? "").trim();
+  if (!sitePublicId) return { ok: false, message: "No site specified." };
+
+  try {
+    return describeTokenInstall(await installRepoTokens(db, ctx.userId, sitePublicId));
+  } catch (error) {
+    console.error("[repo] token install threw", error);
+    return {
+      ok: false,
+      message: "Could not reach GitHub to install the tokens. Try again in a minute.",
+    };
+  }
 }

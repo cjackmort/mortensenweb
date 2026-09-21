@@ -143,6 +143,24 @@ export async function connectExistingRepo(
     };
   }
 
+  // A different repository for a site that already has one. The panel offers
+  // this as "Change the repository", so it replaces the connection: inserting
+  // beside it left the site with two, allowing work allowed both, and whatever
+  // read "the" connection took whichever row came back first.
+  const current = prior
+    ? undefined
+    : (
+        await db
+          .select({
+            id: repositoryConnections.id,
+            owner: repositoryConnections.owner,
+            name: repositoryConnections.name,
+          })
+          .from(repositoryConnections)
+          .where(eq(repositoryConnections.siteId, site.id))
+          .limit(1)
+      )[0];
+
   if (prior) {
     await db
       .update(repositoryConnections)
@@ -153,6 +171,20 @@ export async function connectExistingRepo(
         installationId,
       })
       .where(eq(repositoryConnections.id, prior.id));
+  } else if (current) {
+    await db
+      .update(repositoryConnections)
+      .set({
+        owner: input.owner,
+        name: repo.name,
+        repoNodeId: repo.node_id,
+        defaultBranch: repo.default_branch,
+        installationId,
+        connectionMode: "connected_existing",
+        // Off again. Allowing work was a decision about the old repository.
+        allowlisted: false,
+      })
+      .where(eq(repositoryConnections.id, current.id));
   } else {
     await db.insert(repositoryConnections).values({
       publicId: newPublicId(),
@@ -220,11 +252,16 @@ export async function connectExistingRepo(
   await db.insert(auditLog).values({
     actorUserId: ctx.userId,
     organizationId: site.organizationId,
-    action: prior ? "repository.reconnected" : "repository.connected",
+    action: prior
+      ? "repository.reconnected"
+      : current
+        ? "repository.replaced"
+        : "repository.connected",
     entityType: "site",
     entityId: input.sitePublicId,
     metadata: {
       repository: `${input.owner}/${repo.name}`,
+      ...(current ? { replaced: `${current.owner}/${current.name}` } : {}),
       repoNodeId: repo.node_id,
       previewUrlStyle: style ?? "pr_alias",
       netlifySiteName: siteName ?? null,
