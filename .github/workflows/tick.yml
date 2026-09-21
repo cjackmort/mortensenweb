@@ -21,13 +21,18 @@
 #
 # GitHub's cron is best-effort and can be late by ten minutes or more under
 # load, which is fine for a backstop and is why it is not the primary.
+#
+# Hourly, not every five minutes. This repository is private, and a private
+# repository pays for Actions by the minute with each run rounded up to one:
+# every five minutes is ~8,600 billed minutes a month against 2,000 free. Past
+# :00 because GitHub's scheduler is busiest on the hour.
 # =============================================================================
 
 name: Scheduled tick
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "17 * * * *"
   # So it can be run by hand while diagnosing, without waiting for the cron.
   workflow_dispatch:
 
