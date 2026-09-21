@@ -47,7 +47,7 @@ jobs:
     # The label that was just added, not merely present. `contains(...)` is true
     # on every one of the portal's labelling events; this is true on exactly one.
     if: github.event.label.name == 'claude'
-    uses: cjackmort/mortensenweb/.github/workflows/client-change.yml@main
+    uses: cjackmort/mortensenweb-agent/.github/workflows/client-change.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
       labels: ${{ join(github.event.issue.labels.*.name, ',') }}

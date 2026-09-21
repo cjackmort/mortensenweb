@@ -129,7 +129,7 @@ visible gap.
 
 The admin overview draws every client as a tile, and that tile is a screenshot
 of their home page taken by the deploy workflow on each push to `main`
-(`agent/verify/screenshot.mjs` → `/__preview/home-tile.png`). It replaced an
+(`agent/verify/screenshot.mjs` in `cjackmort/mortensenweb-agent` → `/__preview/home-tile.png`). It replaced an
 iframe of the live page, which any site sending `X-Frame-Options` or a CSP
 `frame-ancestors` refuses — three of the first four clients showed a blank tile
 while all three sites were perfectly healthy.
@@ -144,7 +144,7 @@ Two things follow, both of which are your job when scaffolding a new site:
   set the site to `live`** in the portal (client → the site → Grid thumbnail).
   A still shot is taken under `reducedMotion: 'reduce'`, so a background whose
   whole character is motion can photograph as a flat block of colour. The full
-  procedure is in `agent/skills/animation/SKILL.md` — "If the home page moves,
+  procedure is in `agent/skills/animation/SKILL.md` in `cjackmort/mortensenweb-agent` — "If the home page moves,
   the portal's thumbnail has to move with it".
 
 A static home page needs neither decision: the default is the screenshot, and

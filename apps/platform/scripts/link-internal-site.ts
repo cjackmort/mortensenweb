@@ -24,9 +24,12 @@ import {
 } from "../src/db/schema";
 import { newPublicId } from "../src/lib/ids";
 
+// The agency's public site, which the pipeline changes like any client's. It
+// used to name this repository and the portal's domain, from when the public
+// site was a folder in here; it has its own repository now.
 const REPO_OWNER = "cjackmort";
-const REPO_NAME = "mortensenweb";
-const PRODUCTION_DOMAIN = "portal.mortensenweb.com";
+const REPO_NAME = "site-mortensenweb";
+const PRODUCTION_DOMAIN = "mortensenweb.com";
 
 async function main() {
   const db = await getDb();
@@ -70,7 +73,7 @@ async function main() {
     .values({
       publicId: newPublicId(),
       organizationId: agencyOrg.id,
-      name: "Portal",
+      name: "mortensenweb.com",
       primaryDomain: PRODUCTION_DOMAIN,
       status: "live",
     })
