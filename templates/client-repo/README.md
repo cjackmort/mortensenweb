@@ -25,7 +25,7 @@ GITHUB_INSTALLATION_ID=<id>          # the App's installation on that account
 is named in `allowed_bots`. The portal opens issues as the GitHub App, which
 *is* a bot actor, so without this every run fails immediately.
 
-That line now lives in `cjackmort/mortensenweb/.github/workflows/client-change.yml`,
+That line now lives in `cjackmort/mortensenweb-agent/.github/workflows/client-change.yml`,
 not in each client repository — `claude.yml` here is a nine-line caller. If
 the App is ever reinstalled under a new slug, change it there once.
 
@@ -70,8 +70,9 @@ encryption, which keeps one more credential out of the sealing path.
 | `claude.yml` | issue labelled `claude` | Calls the agency's `client-change` workflow: reads the issue, implements the change with the agency's skills, checks it, opens a pull request |
 | `deploy.yml` | pull request / push to `main` | Calls the agency's `client-deploy` workflow: builds, verifies links and images, screenshots the changed pages, deploys a preview alias / production |
 
-Both are thin callers of reusable workflows in `cjackmort/mortensenweb`
-(`.github/workflows/client-change.yml` and `client-deploy.yml`). The prompt,
+Both are thin callers of reusable workflows in `cjackmort/mortensenweb-agent`
+(`.github/workflows/client-change.yml` and `client-deploy.yml`), which is public
+because a client repository's workflows cannot read a private one. The prompt,
 model, tool allowlist, skills and verification live there, so a change to any
 of them reaches this repository on its next run without this repository
 changing. `secrets: inherit` passes this repository's own secrets through;
