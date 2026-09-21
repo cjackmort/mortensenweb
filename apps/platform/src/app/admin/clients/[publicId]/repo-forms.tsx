@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import {
   connectRepoAction,
+  installTokensAction,
   setAllowlistAction,
   type RepoActionResult,
 } from "./repo-actions";
@@ -76,6 +77,10 @@ export function RepositoryPanel({
     RepoActionResult | null,
     FormData
   >(setAllowlistAction, null);
+  const [tokenState, tokenAction, installingTokens] = useActionState<
+    RepoActionResult | null,
+    FormData
+  >(installTokensAction, null);
   const [umamiState, umamiAction, savingUmami] = useActionState<
     SiteActionResult | null,
     FormData
@@ -275,8 +280,32 @@ export function RepositoryPanel({
           <p className="field-hint">
             Reversible at any time. Turning it off stops new work being sent;
             anything already in flight finishes and still needs the
-            client&rsquo;s approval before it goes live.
+            client&rsquo;s approval before it goes live. Allowing it also
+            installs the Claude and Netlify tokens from the portal&rsquo;s
+            environment into the repository.
           </p>
+
+          {connected.allowlisted && (
+            <>
+              {tokenState && (
+                <p className={tokenState.ok ? "notice notice-success" : "error"}>
+                  {tokenState.message}
+                </p>
+              )}
+              <form action={tokenAction}>
+                <input type="hidden" name="sitePublicId" value={sitePublicId} />
+                <button type="submit" className="secondary" disabled={installingTokens}>
+                  {installingTokens ? "Installing…" : "Install tokens from the portal"}
+                </button>
+              </form>
+              <p className="field-hint">
+                Copies <code>CLAUDE_CODE_OAUTH_TOKEN</code> and{" "}
+                <code>NETLIFY_AUTH_TOKEN</code> from the portal&rsquo;s
+                environment into this repository. Use it after replacing either
+                token in Netlify; nothing else needs to change.
+              </p>
+            </>
+          )}
         </>
       )}
     </section>
