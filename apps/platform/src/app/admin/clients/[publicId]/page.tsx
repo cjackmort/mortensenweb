@@ -28,6 +28,7 @@ import { BriefForm, DispatchBriefForm } from "./brief-forms";
 import { LaunchPanel } from "./launch-forms";
 import { RepositoryPanel } from "./repo-forms";
 import { CompPanel } from "./comp-forms";
+import { InternalPanel } from "./internal-forms";
 import { listActivePlans } from "@/db/repositories/admin/prospects";
 import { getClientComp } from "@/db/repositories/admin/clients";
 
@@ -368,6 +369,11 @@ export default async function ClientDetailPage({
           currentCompPlanId={comp?.compPlanKey ?? null}
           currentNote={comp?.compNote ?? null}
           paidPlanName={comp?.paidPlanName ?? null}
+        />
+
+        <InternalPanel
+          clientPublicId={client.publicId}
+          isInternal={client.isInternal}
         />
 
         {!umamiReady && (
