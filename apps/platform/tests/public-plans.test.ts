@@ -46,10 +46,6 @@ describe("GET /api/plans", () => {
     const keys = body.plans.map((plan: { key: string }) => plan.key);
     expect(keys).not.toContain("comp-unlimited");
   });
-
-  it("lets a CDN cache it briefly", () => {
-    expect(GET().headers.get("cache-control")).toMatch(/^public, /);
-  });
 });
 
 describe("the proxy", () => {

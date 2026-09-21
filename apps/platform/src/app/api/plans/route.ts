@@ -20,29 +20,21 @@ import {
  * `comp-unlimited` is absent for the reason the package gives: it is granted,
  * never sold.
  *
- * Five minutes at the CDN. A site build a few minutes after a price change can
- * still see the old price; rebuild the site after changing one.
+ * Not cached: next.config.ts sends no-store on every /api route, and that
+ * suits this one — a site build straight after a price change gets the new
+ * price rather than a CDN's copy of the old one.
  */
-
-const CDN_MAX_AGE_SECONDS = 300;
 
 export const dynamic = "force-static";
 
 export function GET() {
-  return NextResponse.json(
-    {
-      plans: PLANS,
-      overageCents: OVERAGE_CENTS,
-      build: {
-        priceCents: BUILD_PRICE_CENTS,
-        withCareCents: BUILD_WITH_CARE_CENTS,
-        commitmentMonths: BUILD_COMMITMENT_MONTHS,
-      },
+  return NextResponse.json({
+    plans: PLANS,
+    overageCents: OVERAGE_CENTS,
+    build: {
+      priceCents: BUILD_PRICE_CENTS,
+      withCareCents: BUILD_WITH_CARE_CENTS,
+      commitmentMonths: BUILD_COMMITMENT_MONTHS,
     },
-    {
-      headers: {
-        "Cache-Control": `public, max-age=${CDN_MAX_AGE_SECONDS}`,
-      },
-    },
-  );
+  });
 }
