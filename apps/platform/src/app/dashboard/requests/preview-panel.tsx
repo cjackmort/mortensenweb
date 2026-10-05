@@ -164,13 +164,15 @@ function PreviewCard({ item }: { item: PreviewItem }) {
           <textarea
             id={`note-${item.requestPublicId}`}
             name="note"
+            required
             placeholder="The heading should say… / can the photo be bigger…"
           />
           {/* Stated explicitly: people hold back corrections when they think
               each one costs them, and the result is a site they are quietly
               unhappy with. */}
           <p className="field-hint">
-            This won&rsquo;t use up another of your monthly changes — it&rsquo;s
+            We&rsquo;ll start on these straight away and send you a new preview.
+            It won&rsquo;t use up another of your monthly changes — it&rsquo;s
             part of the same request.
           </p>
           <div className="actions">

@@ -156,6 +156,8 @@ export interface RevisionInput {
   /** The pull request being revised. Null when the earlier run opened none. */
   previousPullRequest: number | null;
   feedback: string;
+  /** Who sent it back: the agency before release, or the owner after. */
+  reviewer?: "operator" | "client";
 }
 
 /**
@@ -359,12 +361,16 @@ function generalInformationSection(entries: ProfileEntry[]): string[] {
  * that ref after the branch is deleted, which closing the old pull request
  * does.
  *
- * The notes are fenced like the client's words. Today an operator writes them;
- * the containment does not depend on that staying true.
+ * The notes are fenced like the client's words — and when the client sent the
+ * preview back, they are the client's words.
  */
 function revisionSection(revision: RevisionInput): string[] {
   const notes = fence(revision.feedback.trim());
   const pr = revision.previousPullRequest;
+  const reviewed =
+    revision.reviewer === "client"
+      ? "was looked at by the website's owner, who asked for the changes quoted below."
+      : "was reviewed and sent back with the notes quoted below.";
 
   return [
     "### This is a second attempt",
@@ -372,7 +378,7 @@ function revisionSection(revision: RevisionInput): string[] {
     pr
       ? `An earlier run handled this request in pull request #${pr}. Its preview`
       : "An earlier run handled this request. Its result",
-    "was reviewed and sent back with the notes quoted below.",
+    reviewed,
     "",
     ...(pr
       ? [

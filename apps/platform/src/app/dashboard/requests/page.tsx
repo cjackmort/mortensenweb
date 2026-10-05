@@ -20,6 +20,7 @@ import { RequestProgress } from "@/components/request-progress";
 import { RequestTimeline } from "@/components/request-timeline";
 import { isCancellable, stageIndex } from "@/lib/requests/status";
 import { formatDate } from "@/lib/time";
+import { plainSummary } from "@/lib/requests/summary";
 import { RequestForm } from "./request-form";
 import { PreviewPanel } from "./preview-panel";
 import { CancelRequestButton } from "./cancel-button";
@@ -112,10 +113,12 @@ export default async function ClientRequestsPage() {
             // What was changed, in the agent's words, beside the buttons
             // that decide on it — so a client on a phone can often approve
             // without hunting for the change in the preview.
-            summary:
+            summary: plainSummary(
               timelines
                 .get(preview.requestPublicId)
-                ?.find((e) => e.kind === "agent_summary")?.body ?? null,
+                ?.filter((e) => e.kind === "agent_summary")
+                .at(-1)?.body,
+            ),
           }))}
         />
 

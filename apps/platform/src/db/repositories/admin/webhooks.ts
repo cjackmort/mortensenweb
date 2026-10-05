@@ -14,6 +14,7 @@ import { newPublicId } from "@/lib/ids";
 import { parseAgentJobMarker, parseEscalationMarker } from "@/lib/github/issue";
 import { previewUrlFor, verifyUrlServes } from "@/lib/netlify/api";
 import { notifyClientOfRequest } from "@/lib/notify/request";
+import { plainSummary } from "@/lib/requests/summary";
 
 /**
  * Processing a GitHub webhook.
@@ -739,26 +740,13 @@ export async function reverifyPendingPreviews(db: Database): Promise<number> {
 
 
 /**
- * The part of a pull request description meant for the client.
- *
- * Everything the portal needs from the body — the job marker, an escalation
- * marker — is an HTML comment, and everything after those is the agent's
- * write-up "for a non-technical reader". Comments are stripped, markdown
- * headings are flattened to plain lines, and the result is capped so a
- * verbose run cannot push the approval buttons off a phone screen. Empty
- * when the agent wrote nothing beyond the marker, so the timeline shows no
- * blank entry.
+ * The part of a pull request description meant for the client: one plain
+ * paragraph, without the file list, the notes for the agency, or the tool's
+ * sign-off. See `lib/requests/summary.ts`. Empty when the agent wrote nothing
+ * for the client, so the timeline shows no blank entry.
  */
 export function clientSummaryFromPullRequest(
   body: string | null | undefined,
 ): string | null {
-  if (!body) return null;
-  const text = body
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!text) return null;
-  return text.length > 1500 ? `${text.slice(0, 1497).trimEnd()}…` : text;
+  return plainSummary(body);
 }

@@ -50,6 +50,10 @@ export function DispatchButton({
   // that would be refused.
   const dispatchable = ["submitted", "triaged", "approved"].includes(status);
 
+  // The client sent their preview back. The schedule redoes it when automatic
+  // work is on; this is the same thing by hand when it is not.
+  const redoable = status === "changes_requested";
+
   // Closing is refused once work is in flight, because it would not stop the
   // run — only stop anyone watching for its pull request.
   const closable = !["dispatched", "in_progress", "pr_open", "closed"].includes(
@@ -70,22 +74,23 @@ export function DispatchButton({
   // the watchdog never reclaimed left the operator with nothing to click. The
   // control appears only once the run is genuinely late — the server checks
   // the same thing, and refuses a run still inside its timeout.
-  if (!dispatchable && !closable && !overdue) {
+  if (!dispatchable && !redoable && !closable && !overdue) {
     return <span className="muted">&mdash;</span>;
   }
 
   return (
     <>
       <div className="actions">
-        {dispatchable && (
+        {(dispatchable || redoable) && (
           <form action={action}>
             <input
               type="hidden"
               name="requestPublicId"
               value={requestPublicId}
             />
+            {redoable && <input type="hidden" name="mode" value="redo" />}
             <button type="submit" className="small" disabled={pending}>
-              {pending ? "Sending…" : "Start work"}
+              {pending ? "Sending…" : redoable ? "Redo with their notes" : "Start work"}
             </button>
           </form>
         )}
