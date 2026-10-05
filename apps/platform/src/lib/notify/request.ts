@@ -59,6 +59,12 @@ export async function notifyClientOfRequest(
   db: Database,
   requestId: string,
   kind: RequestNotification,
+  /**
+   * Narrows "once" to one thing within the request — a preview. Without it a
+   * request gets one email of each kind for ever, so a change sent back and
+   * redone would never announce its second preview.
+   */
+  { about }: { about?: string } = {},
 ): Promise<NotifyOutcome> {
   try {
     const already = await db
@@ -69,6 +75,7 @@ export async function notifyClientOfRequest(
           eq(requestEvents.requestId, requestId),
           eq(requestEvents.kind, "notification_sent"),
           sql`${requestEvents.metadata} ->> 'notification' = ${kind}`,
+          ...(about ? [sql`${requestEvents.metadata} ->> 'about' = ${about}`] : []),
         ),
       )
       .limit(1);
@@ -191,7 +198,7 @@ export async function notifyClientOfRequest(
       kind: "notification_sent",
       body: describe(kind),
       visibility: "client_visible",
-      metadata: { notification: kind, recipients: sentCount },
+      metadata: { notification: kind, recipients: sentCount, ...(about ? { about } : {}) },
     });
 
     return { status: "sent", to: sentCount };

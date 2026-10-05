@@ -237,7 +237,7 @@ describe("timeline and notes", () => {
 });
 
 describe("what the client is shown", () => {
-  it("strips markers and headings from the agent's pull request body", () => {
+  it("gives the client one plain paragraph from the agent's pull request body", () => {
     const body = [
       "<!-- agent-job:01HXYZ -->",
       "<!-- agent-escalation: nothing -->",
@@ -250,8 +250,9 @@ describe("what the client is shown", () => {
       "### Files",
       "- src/index.html",
     ].join("\n");
+    // The file list is for the agency; the client gets the sentence.
     expect(clientSummaryFromPullRequest(body)).toBe(
-      "What changed\n\nReplaced the hero photo with the one you named \"new\".\n\nFiles\n- src/index.html",
+      "Replaced the hero photo with the one you named \"new\".",
     );
     expect(clientSummaryFromPullRequest("<!-- agent-job:01HXYZ -->")).toBeNull();
     expect(clientSummaryFromPullRequest(null)).toBeNull();

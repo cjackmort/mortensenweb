@@ -5,6 +5,7 @@ import {
   expireStalledJobs,
 } from "@/db/repositories/admin/agent-jobs";
 import { reverifyPendingPreviews } from "@/db/repositories/admin/webhooks";
+import { redoChangesRequested } from "@/db/repositories/admin/revisions";
 import { reverifyLiveSites } from "@/db/repositories/admin/launch";
 import { advanceShippedChanges } from "@/db/repositories/admin/shipped";
 import { expireStaleShares } from "@/db/repositories/admin/maintenance";
@@ -166,6 +167,9 @@ export async function POST(request: Request): Promise<Response> {
     // First: a request sitting undispatched is a client waiting with nothing
     // happening, which is the most visible of these failures.
     ["requestsDispatched", () => dispatchSubmittedRequests(db)],
+    // Then the client who looked at a preview and asked for changes — the same
+    // wait, one step further along.
+    ["changesRedone", () => redoChangesRequested(db)],
     ["previewsVerified", () => reverifyPendingPreviews(db)],
     ["jobsExpired", () => expireStalledJobs(db)],
     ["shippedChanges", () => advanceShippedChanges(db)],

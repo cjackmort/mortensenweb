@@ -5,12 +5,10 @@ import {
   auditLog,
   changeRequests,
   organizations,
-  repositoryConnections,
   requestEvents,
 } from "@/db/schema";
 import { notifyClientOfRequest } from "@/lib/notify/request";
-import { dispatchChangeRequest } from "./agent-jobs";
-import { closeAbandonedPullRequest } from "./cancel";
+import { findJobByPublicId, retireAndRedispatch } from "./revisions";
 import type { AdminContext } from "../context";
 
 /**
@@ -130,8 +128,11 @@ export async function releasePreview(
     });
     // The email waits for this moment, not for the build. Sent when the build
     // verified, it handed the client a link to a preview nobody had checked —
-    // including ones an operator was about to send back.
-    await notifyClientOfRequest(db, job.requestId, "preview_ready");
+    // including ones an operator was about to send back. Once per preview, not
+    // once per request: a change the client sent back gets a second one.
+    await notifyClientOfRequest(db, job.requestId, "preview_ready", {
+      about: agentJobPublicId,
+    });
   }
 
   await db.insert(auditLog).values({
@@ -175,28 +176,26 @@ export async function holdPreview(
     };
   }
 
-  const job = await findHeldJob(db, agentJobPublicId);
+  const job = await findJobByPublicId(db, agentJobPublicId);
   if (!job) return { ok: false, message: "No such preview." };
 
-  const retired = await db
-    .update(agentJobs)
-    .set({ status: "cancelled", finishedAt: new Date() })
-    .where(
-      and(
-        eq(agentJobs.id, job.id),
-        eq(agentJobs.status, "pr_open"),
-        isNull(agentJobs.operatorReleasedAt),
-      ),
-    )
-    .returning({ id: agentJobs.id });
+  const outcome = await retireAndRedispatch(db, {
+    job,
+    notes,
+    reviewer: "operator",
+    actor: { automatic: false, userId: ctx.userId },
+    // Released previews are the client's to send back, not the operator's.
+    stillWaiting: isNull(agentJobs.operatorReleasedAt),
+  });
 
-  if (retired.length === 0) {
-    return { ok: false, message: "That preview is no longer waiting on you." };
-  }
-
-  const outcome = await startRevision(ctx, db, job, notes);
   if (!outcome.ok) {
-    return { ok: false, message: `Not sent back — ${outcome.message}` };
+    return {
+      ok: false,
+      message:
+        outcome.reason === "not_waiting"
+          ? "That preview is no longer waiting on you."
+          : `Not sent back — ${outcome.message}`,
+    };
   }
 
   await recordHold(ctx, db, {
@@ -207,79 +206,12 @@ export async function holdPreview(
     notes,
   });
 
-  await closeAbandonedPullRequest(
-    db,
-    job.requestId,
-    job,
-    `Superseded by #${outcome.issueNumber}. This preview was reviewed and sent ` +
-      "back for another attempt, which builds on these commits.",
-  );
-
   return {
     ok: true,
     message:
       `Sent back to the agent with your notes (issue #${outcome.issueNumber}). ` +
       "The new preview will appear here once it is built.",
   };
-}
-
-type HeldJob = NonNullable<Awaited<ReturnType<typeof findHeldJob>>>;
-
-/** The job, its request, and where its pull request lives. */
-async function findHeldJob(db: Database, agentJobPublicId: string) {
-  const rows = await db
-    .select({
-      id: agentJobs.id,
-      requestId: changeRequests.id,
-      requestPublicId: changeRequests.publicId,
-      prNumber: agentJobs.prNumber,
-      installationId: repositoryConnections.installationId,
-      owner: repositoryConnections.owner,
-      name: repositoryConnections.name,
-      defaultBranch: repositoryConnections.defaultBranch,
-    })
-    .from(agentJobs)
-    .innerJoin(changeRequests, eq(changeRequests.id, agentJobs.requestId))
-    .leftJoin(
-      repositoryConnections,
-      eq(repositoryConnections.id, agentJobs.repositoryConnectionId),
-    )
-    .where(eq(agentJobs.publicId, agentJobPublicId))
-    .limit(1);
-
-  return rows[0] ?? null;
-}
-
-/**
- * Dispatch the second attempt, putting the held job back if it does not start.
- *
- * Every refusal `dispatchChangeRequest` can give — the day's cap, GitHub being
- * unreachable, the repository losing its allowlisting — leaves nothing running,
- * so the held preview is still the latest thing built and belongs in the queue.
- */
-async function startRevision(
-  ctx: AdminContext,
-  db: Database,
-  job: HeldJob,
-  notes: string,
-) {
-  const restore = () =>
-    db
-      .update(agentJobs)
-      .set({ status: "pr_open", finishedAt: null })
-      .where(eq(agentJobs.id, job.id));
-
-  try {
-    const outcome = await dispatchChangeRequest(ctx, db, {
-      requestPublicId: job.requestPublicId,
-      revision: { previousPullRequest: job.prNumber, feedback: notes },
-    });
-    if (!outcome.ok) await restore();
-    return outcome;
-  } catch (error) {
-    await restore();
-    throw error;
-  }
 }
 
 /** Internal only: the notes, and which run replaced which. */

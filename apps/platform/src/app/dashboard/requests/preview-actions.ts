@@ -153,6 +153,12 @@ export async function requestMoreChanges(
 
   if (!decision.ok) return { ok: false, message: decision.message };
 
+  // The schedule starts the redo (`redoChangesRequested`), the same way it
+  // starts a fresh request — so a GitHub hiccup is retried rather than lost,
+  // and this click is never slowed by opening an issue. The nudge makes "the
+  // schedule" mean now rather than in five minutes.
+  nudgeScheduler("changes requested");
+
   // Note that this does *not* spend another change from the allowance. Asking
   // for a correction to work we have not yet delivered is part of the same
   // change, and charging for it would make clients reluctant to say when
@@ -160,6 +166,7 @@ export async function requestMoreChanges(
   return {
     ok: true,
     live: false,
-    message: "Thanks — we'll make those adjustments and send you a new preview.",
+    message:
+      "Thanks — we're making those changes now. We'll send you a new preview to look at when it's ready.",
   };
 }

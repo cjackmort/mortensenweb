@@ -1,5 +1,6 @@
 import type { TimelineEntry } from "@/db/repositories/client/change-requests";
 import { formatDateTime } from "@/lib/time";
+import { plainSummary } from "@/lib/requests/summary";
 
 /**
  * The story of a request, under its progress track.
@@ -41,16 +42,20 @@ function label(kind: string): string {
 export function RequestTimeline({ entries }: { entries: TimelineEntry[] }) {
   if (entries.length === 0) return null;
 
-  const summary = entries.find((e) => e.kind === "agent_summary");
+  // The latest attempt's account, in plain words. Entries are oldest first, and
+  // a change sent back for another attempt has one summary per attempt.
+  const summary = plainSummary(
+    entries.filter((e) => e.kind === "agent_summary").at(-1)?.body,
+  );
 
   return (
     <div className="timeline-wrap">
       {/* The agent's summary is the one entry worth showing unfolded: it is
           what the client is being asked to approve, in words. */}
-      {summary?.body && (
+      {summary && (
         <div className="timeline-summary">
           <p className="timeline-summary-label">What we changed</p>
-          <p className="timeline-summary-body">{summary.body}</p>
+          <p className="timeline-summary-body">{summary}</p>
         </div>
       )}
 
