@@ -81,6 +81,18 @@ that query, so `/login` still returns 200 and the site looks fine. Check with
 `curl -o /dev/null -w "%{http_code}" https://portal.mortensenweb.com/preview/notarealtoken`
 — 404 means the database answered, 500 means it did not.
 
+**Neon bills for hours awake, and only sleeps after five idle minutes.** The
+scheduler queried every five minutes, so the database never slept: ~180
+CU-hours a month against the Free plan's 100. It ran out mid-month, Neon
+suspended the compute, and every page that reads data 500'd until the period
+reset. `/api/cron` now checks a gate in Netlify Blobs before touching the
+database (`src/lib/scheduler/gate.ts`) and mostly answers `"skipped": true`.
+Anything new that queries on a timer — a job, an uptime check, a health
+endpoint — has the same effect at any interval of five minutes or less, however
+cheap the query is. Anything new that creates scheduled work must open the
+gate's window (`nudgeScheduler` or `keepSchedulerAwake`), or that work waits up
+to six hours for the next sweep.
+
 **Anything unauthenticated must be listed in `proxy.ts` (Next 16 renamed `middleware.ts`).** Webhook
 receivers, signed attachment links and `/api/cron` all authenticate themselves
 and none can hold a session. An unlisted route is redirected to `/login` and

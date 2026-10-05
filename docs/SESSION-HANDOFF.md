@@ -87,7 +87,9 @@ Stage 3 added the loop itself:
 - **Launch** — DNS instruction email (apex A + www CNAME, never nameservers),
   Umami website provisioning, verified go-live, client flipped to active
 - **Scheduled jobs** — Netlify scheduled function every 5 minutes driving
-  preview re-verification, the agent watchdog, live-site checks, and share expiry
+  preview re-verification, the agent watchdog, live-site checks, and share expiry.
+  Gated so an idle portal lets Neon sleep: ticks run only while a recent event
+  holds the window open, or every six hours (`src/lib/scheduler/gate.ts`)
 
 ## Non-negotiables — do not weaken these
 

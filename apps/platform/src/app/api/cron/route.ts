@@ -12,6 +12,11 @@ import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
 import { reconcileStorageReservations } from "@/db/repositories/client/media-quota";
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
+import {
+  checkGate,
+  keepSchedulerAwake,
+  recordSchedulerRun,
+} from "@/lib/scheduler/gate";
 import { constantTimeEqual } from "@/lib/webhooks/signature";
 
 /**
@@ -49,8 +54,26 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      placeholder holding quota that nothing else will ever finish.
  *   9. **Storage counters.** Recomputed from what is actually stored, so an
  *      interrupted release does not slowly cost a client room.
- *  10. **Stripe reconciliation.** Self-gated to roughly hourly; a net for lost
+ *  10. **Stripe reconciliation.** Self-gated to at most hourly; a net for lost
  *      webhooks rather than something a client is waiting on.
+ *
+ * ## Not every call runs them
+ *
+ * Every job queries Neon, and Neon only sleeps after five idle minutes — so a
+ * five-minute tick that always ran kept the database awake around the clock and
+ * spent the month's compute by mid-month. `lib/scheduler/gate.ts` decides,
+ * without touching the database, whether this call has anything to do:
+ *
+ *  - a **nudge** (`x-nudge-reason`) always runs, and opens a window in which
+ *    the following ticks run too, because it means a client just did something;
+ *  - a **forced** call (`x-cron-force: 1`) always runs, for diagnosing by hand;
+ *  - anything else runs while an event's window is open, or when the last run
+ *    is six hours old, and otherwise answers `skipped` without a query.
+ *
+ * The gate is checked here rather than in the scheduled function so that every
+ * caller passes through it. The GitHub Actions fallback calls this endpoint
+ * directly; gating only the Netlify side would leave it waking the database
+ * every hour.
  *
  * ## Authentication
  *
@@ -84,13 +107,55 @@ function authorised(request: Request): boolean {
   return constantTimeEqual(encoder.encode(provided), encoder.encode(expected));
 }
 
+type Admission =
+  | { run: true; reason: string; gateFailed: boolean }
+  | { run: false; reason: string; awakeUntil: string | null; nextSweepAt: string };
+
+/** Decided before `getDb()`, and without it — that is the whole point. */
+async function admit(request: Request): Promise<Admission> {
+  const nudge = request.headers.get("x-nudge-reason");
+  if (nudge) {
+    // Something just made there be work, and its follow-ups (a dispatch, a
+    // deploy reaching the live site) land over the next half hour or so.
+    const held = await keepSchedulerAwake(`nudge: ${nudge}`);
+    return { run: true, reason: "nudged", gateFailed: !held };
+  }
+
+  if (request.headers.get("x-cron-force") === "1") {
+    return { run: true, reason: "forced", gateFailed: false };
+  }
+
+  const decision = await checkGate();
+  if (!decision.run) return decision;
+  return {
+    run: true,
+    reason: decision.reason,
+    gateFailed: decision.reason === "unreadable",
+  };
+}
+
 export async function POST(request: Request): Promise<Response> {
   if (!authorised(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  const admission = await admit(request);
+  if (!admission.run) {
+    // The same shape as a run, so every caller that reads `ok` and `degraded`
+    // keeps working; `skipped` is the difference.
+    return NextResponse.json({
+      ok: true,
+      degraded: false,
+      failedJobs: [],
+      skipped: true,
+      gate: admission.reason,
+      awakeUntil: admission.awakeUntil,
+      nextSweepAt: admission.nextSweepAt,
+    });
+  }
+
   const db = await getDb();
-  const started = Date.now();
+  const startedAt = new Date();
 
   // Each job is isolated. One throwing must not stop the others — a Netlify
   // outage breaking preview verification should not also stop the watchdog
@@ -123,9 +188,11 @@ export async function POST(request: Request): Promise<Response> {
     // trust: any interruption between a release and the write that should have
     // followed is corrected here rather than slowly costing a client room.
     ["storageReconciled", () => reconcileStorageReservations(db)],
-    // Last, and self-gated to roughly hourly. It is a net for lost Stripe
-    // webhooks rather than something a client is waiting on, so it yields the
-    // tick's budget to the jobs above and skips most runs on its own.
+    // Last, and self-gated to at most hourly — and with the gate above, every
+    // six hours while the portal is quiet. It is a net for lost Stripe
+    // webhooks, which Stripe itself retries for three days, rather than
+    // something a client is waiting on, so it yields the tick's budget to the
+    // jobs above and skips most runs on its own.
     ["stripeReconciled", () => runScheduledReconcile(db)],
   ];
 
@@ -143,6 +210,16 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  // Recorded after the jobs rather than before, so a run killed partway is not
+  // counted as the sweep and the next tick picks the work back up.
+  //
+  // A gate that cannot be read or written fails open, which means it quietly
+  // goes back to waking the database every tick. Reporting it as a failed job
+  // is what makes that visible: the Actions tick goes red instead of the Neon
+  // bill being the first sign.
+  const recorded = await recordSchedulerRun(startedAt);
+  if (admission.gateFailed || !recorded) failed.push("schedulerGate");
+
   return NextResponse.json({
     // Still 200, and `ok` still means "the endpoint ran" — flipping it would
     // change what every existing caller understands by it. `degraded` is the
@@ -151,7 +228,8 @@ export async function POST(request: Request): Promise<Response> {
     ok: true,
     degraded: failed.length > 0,
     failedJobs: failed,
-    ranForMs: Date.now() - started,
+    gate: admission.reason,
+    ranForMs: Date.now() - startedAt.getTime(),
     ...results,
   });
 }

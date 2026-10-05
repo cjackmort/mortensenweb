@@ -329,7 +329,11 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
  * about a client waiting. Reconciliation is not: it is a net for lost
  * webhooks, and webhooks are retried by Stripe for three days on their own.
  * Running a full comparison every tick would burn rate limit to discover
- * nothing, so it runs hourly and the retries cover the gap.
+ * nothing, so it runs at most hourly and the retries cover the gap.
+ *
+ * "At most": the cron endpoint skips ticks entirely while the portal is idle
+ * (`lib/scheduler/gate.ts`), so on a quiet day this runs with the six-hourly
+ * sweep. Three days of Stripe retries cover that comfortably too.
  */
 const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
 

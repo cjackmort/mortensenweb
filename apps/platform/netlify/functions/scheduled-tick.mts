@@ -23,6 +23,15 @@
  * build and the client seeing it is preview verification. At five minutes the
  * worst case adds five; at thirty it would eat the entire budget.
  *
+ * Most ticks run nothing. Neon only sleeps after five idle minutes, so a
+ * five-minute tick that always queried kept the database awake around the
+ * clock and spent the month's compute allowance by mid-month. The endpoint now
+ * checks a gate before touching the database and answers `"skipped": true`
+ * unless something recently created work, or six hours have passed since the
+ * last run (`src/lib/scheduler/gate.ts`). A log full of skipped ticks is the
+ * healthy state. Don't move this schedule to every minute to make the portal
+ * feel faster: the nudge already handles the moments a client is waiting.
+ *
  * The jobs are all idempotent — that is a property of each one, not something
  * this file arranges — so an overlapping or repeated run is harmless. That is
  * also what makes the GitHub Actions fallback in `.github/workflows/tick.yml`

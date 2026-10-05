@@ -16,6 +16,7 @@ import {
   scanForInjection,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
+import { keepSchedulerAwakeForJob } from "@/lib/scheduler/gate";
 import { claimDispatchSlot, releaseDispatchSlot } from "./agent-jobs";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
@@ -248,6 +249,7 @@ export async function dispatchBrief(
 
   const agentJobPublicId = newPublicId();
   const timeoutMinutes = Number(process.env.AGENT_JOB_TIMEOUT_MINUTES ?? 30);
+  const timeoutAt = new Date(Date.now() + timeoutMinutes * 60_000);
 
   const inserted = await db
     .insert(agentJobs)
@@ -257,11 +259,15 @@ export async function dispatchBrief(
       repositoryConnectionId: brief.connectionId,
       baseRef: brief.defaultBranch,
       status: "queued",
-      timeoutAt: new Date(Date.now() + timeoutMinutes * 60_000),
+      timeoutAt,
     })
     .returning({ id: agentJobs.id });
 
   const agentJobId = inserted[0]!.id;
+
+  // Held awake until the watchdog can fire, as in `runDispatch`: a run that
+  // dies silently sends no webhook to do it.
+  await keepSchedulerAwakeForJob(timeoutAt);
 
   // Recorded for the operator, never acted on. Same rule as client text: a
   // brief is a transcription of what a third party said, so instruction-shaped

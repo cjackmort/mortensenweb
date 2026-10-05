@@ -39,7 +39,31 @@ const jobs = {
   runScheduledReconcile: job("runScheduledReconcile"),
 };
 
-vi.mock("@/db/client", () => ({ getDb: async () => ({}) }));
+const getDb = vi.fn(async () => ({}));
+
+/**
+ * The gate, controlled per test. Its default is the sweep being due, so every
+ * test above the gate's own section exercises a run exactly as before.
+ */
+const gate = {
+  checkGate: vi.fn(async (): Promise<unknown> => ({ run: true, reason: "sweep_due" })),
+  keepSchedulerAwake: vi.fn(async (..._a: unknown[]): Promise<boolean> => true),
+  recordSchedulerRun: vi.fn(async (..._a: unknown[]): Promise<boolean> => true),
+};
+
+const IDLE = {
+  run: false,
+  reason: "idle",
+  awakeUntil: null,
+  nextSweepAt: "2026-10-05T18:00:00.000Z",
+};
+
+vi.mock("@/db/client", () => ({ getDb: () => getDb() }));
+vi.mock("@/lib/scheduler/gate", () => ({
+  checkGate: () => gate.checkGate(),
+  keepSchedulerAwake: (...a: unknown[]) => gate.keepSchedulerAwake(...a),
+  recordSchedulerRun: (...a: unknown[]) => gate.recordSchedulerRun(...a),
+}));
 vi.mock("@/db/repositories/admin/agent-jobs", () => ({
   dispatchSubmittedRequests: (...a: unknown[]) => jobs.dispatchSubmittedRequests(...a),
   expireStalledJobs: (...a: unknown[]) => jobs.expireStalledJobs(...a),
@@ -84,21 +108,31 @@ const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"
 const STRIPE_KEYS = ["stripeReconciled"];
 const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS];
 
-function request(secret: string | null = SECRET) {
+function request(
+  secret: string | null = SECRET,
+  extra: Record<string, string> = {},
+) {
   return new Request("https://portal.example.com/api/cron", {
     method: "POST",
-    headers: secret ? { "x-cron-secret": secret } : {},
+    headers: { ...(secret ? { "x-cron-secret": secret } : {}), ...extra },
   });
 }
 
-async function post(secret: string | null = SECRET) {
+async function post(
+  secret: string | null = SECRET,
+  extra: Record<string, string> = {},
+) {
   const { POST } = await import("@/app/api/cron/route");
-  return POST(request(secret));
+  return POST(request(secret, extra));
 }
 
 beforeEach(() => {
   calls.length = 0;
   for (const fn of Object.values(jobs)) fn.mockClear();
+  // Reset rather than clear: a test's "once" answer must not leak into the
+  // next, and resetting a `vi.fn(impl)` restores `impl`.
+  for (const fn of Object.values(gate)) fn.mockReset();
+  getDb.mockClear();
   vi.stubEnv("CRON_SECRET", SECRET);
 });
 
@@ -182,5 +216,108 @@ describe("the scheduled endpoint", () => {
 
     expect(response.status).toBe(401);
     expect(calls).toEqual([]);
+  });
+});
+
+/**
+ * The gate. A five-minute tick that always ran kept Neon awake around the clock
+ * and spent the month's compute by the middle of it, so the property here is
+ * that an idle tick never reaches the database — not merely that it runs no
+ * jobs. Opening a connection is what keeps the compute up.
+ */
+describe("the scheduled endpoint's gate", () => {
+  it("answers an idle tick without touching the database", async () => {
+    gate.checkGate.mockResolvedValueOnce(IDLE);
+
+    const response = await post();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      degraded: false,
+      failedJobs: [],
+      skipped: true,
+      gate: "idle",
+      nextSweepAt: IDLE.nextSweepAt,
+    });
+    expect(getDb).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+    expect(gate.recordSchedulerRun).not.toHaveBeenCalled();
+  });
+
+  it("runs a nudge even when idle, and keeps the following ticks running", async () => {
+    gate.checkGate.mockResolvedValue(IDLE);
+
+    const body = await (
+      await post(SECRET, { "x-nudge-reason": "request submitted" })
+    ).json();
+
+    expect(body.gate).toBe("nudged");
+    expect(calls).toHaveLength(Object.keys(jobs).length);
+    expect(gate.keepSchedulerAwake).toHaveBeenCalledWith(
+      "nudge: request submitted",
+    );
+    // A nudge is an event; the gate's idle answer is not consulted.
+    expect(gate.checkGate).not.toHaveBeenCalled();
+  });
+
+  it("runs a forced call when idle, for diagnosing by hand", async () => {
+    gate.checkGate.mockResolvedValue(IDLE);
+
+    const body = await (await post(SECRET, { "x-cron-force": "1" })).json();
+
+    expect(body.gate).toBe("forced");
+    expect(calls).toHaveLength(Object.keys(jobs).length);
+    expect(gate.checkGate).not.toHaveBeenCalled();
+    // Diagnosing must not itself hold the database awake for 45 minutes.
+    expect(gate.keepSchedulerAwake).not.toHaveBeenCalled();
+  });
+
+  it("records the run once the jobs have finished", async () => {
+    const body = await (await post()).json();
+
+    expect(body.gate).toBe("sweep_due");
+    expect(gate.recordSchedulerRun).toHaveBeenCalledTimes(1);
+    expect(gate.recordSchedulerRun.mock.calls[0]![0]).toBeInstanceOf(Date);
+  });
+
+  it("runs the jobs when the gate cannot be read, but reports it as degraded", async () => {
+    gate.checkGate.mockResolvedValueOnce({ run: true, reason: "unreadable" });
+
+    const body = await (await post()).json();
+
+    // Failing open keeps the work happening; reporting it keeps the cost from
+    // quietly returning. The Actions tick turns red on `degraded`.
+    expect(calls).toHaveLength(Object.keys(jobs).length);
+    expect(body.degraded).toBe(true);
+    expect(body.failedJobs).toEqual(["schedulerGate"]);
+  });
+
+  it("reports a run it could not record, since every later tick would then run", async () => {
+    gate.recordSchedulerRun.mockResolvedValueOnce(false);
+
+    const body = await (await post()).json();
+
+    expect(body.degraded).toBe(true);
+    expect(body.failedJobs).toEqual(["schedulerGate"]);
+  });
+
+  it("reports a nudge whose window could not be held open", async () => {
+    gate.keepSchedulerAwake.mockResolvedValueOnce(false);
+
+    const body = await (
+      await post(SECRET, { "x-nudge-reason": "change approved" })
+    ).json();
+
+    expect(calls).toHaveLength(Object.keys(jobs).length);
+    expect(body.failedJobs).toEqual(["schedulerGate"]);
+  });
+
+  it("consults no gate for a caller without the secret", async () => {
+    await post("wrong-secret", { "x-nudge-reason": "spoofed" });
+
+    expect(gate.checkGate).not.toHaveBeenCalled();
+    expect(gate.keepSchedulerAwake).not.toHaveBeenCalled();
   });
 });
