@@ -11,6 +11,7 @@ import {
   dispatchInternalChangeRequest,
   type NewInternalRequestInput,
 } from "@/db/repositories/admin/internal-requests";
+import { nudgeScheduler } from "@/lib/scheduler/nudge";
 
 const CATEGORIES: readonly NonNullable<NewInternalRequestInput["category"]>[] = [
   "content",
@@ -83,6 +84,12 @@ export async function submitInternalRequestAction(
   revalidatePath("/admin/mortensenweb");
 
   if (!result.ok) return { ok: false, message: result.message };
+
+  // The same nudge a client's submit gets. Auto-dispatch picks this up from
+  // the scheduler, which no longer runs on an idle tick — without the nudge it
+  // would wait for the next six-hourly sweep. See `lib/scheduler/gate.ts`.
+  nudgeScheduler("internal request submitted");
+
   return {
     ok: true,
     message:

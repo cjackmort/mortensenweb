@@ -26,6 +26,7 @@ import {
   sizeLabel,
 } from "@/lib/github/issue";
 import { isGithubConfigured } from "@/lib/github/app";
+import { keepSchedulerAwakeForJob } from "@/lib/scheduler/gate";
 import { attachmentUrl, mediaAssetUrl } from "@/lib/storage/signed-links";
 import { snapshotRequestAssets } from "@/db/repositories/client/request-assets";
 import type { AdminContext } from "../context";
@@ -408,6 +409,7 @@ async function runDispatch(
   const timeoutMinutes = Number(
     process.env.AGENT_JOB_TIMEOUT_MINUTES ?? DEFAULT_TIMEOUT_MINUTES,
   );
+  const timeoutAt = new Date(Date.now() + timeoutMinutes * 60_000);
 
   const inserted = await db
     .insert(agentJobs)
@@ -417,11 +419,16 @@ async function runDispatch(
       repositoryConnectionId: repo.connectionId,
       baseRef: repo.defaultBranch,
       status: "queued",
-      timeoutAt: new Date(Date.now() + timeoutMinutes * 60_000),
+      timeoutAt,
     })
     .returning({ id: agentJobs.id });
 
   const agentJobId = inserted[0]!.id;
+
+  // A run that dies without a word sends no webhook to wake the scheduler, so
+  // the job itself holds it awake until the watchdog can reclaim it. Otherwise
+  // the client reads "being worked on" until the next six-hourly sweep.
+  await keepSchedulerAwakeForJob(timeoutAt);
 
   // Recorded, never acted on. §13.2: text that looks like an instruction is
   // surfaced to the operator rather than filtered out of the client's words.

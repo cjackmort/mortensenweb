@@ -68,6 +68,14 @@ jobs:
             exit 0
           fi
 
+          # Scheduled runs pass through the endpoint's gate like Netlify's do,
+          # and most of them answer "skipped" without touching the database —
+          # an ungated hourly call would keep Neon awake on its own. A run
+          # started by hand is someone diagnosing, though, and a skipped tick
+          # would show them nothing, so that one is forced through.
+          FORCE=0
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then FORCE=1; fi
+
           # --fail-with-body so a non-2xx fails the job *and* still prints what
           # the endpoint said. Without the body, a 401 is indistinguishable
           # from a 500 in the run log, and those need different fixes.
@@ -76,6 +84,7 @@ jobs:
             --max-time 120 \
             -X POST \
             -H "x-cron-secret: ${CRON_SECRET}" \
+            -H "x-cron-force: ${FORCE}" \
             "${PORTAL_URL%/}/api/cron" | tee response.json
           echo
 

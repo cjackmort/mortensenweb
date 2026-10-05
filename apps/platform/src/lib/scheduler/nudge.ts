@@ -16,6 +16,12 @@ import { after } from "next/server";
  * as the safety net; every job on that endpoint is idempotent, so running it
  * twice is harmless.
  *
+ * A nudge is also what keeps the scheduler running afterwards. The endpoint
+ * skips ticks while the portal is idle, so that Neon can sleep, and the
+ * `x-nudge-reason` header is what tells it a client just did something and the
+ * next ticks have follow-up work to do (see `gate.ts`). An action that creates
+ * scheduled work and does not nudge waits for the six-hourly sweep.
+ *
  * Silent when `CRON_SECRET` or the site URL is unset — the cron endpoint would
  * refuse the call anyway, and development has no scheduler to nudge.
  */

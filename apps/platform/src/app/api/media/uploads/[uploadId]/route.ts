@@ -9,6 +9,10 @@ import {
   receivedPartNumbers,
 } from "@/db/repositories/client/media-uploads";
 import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
+import { keepSchedulerAwake } from "@/lib/scheduler/gate";
+
+/** Derivative jobs the completion runs inline before leaving the rest to the scheduler. */
+const INLINE_DERIVATIVE_JOBS = 2;
 
 /**
  * Finishing, resuming, or giving up on an upload.
@@ -86,13 +90,28 @@ export async function POST(
     // request a person is waiting on is the mistake this whole design exists to
     // undo. `after()` gives the queue a nudge once the response has gone, so
     // the usual wait is seconds rather than the next scheduled tick.
+    //
+    // When that leaves work behind — a full batch, or a resize that failed and
+    // backed off — the scheduler is what finishes it, so it is held awake for
+    // the retries. Without that, an idle portal would leave the photo at
+    // "Processing…" until the next six-hourly sweep.
     after(async () => {
       try {
-        await runDerivativeJobs(await getDb(), 2);
+        const outcomes = await runDerivativeJobs(
+          await getDb(),
+          INLINE_DERIVATIVE_JOBS,
+        );
+        if (
+          outcomes.length >= INLINE_DERIVATIVE_JOBS ||
+          outcomes.some((outcome) => !outcome.ok)
+        ) {
+          await keepSchedulerAwake("media derivatives pending");
+        }
       } catch (error) {
         console.warn("[media] derivative nudge failed", {
           message: error instanceof Error ? error.message : "unknown",
         });
+        await keepSchedulerAwake("media derivatives pending");
       }
     });
 

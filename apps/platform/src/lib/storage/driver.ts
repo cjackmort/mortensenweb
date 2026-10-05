@@ -135,8 +135,12 @@ class LocalDiskDriver implements StorageDriver {
  *
  * `NETLIFY` is kept first: it is still correct during a build, which is where
  * anything that touches storage at build time would run.
+ *
+ * Exported because the scheduler's gate keeps its state in Blobs too, and a
+ * second copy of this check would be the place the next renamed variable gets
+ * fixed once and missed once.
  */
-function onNetlify(): boolean {
+export function onNetlify(): boolean {
   return Boolean(
     process.env.NETLIFY ||
       process.env.NETLIFY_BLOBS_CONTEXT ||
@@ -159,7 +163,7 @@ function onNetlify(): boolean {
  * production upload written to a deploy-scoped store disappears the next time
  * the site deploys, taking a client's original with it.
  */
-function isProductionContext(): boolean {
+export function isProductionContext(): boolean {
   const context = process.env.CONTEXT;
   if (context) return context === "production";
   return process.env.NODE_ENV === "production";

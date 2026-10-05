@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { processGithubDelivery } from "@/db/repositories/admin/webhooks";
+import { keepSchedulerAwake } from "@/lib/scheduler/gate";
 import { verifyGithubSignature } from "@/lib/webhooks/signature";
 
 /**
@@ -95,6 +96,17 @@ export async function POST(request: Request): Promise<Response> {
 
     if (outcome.status === "rejected" && !signatureValid) {
       return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
+    }
+
+    // A processed delivery moved an agent job — a pull request opened or
+    // merged, a build finished — and the scheduler's follow-ups (verifying the
+    // preview, confirming the deploy reached the live site) come next. Only
+    // `processed`: the App is installed on every repository, and keeping the
+    // loop awake for every delivery — CI runs and pull requests that belong to
+    // no job — would keep the database on through an ordinary afternoon of
+    // commits.
+    if (outcome.status === "processed") {
+      await keepSchedulerAwake(`github ${event}`);
     }
 
     // 202: received and dealt with. The body names the outcome for the delivery
