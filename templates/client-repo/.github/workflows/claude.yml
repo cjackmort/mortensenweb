@@ -1,9 +1,11 @@
 # =============================================================================
-# TEMPLATE — copied into every client repository at scaffold time.
+# Installed by the Mortensen Web Co. portal. Edits here are overwritten.
 #
-# A caller, nothing more. The agent's instructions, model, tool allowlist and
-# skills live in the agency repository's reusable workflow, so an improvement
-# there reaches this site on its next request without this file changing.
+# The portal writes this file into every site's repository when automated work
+# is allowed, and again from "Install tokens and agent workflow". It is the
+# same nine lines everywhere, whatever built the site — so a change to the
+# agent's prompt, model or skills is made once, in the shared workflow below,
+# and reaches every site on its next request.
 #
 # Gated on the `claude` label so a human opening an ordinary issue never starts
 # a billed run by accident.
@@ -14,8 +16,6 @@
 # meant four workflow runs for one request. The concurrency group did not save
 # us: `cancel-in-progress: false` *queues* the duplicates rather than dropping
 # them, so a second full agent run started the moment the first finished.
-# Measured on one request: two runs of 4m40s and 13m24s, both billed, both
-# producing nothing.
 #
 # Listening only for the `claude` label, and only when that is the label that
 # was just added, fires exactly once however many other labels the portal
@@ -47,8 +47,11 @@ jobs:
     # The label that was just added, not merely present. `contains(...)` is true
     # on every one of the portal's labelling events; this is true on exactly one.
     if: github.event.label.name == 'claude'
-    uses: cjackmort/mortensenweb/.github/workflows/client-change.yml@main
+    uses: cjackmort/mortensenweb-agent/.github/workflows/client-change.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
       labels: ${{ join(github.event.issue.labels.*.name, ',') }}
+      # Node 22 builds every site we make; Astro 7 requires it, and a site with
+      # no build step never uses it.
+      node-version: "22"
     secrets: inherit
