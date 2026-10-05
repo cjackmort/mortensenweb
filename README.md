@@ -13,12 +13,24 @@ automation pipeline for website changes.
 ```
 mortensenweb/
 ├── apps/
-│   ├── platform/          Admin + client portal        (Stage 2)
-│   └── portfolio/         Public agency site           (Stage 2)
+│   └── platform/          Admin + client portal        (Stage 2)
 ├── packages/
+│   ├── plans/             The care plans, served at /api/plans
 │   └── theme-library/     Design system + themes       (Stage 4)
+├── templates/client-repo/ What a new client repository starts from
 └── docs/                  Architecture and runbooks
 ```
+
+Two things that used to live here have their own repositories, so this one can
+be private:
+
+- **mortensenweb.com** is `cjackmort/site-mortensenweb` (private). It goes through
+  the same pipeline as a client site, and reads its prices from `/api/plans` at
+  build time.
+- **The shared agent and deploy workflows**, the agent's skills and the site
+  checks are `cjackmort/mortensenweb-agent` (public). A client repository's
+  workflows can only read that client's repository and public ones, so these
+  could not stay in a private repository.
 
 Client and prospect websites are **not** in this repository. Each gets its own private repository
 (`client-<company>-website`, `prospect-<business>-<job-id>`) so the Claude automation can operate

@@ -198,7 +198,7 @@ export default async function MortensenWebPage({
           </div>
           <p className="muted" style={{ marginTop: 0 }}>
             The same request a client submits, going through the same
-            pipeline against <code>cjackmort/mortensenweb</code> — a real way
+            pipeline against <code>cjackmort/site-mortensenweb</code> — a real way
             to test a change before deciding whether a client should see it
             offered.
           </p>

@@ -28,5 +28,5 @@ permissions:
 
 jobs:
   deploy:
-    uses: cjackmort/mortensenweb/.github/workflows/client-deploy.yml@main
+    uses: cjackmort/mortensenweb-agent/.github/workflows/client-deploy.yml@main
     secrets: inherit
