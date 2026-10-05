@@ -31,6 +31,8 @@ import { CompPanel } from "./comp-forms";
 import { InternalPanel } from "./internal-forms";
 import { listActivePlans } from "@/db/repositories/admin/prospects";
 import { getClientComp } from "@/db/repositories/admin/clients";
+import { getBusinessProfile } from "@/db/repositories/admin/business-profile";
+import { ProfilePanel } from "./profile-forms";
 
 const BRIEF_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -86,13 +88,14 @@ export default async function ClientDetailPage({
     throw error;
   }
 
-  const [portalUsers, siteRows, invoices, briefs, compPlans, comp] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, compPlans, comp, profile] = await Promise.all([
     listOrganizationUsers(ctx, db, detail.organization.id),
     listSitesWithAnalytics(ctx, db, detail.organization.id),
     listClientPaymentRequests(ctx, db, detail.organization.id),
     listBriefs(ctx, db, detail.organization.id),
     listActivePlans(db),
     getClientComp(ctx, db, publicId),
+    getBusinessProfile(db, detail.organization.id),
   ]);
 
   const { client, organization, subscription, requests } = detail;
@@ -174,6 +177,24 @@ export default async function ClientDetailPage({
               : "No active subscription"}
           </dd>
         </dl>
+      </section>
+
+      <section className="card" id="general-information">
+        <div className="card-head">
+          <h2>General information</h2>
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          What the website says about the business. Filled in once, and given to
+          the agent on every request and brief for this client, so nobody has to
+          repeat the phone number or the hours.
+        </p>
+        <ProfilePanel
+          clientPublicId={client.publicId}
+          details={profile?.details ?? {}}
+          sites={siteRows.map((site) => ({ publicId: site.publicId, name: site.name }))}
+          updatedAt={profile?.updatedAt.toISOString() ?? null}
+          lastAppliedAt={profile?.lastAppliedAt?.toISOString() ?? null}
+        />
       </section>
 
       <section className="card">

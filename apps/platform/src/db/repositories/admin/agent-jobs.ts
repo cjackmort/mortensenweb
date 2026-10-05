@@ -30,6 +30,7 @@ import { isGithubConfigured } from "@/lib/github/app";
 import { keepSchedulerAwakeForJob } from "@/lib/scheduler/gate";
 import { attachmentUrl, mediaAssetUrl } from "@/lib/storage/signed-links";
 import { snapshotRequestAssets } from "@/db/repositories/client/request-assets";
+import { profileEntriesFor } from "./business-profile";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -519,6 +520,9 @@ async function runDispatch(
         allowedPaths: input.allowedPaths,
         clientNotes,
         revision: input.revision,
+        // Read at dispatch, so a run always carries the profile as it is now
+        // rather than as it was when the request was written.
+        businessProfile: await profileEntriesFor(db, request.organizationId),
       }),
       labels: [
         "portal-request",
