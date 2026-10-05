@@ -59,9 +59,11 @@ const DISPATCHABLE = new Set(["submitted", "triaged", "approved"]);
 
 /**
  * Statuses from which a second attempt is meaningful: a preview was built and
- * a reviewer sent it back. The caller retires the earlier job first.
+ * a reviewer sent it back — the operator before release (`pr_open`), or the
+ * client after it (`changes_requested`). The caller retires the earlier job
+ * first; see `revisions.ts`.
  */
-const REVISABLE = new Set(["pr_open"]);
+const REVISABLE = new Set(["pr_open", "changes_requested"]);
 
 // ---------------------------------------------------------------------------
 // Daily quota
@@ -339,7 +341,23 @@ async function mediaAssetLinksFor(
   return links.length > 0 ? links : undefined;
 }
 
-type DispatchActor = { automatic: false; userId: string } | { automatic: true };
+export type DispatchActor = { automatic: false; userId: string } | { automatic: true };
+
+/**
+ * A second attempt, for whoever sent the preview back.
+ *
+ * Exported for `revisions.ts`, which retires the earlier job around it. An
+ * operator's hold and a client's request for changes both arrive here, so the
+ * actor is the caller's rather than always an admin session — a client's
+ * request is dispatched by the schedule, with nobody signed in behind it.
+ */
+export async function dispatchRevision(
+  db: Database,
+  input: DispatchInput & { revision: RevisionInput },
+  actor: DispatchActor,
+): Promise<DispatchOutcome> {
+  return runDispatch(db, input, actor);
+}
 
 async function runDispatch(
   db: Database,
