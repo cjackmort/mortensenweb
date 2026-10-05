@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { JetBrains_Mono, Jost, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
+
+/*
+ * mortensenweb.com's three faces, self-hosted by next/font at build time — the
+ * portal's CSP allows fonts only from itself, and a client should not wait on
+ * a third-party font host to read their own dashboard.
+ */
+const sans = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono", display: "swap" });
+const display = Jost({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Mortensen Web Co. — Portal",
@@ -25,8 +35,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f7f9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0c0e" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f5f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1116" },
   ],
 };
 
@@ -36,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
       <body>{children}</body>
     </html>
   );
