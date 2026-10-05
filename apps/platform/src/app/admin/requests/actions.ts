@@ -163,6 +163,9 @@ export async function holdPreviewAction(
 
   const outcome = await holdPreview(adminContextFrom(user), await getDb(), agentJobPublicId, reason);
   revalidatePath("/admin/requests");
+  // Sending it back restarts the work, which the client's request status shows.
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/requests");
   return outcome;
 }
 

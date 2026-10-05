@@ -109,22 +109,25 @@ function ReleaseCard({ item }: { item: PendingRelease }) {
             value={item.agentJobPublicId}
           />
           <label htmlFor={`hold-${item.agentJobPublicId}`}>
-            What is wrong with it?
+            What needs changing?
           </label>
           <textarea
             id={`hold-${item.agentJobPublicId}`}
             name="reason"
-            placeholder="Wrong photo / broke the nav on mobile / copy is off…"
+            required
+            placeholder="The top of the sculpture is cut off / still too dark / broke the nav on mobile…"
           />
-          {/* Internal only. Telling a client that something they never saw was
-              rejected raises a worry rather than settling one. */}
+          {/* The agent works from these notes, so they are required. Not shown
+              to the client: telling them something they never saw was rejected
+              raises a worry rather than settling one. */}
           <p className="field-hint">
-            Recorded for you, not shown to the client — they have not seen this
-            preview.
+            The agent redoes it from this preview using your notes, and the new
+            preview comes back here. The client is not told — they have not seen
+            this one.
           </p>
           <div className="actions">
             <button type="submit" disabled={holding}>
-              {holding ? "Holding…" : "Hold it"}
+              {holding ? "Sending back…" : "Send back to the agent"}
             </button>
             <button
               type="button"
