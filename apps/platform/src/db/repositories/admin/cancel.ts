@@ -171,7 +171,12 @@ export async function cancelChangeRequest(
     },
   });
 
-  const pullRequestClosed = await closeAbandonedPullRequest(db, request.id, job);
+  const pullRequestClosed = await closeAbandonedPullRequest(
+    db,
+    request.id,
+    job,
+    "Closing this — the client cancelled the change request it was raised for.",
+  );
 
   return {
     ok: true,
@@ -190,8 +195,12 @@ export async function cancelChangeRequest(
  * cancellation is already recorded and must not be undone by GitHub being
  * unreachable. The failure is written to the internal timeline so it is
  * visible to an operator rather than only to a log nobody reads.
+ *
+ * Also used when a held preview is sent back for another attempt, which
+ * replaces the pull request rather than calling the change off — hence the
+ * caller's own `comment`.
  */
-async function closeAbandonedPullRequest(
+export async function closeAbandonedPullRequest(
   db: Database,
   requestId: string,
   job:
@@ -203,6 +212,7 @@ async function closeAbandonedPullRequest(
         defaultBranch: string | null;
       }
     | undefined,
+  comment: string,
 ): Promise<boolean> {
   if (!job?.prNumber || !job.installationId || !job.owner || !job.name) {
     return false;
@@ -217,11 +227,7 @@ async function closeAbandonedPullRequest(
   try {
     // Comment first. If the close succeeds and the comment does not, the
     // repository is left with a pull request closed for no stated reason.
-    await commentOnIssue(
-      repo,
-      job.prNumber,
-      "Closing this — the client cancelled the change request it was raised for.",
-    );
+    await commentOnIssue(repo, job.prNumber, comment);
 
     // Read the branch name before closing: `head.ref` is only available from
     // the pull request itself, and `agent_jobs` records the SHA rather than the

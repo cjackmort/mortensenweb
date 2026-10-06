@@ -159,7 +159,7 @@ export type DecisionOutcome =
   | { ok: true; decision: "approved" | "changes_requested"; headSha: string }
   | {
       ok: false;
-      reason: "not_found" | "no_preview" | "already_decided" | "wrong_status";
+      reason: "not_found" | "no_preview" | "already_decided" | "wrong_status" | "no_note";
       message: string;
     };
 
@@ -181,6 +181,17 @@ export async function recordPreviewDecision(
   note?: string,
 ): Promise<DecisionOutcome> {
   assertMutable(ctx);
+
+  // The agent starts again from these words, so "something's not right" with
+  // nothing after it would start a run with nothing to go on.
+  const said = note?.trim() ?? "";
+  if (decision === "changes_requested" && !said) {
+    return {
+      ok: false,
+      reason: "no_note",
+      message: "Tell us what you'd like different, so we can get it right.",
+    };
+  }
 
   const job = await findJobForRequest(db, ctx, requestPublicId);
   if (!job) throw new NotFoundError();
@@ -253,10 +264,11 @@ export async function recordPreviewDecision(
       body:
         decision === "approved"
           ? "You approved this change. We're putting it live now."
-          : note?.trim()
-            ? `You asked for changes: ${note.trim()}`
-            : "You asked for more changes before this goes live.",
+          : `You asked for changes: ${said}`,
       visibility: "client_visible",
+      // Kept on its own as well as in the sentence: the agent's next run is
+      // handed the client's words, not our wording around them.
+      ...(decision === "changes_requested" ? { metadata: { note: said } } : {}),
     });
   }
 

@@ -28,6 +28,7 @@ function job(name: string) {
 
 const jobs = {
   dispatchSubmittedRequests: job("dispatchSubmittedRequests"),
+  redoChangesRequested: job("redoChangesRequested"),
   expireStalledJobs: job("expireStalledJobs"),
   reverifyPendingPreviews: job("reverifyPendingPreviews"),
   reverifyLiveSites: job("reverifyLiveSites"),
@@ -71,6 +72,9 @@ vi.mock("@/db/repositories/admin/agent-jobs", () => ({
 vi.mock("@/db/repositories/admin/webhooks", () => ({
   reverifyPendingPreviews: (...a: unknown[]) => jobs.reverifyPendingPreviews(...a),
 }));
+vi.mock("@/db/repositories/admin/revisions", () => ({
+  redoChangesRequested: (...a: unknown[]) => jobs.redoChangesRequested(...a),
+}));
 vi.mock("@/db/repositories/admin/launch", () => ({
   reverifyLiveSites: (...a: unknown[]) => jobs.reverifyLiveSites(...a),
 }));
@@ -98,6 +102,7 @@ const SECRET = "test-cron-secret";
 /** Every result key the endpoint is expected to report, by feature. */
 const LOOP_KEYS = [
   "requestsDispatched",
+  "changesRedone",
   "previewsVerified",
   "jobsExpired",
   "shippedChanges",

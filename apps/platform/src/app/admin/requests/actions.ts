@@ -10,6 +10,7 @@ import {
   reclaimStalledRequest,
 } from "@/db/repositories/admin/agent-jobs";
 import { holdPreview, releasePreview } from "@/db/repositories/admin/release";
+import { redoAfterClientChanges } from "@/db/repositories/admin/revisions";
 
 /**
  * Starting automated work on a request.
@@ -57,12 +58,18 @@ export async function startAutomatedWork(
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const outcome = await dispatchChangeRequest(ctx, db, {
-    requestPublicId,
-    allowedPaths,
-  });
+  // A client sent their preview back: redo it from that preview with their
+  // notes, rather than starting the request over from nothing.
+  const outcome =
+    formData.get("mode") === "redo"
+      ? await redoAfterClientChanges(db, requestPublicId, {
+          automatic: false,
+          userId: ctx.userId,
+        })
+      : await dispatchChangeRequest(ctx, db, { requestPublicId, allowedPaths });
 
   revalidatePath("/admin/requests");
+  revalidatePath("/dashboard/requests");
 
   if (!outcome.ok) {
     return { ok: false, message: outcome.message };
@@ -163,6 +170,9 @@ export async function holdPreviewAction(
 
   const outcome = await holdPreview(adminContextFrom(user), await getDb(), agentJobPublicId, reason);
   revalidatePath("/admin/requests");
+  // Sending it back restarts the work, which the client's request status shows.
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/requests");
   return outcome;
 }
 

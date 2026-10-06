@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   agentJobs,
@@ -14,6 +14,7 @@ import { newPublicId } from "@/lib/ids";
 import { parseAgentJobMarker, parseEscalationMarker } from "@/lib/github/issue";
 import { previewUrlFor, verifyUrlServes } from "@/lib/netlify/api";
 import { notifyClientOfRequest } from "@/lib/notify/request";
+import { plainSummary } from "@/lib/requests/summary";
 
 /**
  * Processing a GitHub webhook.
@@ -277,6 +278,20 @@ async function handlePullRequest(
 
   if (action === "closed") {
     const merged = Boolean(pr.merged);
+
+    // A preview sent back for another attempt has its pull request closed by
+    // the portal, and a newer job is already working on the request. That
+    // close is about this attempt only — passing it on would mark the request
+    // closed and tell the client their change was dropped, while the agent is
+    // still working on it.
+    if (!merged && job.requestId && (await isSuperseded(db, job))) {
+      await db
+        .update(agentJobs)
+        .set({ status: "cancelled", finishedAt: now })
+        .where(eq(agentJobs.id, job.id));
+      return { status: "processed", note: "Superseded attempt closed." };
+    }
+
     await db
       .update(agentJobs)
       .set({
@@ -428,6 +443,23 @@ async function handlePullRequest(
   return { status: "processed", note: `Pull request #${pr.number} recorded.` };
 }
 
+/** Whether a later job has taken over this job's request. */
+async function isSuperseded(
+  db: Database,
+  job: { id: string; requestId: string | null },
+): Promise<boolean> {
+  if (!job.requestId) return false;
+
+  const newest = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(eq(agentJobs.requestId, job.requestId))
+    .orderBy(desc(agentJobs.createdAt))
+    .limit(1);
+
+  return newest[0] !== undefined && newest[0].id !== job.id;
+}
+
 // ---------------------------------------------------------------------------
 // Build completion
 // ---------------------------------------------------------------------------
@@ -488,6 +520,9 @@ async function handleBuildCompletion(
         eq(agentJobs.headSha, headSha),
       ),
     )
+    // Newest first: a second attempt is built on the first one's commits, so
+    // the two can share a head until the new run pushes its own.
+    .orderBy(desc(agentJobs.createdAt))
     .limit(1);
 
   const job = jobs[0];
@@ -549,20 +584,7 @@ async function handleBuildCompletion(
       ),
     );
 
-  if (job.requestId) {
-    await db.insert(requestEvents).values({
-      requestId: job.requestId,
-      actorType: "system",
-      kind: "preview_ready",
-      body: "Your preview is ready to look at.",
-      visibility: "client_visible",
-      metadata: { previewUrl: job.previewUrl },
-    });
-    // The email is what turns a verified preview into an approved one. Sent
-    // after the event is recorded, and idempotent, so the scheduled re-check
-    // that can verify the same preview a minute later sends nothing twice.
-    await notifyClientOfRequest(db, job.requestId, "preview_ready");
-  }
+  if (job.requestId) await recordPreviewVerified(db, job.requestId, job.previewUrl);
 
   return { status: "processed", note: "Preview verified." };
 }
@@ -644,6 +666,29 @@ export async function processGithubDelivery(
 }
 
 /**
+ * A preview answered, so it is ready for an operator to look at.
+ *
+ * Internal, and no email: the client hears about a preview when an operator
+ * releases it (`admin/release.ts`), not when it builds. Telling them here sent
+ * a link to work nobody had checked yet — including previews the operator
+ * then held back.
+ */
+async function recordPreviewVerified(
+  db: Database,
+  requestId: string,
+  previewUrl: string,
+): Promise<void> {
+  await db.insert(requestEvents).values({
+    requestId,
+    actorType: "system",
+    kind: "preview_ready",
+    body: "Preview built and answering. Waiting for an operator to look at it.",
+    visibility: "internal",
+    metadata: { previewUrl },
+  });
+}
+
+/**
  * Re-check previews that built successfully but did not answer in time.
  *
  * Netlify publishes an alias a moment after the deploy reports success, so a
@@ -685,17 +730,7 @@ export async function reverifyPendingPreviews(db: Database): Promise<number> {
       .set({ status: "ready", verifiedAt: now })
       .where(eq(previewDeployments.agentJobId, job.id));
 
-    if (job.requestId) {
-      await db.insert(requestEvents).values({
-        requestId: job.requestId,
-        actorType: "system",
-        kind: "preview_ready",
-        body: "Your preview is ready to look at.",
-        visibility: "client_visible",
-        metadata: { previewUrl: job.previewUrl },
-      });
-      await notifyClientOfRequest(db, job.requestId, "preview_ready");
-    }
+    if (job.requestId) await recordPreviewVerified(db, job.requestId, job.previewUrl);
 
     verified += 1;
   }
@@ -705,26 +740,13 @@ export async function reverifyPendingPreviews(db: Database): Promise<number> {
 
 
 /**
- * The part of a pull request description meant for the client.
- *
- * Everything the portal needs from the body — the job marker, an escalation
- * marker — is an HTML comment, and everything after those is the agent's
- * write-up "for a non-technical reader". Comments are stripped, markdown
- * headings are flattened to plain lines, and the result is capped so a
- * verbose run cannot push the approval buttons off a phone screen. Empty
- * when the agent wrote nothing beyond the marker, so the timeline shows no
- * blank entry.
+ * The part of a pull request description meant for the client: one plain
+ * paragraph, without the file list, the notes for the agency, or the tool's
+ * sign-off. See `lib/requests/summary.ts`. Empty when the agent wrote nothing
+ * for the client, so the timeline shows no blank entry.
  */
 export function clientSummaryFromPullRequest(
   body: string | null | undefined,
 ): string | null {
-  if (!body) return null;
-  const text = body
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!text) return null;
-  return text.length > 1500 ? `${text.slice(0, 1497).trimEnd()}…` : text;
+  return plainSummary(body);
 }

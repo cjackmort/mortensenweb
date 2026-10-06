@@ -91,8 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FALLBACK_LABELS: ${{ inputs.labels }}
           ISSUE: ${{ inputs.issue_number }}
-          MODEL_SMALL: ${{ vars.AGENT_MODEL_SMALL || 'claude-opus-5' }}
-          MODEL_LARGE: ${{ vars.AGENT_MODEL_LARGE || 'claude-opus-5' }}
+          MODEL_SMALL: ${{ vars.AGENT_MODEL_SMALL || 'claude-opus-5-5' }}
+          MODEL_LARGE: ${{ vars.AGENT_MODEL_LARGE || 'claude-opus-5-5' }}
         run: |
           LABELS="$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || true)"
           if [ -z "$LABELS" ]; then
@@ -208,6 +208,17 @@ jobs:
             once checks pass. Anything structural is held for a human to review,
             which is the expected outcome for that kind of change — not a
             failure, and not a reason to reshape your work to look smaller.
+
+            ## A second attempt
+
+            If the issue has a section headed "This is a second attempt", an
+            earlier run's preview was reviewed and sent back. Follow that
+            section: start from the earlier pull request's commits, change
+            what the reviewer's notes ask for, and open a new pull request
+            carrying this issue's marker. The notes describe what is wrong
+            with the result you are starting from — look at it before you
+            change anything. Where the notes and the original request
+            disagree, the notes win.
 
             ## Verify before you open the pull request
 

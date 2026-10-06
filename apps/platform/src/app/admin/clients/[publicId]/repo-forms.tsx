@@ -282,7 +282,7 @@ export function RepositoryPanel({
             anything already in flight finishes and still needs the
             client&rsquo;s approval before it goes live. Allowing it also
             installs the Claude and Netlify tokens from the portal&rsquo;s
-            environment into the repository.
+            environment, and the shared agent workflow, into the repository.
           </p>
 
           {connected.allowlisted && (
@@ -295,14 +295,16 @@ export function RepositoryPanel({
               <form action={tokenAction}>
                 <input type="hidden" name="sitePublicId" value={sitePublicId} />
                 <button type="submit" className="secondary" disabled={installingTokens}>
-                  {installingTokens ? "Installing…" : "Install tokens from the portal"}
+                  {installingTokens ? "Installing…" : "Install tokens and agent workflow"}
                 </button>
               </form>
               <p className="field-hint">
                 Copies <code>CLAUDE_CODE_OAUTH_TOKEN</code> and{" "}
                 <code>NETLIFY_AUTH_TOKEN</code> from the portal&rsquo;s
-                environment into this repository. Use it after replacing either
-                token in Netlify; nothing else needs to change.
+                environment into this repository, and writes the shared agent
+                workflow into <code>.github/workflows/claude.yml</code>,
+                replacing any older copy. Use it after replacing either token in
+                Netlify, or on a site set up before the portal did this.
               </p>
             </>
           )}

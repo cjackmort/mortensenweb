@@ -235,6 +235,62 @@ export async function deleteBranch(
 }
 
 // ---------------------------------------------------------------------------
+// Files
+// ---------------------------------------------------------------------------
+
+/**
+ * UTF-8 to base64 and back. `btoa` alone takes Latin-1, and the files written
+ * here contain em dashes; passing one straight through throws.
+ */
+function encodeBase64(text: string): string {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeBase64(base64: string): string {
+  const binary = atob(base64.replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+}
+
+/** A file's text and blob sha on a branch, or null when it does not exist. */
+export async function getFileContent(
+  repo: Repo,
+  path: string,
+  ref: string,
+): Promise<{ sha: string; content: string } | null> {
+  const { status, data } = await githubRequest<{ sha: string; content: string }>(
+    repo.installationId,
+    `${repoPath(repo)}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+    { allowStatuses: [404] },
+  );
+  if (status === 404) return null;
+  return { sha: data.sha, content: decodeBase64(data.content) };
+}
+
+/**
+ * Create or replace a file with one commit. `sha` is required to replace —
+ * GitHub refuses an update that does not name the blob it is replacing.
+ *
+ * Writing under `.github/workflows/` needs the App's Workflows permission.
+ */
+export async function putFileContent(
+  repo: Repo,
+  path: string,
+  input: { content: string; message: string; branch: string; sha?: string },
+): Promise<void> {
+  await githubRequest(repo.installationId, `${repoPath(repo)}/contents/${path}`, {
+    method: "PUT",
+    body: {
+      message: input.message,
+      content: encodeBase64(input.content),
+      branch: input.branch,
+      ...(input.sha ? { sha: input.sha } : {}),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Repository provisioning
 // ---------------------------------------------------------------------------
 

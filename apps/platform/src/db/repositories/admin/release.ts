@@ -7,6 +7,8 @@ import {
   organizations,
   requestEvents,
 } from "@/db/schema";
+import { notifyClientOfRequest } from "@/lib/notify/request";
+import { findJobByPublicId, retireAndRedispatch } from "./revisions";
 import type { AdminContext } from "../context";
 
 /**
@@ -124,6 +126,13 @@ export async function releasePreview(
       body: "Your change is ready to look at.",
       visibility: "client_visible",
     });
+    // The email waits for this moment, not for the build. Sent when the build
+    // verified, it handed the client a link to a preview nobody had checked —
+    // including ones an operator was about to send back. Once per preview, not
+    // once per request: a change the client sent back gets a second one.
+    await notifyClientOfRequest(db, job.requestId, "preview_ready", {
+      about: agentJobPublicId,
+    });
   }
 
   await db.insert(auditLog).values({
@@ -137,46 +146,106 @@ export async function releasePreview(
 }
 
 /**
- * Reject a preview before the client ever sees it.
+ * Send a preview back to the agent before the client ever sees it.
  *
- * Records why, internally, and leaves the request where it is. It does not
- * cancel and it does not notify — the operator is going to fix it or re-run it,
- * and telling a client that something they never saw was rejected would raise a
- * worry rather than settle one.
+ * The operator's notes go to a new agent run, which starts from the held pull
+ * request's commits and opens a new one; its preview comes back to this queue
+ * once built. Holding used to stop at recording the notes, so the held preview
+ * sat in the queue and nothing ever acted on what was wrong with it.
+ *
+ * The client is told nothing, here or by the new run. They never saw the held
+ * preview, and telling them something they never saw was rejected would raise
+ * a worry rather than settle one.
+ *
+ * **The held job is retired before the new run starts**, and only if it is
+ * still waiting, so a second click cannot start a second run. If the run cannot
+ * be started the job is put back: a preview that vanished from the queue with
+ * nothing replacing it is worse than the one the operator was unhappy with.
  */
 export async function holdPreview(
   ctx: AdminContext,
   db: Database,
   agentJobPublicId: string,
-  reason: string,
+  feedback: string,
 ): Promise<ReleaseOutcome> {
-  const rows = await db
-    .select({ id: agentJobs.id, requestId: agentJobs.requestId })
-    .from(agentJobs)
-    .where(eq(agentJobs.publicId, agentJobPublicId))
-    .limit(1);
+  const notes = feedback.trim();
+  if (!notes) {
+    return {
+      ok: false,
+      message: "Say what needs changing — the agent's next attempt works from these notes.",
+    };
+  }
 
-  const job = rows[0];
+  const job = await findJobByPublicId(db, agentJobPublicId);
   if (!job) return { ok: false, message: "No such preview." };
 
-  if (job.requestId) {
-    await db.insert(requestEvents).values({
-      requestId: job.requestId,
-      actorType: "admin",
-      actorUserId: ctx.userId,
-      kind: "preview_held",
-      body: reason.trim() || "Held by an operator before the client saw it.",
-      visibility: "internal",
-    });
+  const outcome = await retireAndRedispatch(db, {
+    job,
+    notes,
+    reviewer: "operator",
+    actor: { automatic: false, userId: ctx.userId },
+    // Released previews are the client's to send back, not the operator's.
+    stillWaiting: isNull(agentJobs.operatorReleasedAt),
+  });
+
+  if (!outcome.ok) {
+    return {
+      ok: false,
+      message:
+        outcome.reason === "not_waiting"
+          ? "That preview is no longer waiting on you."
+          : `Not sent back — ${outcome.message}`,
+    };
   }
+
+  await recordHold(ctx, db, {
+    requestId: job.requestId,
+    heldJobPublicId: agentJobPublicId,
+    revisionJobPublicId: outcome.agentJobPublicId,
+    issueNumber: outcome.issueNumber,
+    notes,
+  });
+
+  return {
+    ok: true,
+    message:
+      `Sent back to the agent with your notes (issue #${outcome.issueNumber}). ` +
+      "The new preview will appear here once it is built.",
+  };
+}
+
+/** Internal only: the notes, and which run replaced which. */
+async function recordHold(
+  ctx: AdminContext,
+  db: Database,
+  hold: {
+    requestId: string;
+    heldJobPublicId: string;
+    revisionJobPublicId: string;
+    issueNumber: number;
+    notes: string;
+  },
+): Promise<void> {
+  const links = {
+    revisionAgentJobPublicId: hold.revisionJobPublicId,
+    issueNumber: hold.issueNumber,
+  };
+
+  await db.insert(requestEvents).values({
+    requestId: hold.requestId,
+    actorType: "admin",
+    actorUserId: ctx.userId,
+    kind: "preview_held",
+    body: hold.notes,
+    visibility: "internal",
+    metadata: { heldAgentJobPublicId: hold.heldJobPublicId, ...links },
+  });
 
   await db.insert(auditLog).values({
     actorUserId: ctx.userId,
     action: "preview.held",
     entityType: "agent_job",
-    entityId: agentJobPublicId,
-    metadata: { reason: reason.trim() || null },
+    entityId: hold.heldJobPublicId,
+    metadata: { reason: hold.notes, ...links },
   });
-
-  return { ok: true, message: "Held. The client has not been shown it." };
 }

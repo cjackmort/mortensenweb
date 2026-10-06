@@ -8,8 +8,11 @@ import { connectExistingRepo } from "@/db/repositories/admin/connect-repo";
 import { allowlistRepository } from "@/db/repositories/admin/scaffold";
 import {
   describeTokenInstall,
+  describeWorkflowInstall,
+  installAgentWorkflow,
   installRepoTokens,
 } from "@/db/repositories/admin/repo-tokens";
+import type { Database } from "@/db/client";
 
 /**
  * Connecting a repository that already exists, and authorising work on it.
@@ -118,33 +121,62 @@ export async function setAllowlistAction(
     };
   }
 
-  // Allowing work is when the repository needs the credentials to do it. Without
-  // them the agent and deploy workflows fail on their first step, after the
-  // portal has already told the client the change is under way.
-  let tokens: RepoActionResult;
-  try {
-    tokens = describeTokenInstall(await installRepoTokens(db, ctx.userId, sitePublicId));
-  } catch (error) {
-    console.error("[repo] token install threw", error);
-    tokens = {
-      ok: false,
-      message:
-        "Could not reach GitHub to install its tokens; use “Install tokens from the portal” to retry.",
-    };
-  }
+  // Allowing work is when the repository needs the credentials and the workflow
+  // to do it. Without them a request opens an issue that nothing acts on, after
+  // the portal has already told the client the change is under way.
+  const installed = await installForAutomation(db, ctx.userId, sitePublicId);
 
   return {
-    ok: tokens.ok,
-    message: `Automated work is allowed on this repository. ${tokens.message}`,
+    ok: installed.ok,
+    message: `Automated work is allowed on this repository. ${installed.message}`,
   };
 }
 
 /**
- * Copy the portal's tokens into the site's repository again.
+ * The tokens and the agent workflow, each reported on its own.
+ *
+ * Attempted independently: a token that cannot be written is no reason not to
+ * install the workflow, and the operator needs to know which half failed.
+ */
+async function installForAutomation(
+  db: Database,
+  actorUserId: string,
+  sitePublicId: string,
+): Promise<RepoActionResult> {
+  const retry = "Use “Install tokens and agent workflow” to retry.";
+
+  let tokens: RepoActionResult;
+  try {
+    tokens = describeTokenInstall(await installRepoTokens(db, actorUserId, sitePublicId));
+  } catch (error) {
+    console.error("[repo] token install threw", error);
+    tokens = { ok: false, message: `Could not reach GitHub to install the tokens. ${retry}` };
+  }
+
+  let workflow: RepoActionResult;
+  try {
+    workflow = describeWorkflowInstall(await installAgentWorkflow(db, actorUserId, sitePublicId));
+  } catch (error) {
+    console.error("[repo] agent workflow install threw", error);
+    workflow = {
+      ok: false,
+      message: `Could not write the agent workflow — the GitHub App needs Workflows: read & write. ${retry}`,
+    };
+  }
+
+  return {
+    ok: tokens.ok && workflow.ok,
+    message: `${tokens.message} ${workflow.message}`,
+  };
+}
+
+/**
+ * Copy the portal's tokens and the agent workflow into the site's repository
+ * again.
  *
  * For after a token is replaced in the portal's environment — a Claude token
  * from `claude setup-token` lasts a year — and for a repository allowed before
- * the portal installed tokens on allowing.
+ * the portal installed either on allowing.
  */
 export async function installTokensAction(
   _previous: RepoActionResult | null,
@@ -158,13 +190,5 @@ export async function installTokensAction(
   const sitePublicId = String(formData.get("sitePublicId") ?? "").trim();
   if (!sitePublicId) return { ok: false, message: "No site specified." };
 
-  try {
-    return describeTokenInstall(await installRepoTokens(db, ctx.userId, sitePublicId));
-  } catch (error) {
-    console.error("[repo] token install threw", error);
-    return {
-      ok: false,
-      message: "Could not reach GitHub to install the tokens. Try again in a minute.",
-    };
-  }
+  return installForAutomation(db, ctx.userId, sitePublicId);
 }
