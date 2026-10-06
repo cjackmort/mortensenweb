@@ -12,6 +12,12 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html: string;
+  /**
+   * Overrides `RESEND_REPLY_TO` for this message. A new-lead email sets it to
+   * the customer, so the client answering from their inbox reaches the person
+   * who wrote in rather than us.
+   */
+  replyTo?: string;
 }
 
 export type SendResult =
@@ -54,9 +60,11 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
         subject: message.subject,
         text: message.text,
         html: message.html,
-        ...(process.env.RESEND_REPLY_TO
-          ? { reply_to: process.env.RESEND_REPLY_TO }
-          : {}),
+        ...(message.replyTo
+          ? { reply_to: message.replyTo }
+          : process.env.RESEND_REPLY_TO
+            ? { reply_to: process.env.RESEND_REPLY_TO }
+            : {}),
       }),
     });
 
