@@ -197,6 +197,35 @@ export const clients = pgTable(
   ],
 );
 
+/**
+ * The business's general information — what its website says about it.
+ *
+ * Distinct from the contact fields on `clients`, which are how the agency
+ * reaches the owner. These are what visitors see: the public phone, the
+ * opening hours, the service list. One per organization, attached by the
+ * portal to every agent run for that organization's sites so nobody has to
+ * restate them in each request. Field names: `src/lib/business-profile.ts`.
+ */
+export const businessProfiles = pgTable(
+  "business_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    /** When an operator last sent these details to the site as a change. */
+    lastAppliedAt: timestamp("last_applied_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("business_profiles_organization_key").on(t.organizationId),
+    check("business_profiles_details_object", sql`jsonb_typeof(${t.details}) = 'object'`),
+  ],
+);
+
 export const servicePlans = pgTable(
   "service_plans",
   {
