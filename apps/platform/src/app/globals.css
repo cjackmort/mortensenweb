@@ -1193,8 +1193,7 @@ button,
   transition:
     background 0.18s var(--ease-out),
     border-color 0.18s var(--ease-out),
-    color 0.18s var(--ease-out),
-    transform 0.3s var(--ease-out);
+    color 0.18s var(--ease-out);
 }
 
 button:hover,
@@ -1202,13 +1201,6 @@ button:hover,
   background: var(--accent-fill-hover);
   border-color: var(--accent-fill-hover);
   color: var(--on-accent);
-}
-
-@media (pointer: fine) {
-  button:not(:disabled):hover,
-  .button:hover {
-    transform: translateY(-1px);
-  }
 }
 
 button.secondary,
@@ -3464,4 +3456,20 @@ button.link:focus-visible {
   font: 500 clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem) / 1.15 var(--display);
   letter-spacing: -0.02em;
   color: var(--text);
+}
+
+/* Buttons that are surfaces rather than actions — a folder in a list, a photo
+   tile. They keep the page's type, not the brand button's mono capitals; a
+   bare class outranks the `button` rule, so these win wherever they sit. */
+.media-folder,
+.media-tile-body {
+  letter-spacing: normal;
+  text-transform: none;
+  box-shadow: none;
+}
+
+/* Hints are drawn up under the field they explain. In the media sidebar they
+   follow a meter or a list instead, and drawn up they sat on top of it. */
+.media-sidebar .field-hint {
+  margin-top: 0.6rem;
 }

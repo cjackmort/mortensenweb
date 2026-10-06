@@ -38,7 +38,7 @@ export default async function MediaPage({
   if (!user) redirect("/login");
   if (!user.organizationId) {
     return (
-      <main className="page">
+      <main className="shell">
         <div className="card">
           <div className="card-head">
             <h2>Media library</h2>
@@ -81,21 +81,16 @@ export default async function MediaPage({
   ]);
 
   return (
-    <main className="page">
-      <div className="page-intro">
-        <h1>Media library</h1>
-        <p>
-          Your photos and artwork, at full quality. Upload once and use them in
-          as many change requests as you like.
-        </p>
-        {/* Said plainly, because a client who suspects that filing a photo
-            might rearrange their website will not use folders at all. */}
-        <p className="field-hint">
-          Folders are for your own organisation. Moving images between them
-          never changes your website &mdash; that only happens when you ask for
-          a change and approve the preview.
-        </p>
+    <main className="shell">
+      <div className="masthead">
+        <h1>Media</h1>
       </div>
+      {/* One sentence, said plainly: a client who suspects that filing a photo
+          might rearrange their website will not use folders at all. */}
+      <p className="page-intro">
+        Your photos at full quality, ready to use in any request. Moving them
+        between folders never changes your website.
+      </p>
 
       <MediaLibrary
         folders={folders}
