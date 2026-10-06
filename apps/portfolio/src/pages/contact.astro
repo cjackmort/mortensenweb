@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import { SITE } from "../data/site";
+import { BUILDS, PLANS, dollars } from "@mortensenweb/plans";
 /**
  * Netlify Forms, not a route handler. The form must exist in the built HTML
  * for Netlify's build step to detect it; `form-name` identifies the
@@ -86,15 +87,33 @@ import { SITE } from "../data/site";
           </fieldset>
 
           <div>
-            <label for="budget">Rough budget for the build</label>
-            <select id="budget" name="budget">
-              <option value="">Not sure yet</option>
-              <option value="under-1500">Under $1,500</option>
-              <option value="1500-3000">$1,500 – $3,000</option>
-              <option value="3000-6000">$3,000 – $6,000</option>
-              <option value="over-6000">Over $6,000</option>
+            {/*
+              Was a budget range ("Under $1,500" upwards) until 2026-10-06,
+              when the build became three published prices. Asking for a
+              budget above every price we charge told a visitor we cost far
+              more than we do. Both lists come from the plans package, so they
+              cannot quote a different number from the pricing page.
+            */}
+            <label for="build">Which build sounds like you?</label>
+            <select id="build" name="build">
+              <option value="">Not sure — help me choose</option>
+              {BUILDS.map((b) => (
+                <option value={b.key}>{b.name} — {dollars(b.priceCents)}, {b.short}</option>
+              ))}
             </select>
-            <p class="hint">Helps us suggest the right size of site. Not a commitment.</p>
+            <p class="hint"><a class="link" href="/pricing/">What each build includes</a>. Not a commitment.</p>
+          </div>
+
+          <div>
+            <label for="plan">Interested in a monthly plan?</label>
+            <select id="plan" name="plan">
+              <option value="">Not sure yet</option>
+              <option value="none">No — just the site</option>
+              {PLANS.map((p) => (
+                <option value={p.key}>{p.name} — {dollars(p.monthlyCents)}/month</option>
+              ))}
+            </select>
+            <p class="hint">Optional. You can start, change or stop a plan any time.</p>
           </div>
 
           <div>

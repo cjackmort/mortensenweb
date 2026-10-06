@@ -39,10 +39,10 @@ let admin: AdminContext;
 
 const fake = {
   prices: new Map<string, { id: string; lookup_key: string; unit_amount: number }>([
-    ["care_lite_monthly_v1", { id: "price_lite", lookup_key: "care_lite_monthly_v1", unit_amount: 5000 }],
-    ["care_basic_monthly_v1", { id: "price_basic", lookup_key: "care_basic_monthly_v1", unit_amount: 10000 }],
+    ["lite_monthly_v2", { id: "price_lite", lookup_key: "lite_monthly_v2", unit_amount: 5000 }],
+    ["care_monthly_v2", { id: "price_basic", lookup_key: "care_monthly_v2", unit_amount: 10000 }],
     ["test_plan_monthly_v1", { id: "price_test", lookup_key: "test_plan_monthly_v1", unit_amount: 100 }],
-    ["care_plus_monthly_v1", { id: "price_plus", lookup_key: "care_plus_monthly_v1", unit_amount: 20000 }],
+    ["growth_monthly_v2", { id: "price_plus", lookup_key: "growth_monthly_v2", unit_amount: 20000 }],
   ]),
   subscriptions: new Map<string, Stripe.Subscription>(),
   updates: [] as Array<{ id: string; params: Stripe.SubscriptionUpdateParams }>,
@@ -216,7 +216,7 @@ describe("the plans an operator can choose", () => {
     const plans = await listAssignablePlans(db);
     const keys = plans.map((p) => p.key);
 
-    expect(keys).toEqual(["care-lite", "care-basic", "care-plus", "care-unlimited", "test-plan"]);
+    expect(keys).toEqual(["lite", "care", "growth", "pro", "test-plan"]);
     expect(plans.at(-1)).toMatchObject({ name: "Test plan", monthlyCents: 100 });
   });
 
@@ -230,7 +230,7 @@ describe("assigning a plan to a client who is not on Stripe", () => {
   it("records the plan and the day, and that is what they are offered", async () => {
     const result = await assignBillingPlan(admin, db, {
       clientPublicId: acme.publicId,
-      planKey: "care-basic",
+      planKey: "care",
       billingDay: 15,
     });
 
@@ -238,25 +238,25 @@ describe("assigning a plan to a client who is not on Stripe", () => {
     const rows = await activeRows(acme.clientId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      planId: await planId("care-basic"),
-      monthlyPriceCents: 10000,
+      planId: await planId("care"),
+      monthlyPriceCents: 5000,
       billingDay: 15,
       provider: null,
     });
 
     const entitlements = await getEntitlements(db, acme.ctx);
-    expect(entitlements?.planKey).toBe("care-basic");
+    expect(entitlements?.planKey).toBe("care");
   });
 
   it("moves the day without re-pricing a plan whose price was locked in", async () => {
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-basic", billingDay: 1 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care", billingDay: 1 });
     // Agreed at an older price, before the published one went up.
     await db
       .update(subscriptions)
       .set({ monthlyPriceCents: 9900 })
       .where(eq(subscriptions.clientId, acme.clientId));
 
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-basic", billingDay: 20 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care", billingDay: 20 });
 
     const rows = await activeRows(acme.clientId);
     expect(rows).toHaveLength(1);
@@ -264,7 +264,7 @@ describe("assigning a plan to a client who is not on Stripe", () => {
   });
 
   it("prices a new plan at that plan's price", async () => {
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-basic", billingDay: 1 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care", billingDay: 1 });
     await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "test-plan", billingDay: 1 });
 
     const rows = await activeRows(acme.clientId);
@@ -273,18 +273,18 @@ describe("assigning a plan to a client who is not on Stripe", () => {
   });
 
   it("writes who changed it to the audit log", async () => {
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-lite", billingDay: 3 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "lite", billingDay: 3 });
     const entries = await db.select().from(auditLog).where(eq(auditLog.organizationId, acme.orgId));
     expect(entries.at(-1)).toMatchObject({
       action: "subscription.assigned",
-      metadata: expect.objectContaining({ planKey: "care-lite", billingDay: 3 }),
+      metadata: expect.objectContaining({ planKey: "lite", billingDay: 3 }),
     });
   });
 
   it("refuses a plan with no price, an unknown plan, and an impossible day", async () => {
     const comp = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "comp-unlimited", billingDay: 1 });
     const unknown = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "gold", billingDay: 1 });
-    const day = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-lite", billingDay: 31 });
+    const day = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "lite", billingDay: 31 });
 
     expect([comp.ok, unknown.ok, day.ok]).toEqual([false, false, false]);
     expect(await activeRows(acme.clientId)).toHaveLength(0);
@@ -294,7 +294,7 @@ describe("assigning a plan to a client who is not on Stripe", () => {
     await db.insert(subscriptions).values({
       publicId: newPublicId(),
       clientId: acme.clientId,
-      planId: await planId("care-basic"),
+      planId: await planId("care"),
       monthlyPriceCents: 10000,
       billingDay: 1,
       startedOn: "2026-09-01",
@@ -302,7 +302,7 @@ describe("assigning a plan to a client who is not on Stripe", () => {
       providerSubscriptionId: "sq_1",
     });
 
-    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-plus", billingDay: 9 });
+    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "growth", billingDay: 9 });
 
     expect(result).toMatchObject({ ok: false });
     const rows = await activeRows(acme.clientId);
@@ -369,11 +369,11 @@ describe("a client already paying through Stripe", () => {
   const SUB = "sub_live_1";
   const periodEnd = Math.floor(Date.parse("2026-11-05T15:30:00Z") / 1000);
 
-  async function onStripe(lookupKey = "care_basic_monthly_v1") {
+  async function onStripe(lookupKey = "care_monthly_v2") {
     fake.subscriptions.set(SUB, {
       id: SUB,
       status: "active",
-      metadata: { client_id: acme.clientId, plan_key: "care-basic" },
+      metadata: { client_id: acme.clientId, plan_key: "care" },
       items: {
         data: [{ id: "si_1", current_period_end: periodEnd, price: { id: "price_basic", lookup_key: lookupKey } }],
       },
@@ -382,7 +382,7 @@ describe("a client already paying through Stripe", () => {
     await db.insert(subscriptions).values({
       publicId: newPublicId(),
       clientId: acme.clientId,
-      planId: await planId("care-basic"),
+      planId: await planId("care"),
       monthlyPriceCents: 10000,
       billingDay: 5,
       startedOn: "2026-10-05",
@@ -395,7 +395,7 @@ describe("a client already paying through Stripe", () => {
   it("changes the price from their next payment, without charging now", async () => {
     await onStripe();
 
-    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-lite", billingDay: 5 });
+    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "lite", billingDay: 5 });
 
     expect(result.ok).toBe(true);
     expect(fake.updates).toHaveLength(1);
@@ -409,7 +409,7 @@ describe("a client already paying through Stripe", () => {
   it("moves the payment day to after the period they already paid for", async () => {
     await onStripe();
 
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-basic", billingDay: 15 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care", billingDay: 15 });
 
     expect(fake.updates).toHaveLength(1);
     const params = fake.updates[0]!.params;
@@ -425,7 +425,7 @@ describe("a client already paying through Stripe", () => {
   it("does not touch Stripe when nothing changed", async () => {
     await onStripe();
 
-    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-basic", billingDay: 5 });
+    const result = await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care", billingDay: 5 });
 
     expect(result.ok).toBe(true);
     expect(fake.updates).toHaveLength(0);
@@ -434,7 +434,7 @@ describe("a client already paying through Stripe", () => {
   it("does not open a second hand-billed plan beside the Stripe one", async () => {
     await onStripe();
 
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-plus", billingDay: 5 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "growth", billingDay: 5 });
 
     expect(await activeRows(acme.clientId)).toHaveLength(1);
   });
@@ -442,7 +442,7 @@ describe("a client already paying through Stripe", () => {
   it("reports what Stripe is billing", async () => {
     await onStripe();
     const view = await getBillingPlan(db, acme.clientId);
-    expect(view).toMatchObject({ planKey: "care-basic", billingDay: 5, provider: "stripe" });
+    expect(view).toMatchObject({ planKey: "care", billingDay: 5, provider: "stripe" });
   });
 });
 
@@ -457,9 +457,9 @@ describe("a client choosing their own plan", () => {
   it("can choose a bigger plan than the one assigned, still on the assigned day", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-05T18:00:00Z"));
-    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "care-lite", billingDay: 15 });
+    await assignBillingPlan(admin, db, { clientPublicId: acme.publicId, planKey: "lite", billingDay: 15 });
 
-    const outcome = await beginStripeCheckout(db, acme.ctx, { planKey: "care-plus", ...URLS });
+    const outcome = await beginStripeCheckout(db, acme.ctx, { planKey: "growth", ...URLS });
 
     expect(outcome.ok).toBe(true);
     const params = fake.sessionParams.at(-1)!;
@@ -472,9 +472,9 @@ describe("a client choosing their own plan", () => {
 
     expect(choice.open).toBe(true);
     if (!choice.open) return;
-    expect(choice.plans.map((p) => p.key)).toEqual(["care-lite", "care-basic", "care-plus", "care-unlimited"]);
+    expect(choice.plans.map((p) => p.key)).toEqual(["lite", "care", "growth", "pro"]);
     expect(choice.plans.every((p) => p.features.length > 0)).toBe(true);
-    expect(choice.plans.find((p) => p.featured)?.key).toBe("care-basic");
+    expect(choice.plans.find((p) => p.featured)?.key).toBe("care");
   });
 
   it("sees the plan an operator assigned marked for them, and the test plan only then", async () => {
@@ -502,7 +502,7 @@ describe("a client choosing their own plan", () => {
     await db.insert(subscriptions).values({
       publicId: newPublicId(),
       clientId: acme.clientId,
-      planId: await planId("care-basic"),
+      planId: await planId("care"),
       monthlyPriceCents: 10000,
       billingDay: 1,
       startedOn: "2026-10-01",

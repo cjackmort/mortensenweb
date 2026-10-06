@@ -76,7 +76,7 @@ async function main() {
     .values([
       // The sold plans come from packages/plans, the same module the public
       // site's pricing page renders — so the two cannot quote different
-      // numbers. 0016_care_plan_pricing.sql is the authoritative version for
+      // numbers. 0026_plans_2026_10.sql is the authoritative version for
       // a database this seed runs against after migrations; the package is
       // what both it and the site are written from.
       ...PLANS.map((plan) => ({
@@ -229,7 +229,7 @@ async function main() {
       .returning()
   )[0]!;
 
-  const basicPlan = planRows.find((p) => p.key === "care-basic") ?? planRows[0];
+  const basicPlan = planRows.find((p) => p.key === "care") ?? planRows[0];
 
   const subscription = (
     await db

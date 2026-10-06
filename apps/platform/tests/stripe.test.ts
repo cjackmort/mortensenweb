@@ -93,10 +93,21 @@ describe("plan to price mapping", () => {
   it("agrees with the published prices", () => {
     // Guards the drift this package was created to stop: the site quoting one
     // number while the portal bills another.
-    expect(expectedCentsForPlan("care-lite")).toBe(5000);
-    expect(expectedCentsForPlan("care-basic")).toBe(10000);
-    expect(expectedCentsForPlan("care-plus")).toBe(20000);
-    expect(expectedCentsForPlan("care-unlimited")).toBe(30000);
+    expect(expectedCentsForPlan("lite")).toBe(2500);
+    expect(expectedCentsForPlan("care")).toBe(5000);
+    expect(expectedCentsForPlan("growth")).toBe(10000);
+    expect(expectedCentsForPlan("pro")).toBe(15000);
+  });
+
+  it("reads a retired price as the plan its subscribers were moved to, and never sells one", () => {
+    // 0026_plans_2026_10.sql moved old Lite to Care, Basic to Growth, and
+    // Plus and Unlimited to Pro, at the price they already paid.
+    expect(planForLookupKey("care_lite_monthly_v1")).toBe("care");
+    expect(planForLookupKey("care_basic_monthly_v1")).toBe("growth");
+    expect(planForLookupKey("care_plus_monthly_v1")).toBe("pro");
+    expect(planForLookupKey("care_unlimited_monthly_v1")).toBe("pro");
+    expect(lookupKeyForPlan("care")).toBe("care_monthly_v2");
+    expect(lookupKeyForPlan("pro")).toBe("pro_monthly_v2");
   });
 });
 
