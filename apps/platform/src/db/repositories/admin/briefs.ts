@@ -18,6 +18,7 @@ import {
 import { isGithubConfigured } from "@/lib/github/app";
 import { keepSchedulerAwakeForJob } from "@/lib/scheduler/gate";
 import { claimDispatchSlot, releaseDispatchSlot } from "./agent-jobs";
+import { profileEntriesFor } from "./business-profile";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -303,6 +304,11 @@ export async function dispatchBrief(
         businessName: brief.businessName,
         verifiedFacts: context.verifiedFacts,
         sourceWebsiteUrl: context.sourceWebsiteUrl,
+        // A client's own brief has no crawled facts; their general information
+        // is what the agent may publish. A prospect's facts, when passed, win.
+        businessProfile: context.verifiedFacts
+          ? undefined
+          : await profileEntriesFor(db, brief.organizationId),
       }),
       labels: ["portal-brief", "claude"],
     });
