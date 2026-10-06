@@ -10,6 +10,7 @@ import {
   requireStripe,
   stripeConfigured,
 } from "@/lib/payments/stripe";
+import { usablePromo } from "@/lib/payments/promos";
 import { type AdminContext, type TenantContext } from "../context";
 
 /**
@@ -64,6 +65,8 @@ export interface ResolvedClient {
   contactEmail: string | null;
   stripeCustomerId: string | null;
   compPlanId: string | null;
+  /** A promo an operator attached for this checkout. */
+  promoCodeId: string | null;
 }
 
 const RESOLVED_CLIENT = {
@@ -73,6 +76,7 @@ const RESOLVED_CLIENT = {
   contactEmail: clients.primaryContactEmail,
   stripeCustomerId: clients.stripeCustomerId,
   compPlanId: clients.compPlanId,
+  promoCodeId: clients.promoCodeId,
 };
 
 export async function resolveClient(
@@ -222,6 +226,7 @@ async function openSessionFor(
   customerId: string,
   priceId: string,
   billingDay: string,
+  promoCodeId: string,
 ): Promise<Stripe.Checkout.Session | null> {
   const stripe = requireStripe();
   const sessions = await stripe.checkout.sessions.list({
@@ -239,6 +244,9 @@ async function openSessionFor(
     // A checkout made before the operator moved the payment day would start
     // the subscription on the old one.
     if ((session.metadata?.billing_day ?? "") !== billingDay) return false;
+    // Nor one made before an operator attached a promo, or removed one: the
+    // client would pay a price nobody meant to offer them.
+    if ((session.metadata?.promo_code_id ?? "") !== promoCodeId) return false;
     return session.line_items?.data.some((item) => item.price?.id === priceId);
   });
 
@@ -400,19 +408,85 @@ async function checkoutFor(
     const anchorDay = assigned ? anchorDayFor(assigned.billingDay) : null;
     const billingDay = anchorDay ? String(anchorDay) : "";
 
-    const reusable = await openSessionFor(customerId, price.id, billingDay);
+    // An attached promo is re-checked here rather than trusted from when it
+    // was attached: one that has expired or run out since is dropped, and the
+    // client pays the plan price instead of being unable to pay at all.
+    const promo = client.promoCodeId ? await usablePromo(client.promoCodeId) : null;
+    const promoCodeId = promo?.id ?? "";
+
+    const reusable = await openSessionFor(customerId, price.id, billingDay, promoCodeId);
     if (reusable?.url) {
       return { ok: true, url: reusable.url, sessionId: reusable.id, reused: true };
     }
 
-    const stripe = requireStripe();
-    const session = await stripe.checkout.sessions.create(
+    const session = await createSession({
+      customerId,
+      priceId: price.id,
+      client,
+      planKey,
+      billingDay,
+      anchorDay,
+      promoCodeId,
+      urls: input,
+    });
+    if (!session.url) {
+      return {
+        ok: false,
+        reason: "stripe_failed",
+        message: "Stripe did not return a checkout page. Please try again.",
+      };
+    }
+
+    return { ok: true, url: session.url, sessionId: session.id, reused: false };
+  } catch (error) {
+    console.error("[stripe:checkout] failed", {
+      clientId: client.clientId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return {
+      ok: false,
+      reason: "stripe_failed",
+      message: "We could not start checkout just now. Please try again.",
+    };
+  }
+}
+
+interface SessionInput {
+  customerId: string;
+  priceId: string;
+  client: ResolvedClient;
+  planKey: string;
+  billingDay: string;
+  anchorDay: number | null;
+  /** Empty when no promo is attached. */
+  promoCodeId: string;
+  urls: { successUrl: string; cancelUrl: string };
+}
+
+/**
+ * The Checkout Session itself.
+ *
+ * With a promo attached it is applied for them; without one the client gets a
+ * box to type a code. Stripe accepts one or the other on a session, never
+ * both, and a client who was handed a promo has no code to type.
+ *
+ * If Stripe refuses the attached promo — a first-time-only code offered to a
+ * customer who has paid before is the likely one — the session is made again
+ * without it, with the code box instead. A promo is never the reason somebody
+ * cannot pay.
+ */
+async function createSession(input: SessionInput): Promise<Stripe.Checkout.Session> {
+  const stripe = requireStripe();
+  const { client, planKey, billingDay, anchorDay } = input;
+
+  const create = (promoCodeId: string) =>
+    stripe.checkout.sessions.create(
       {
         mode: "subscription",
-        customer: customerId,
-        line_items: [{ price: price.id, quantity: 1 }],
-        success_url: input.successUrl,
-        cancel_url: input.cancelUrl,
+        customer: input.customerId,
+        line_items: [{ price: input.priceId, quantity: 1 }],
+        success_url: input.urls.successUrl,
+        cancel_url: input.urls.cancelUrl,
 
         // Both of these carry the tenant. `client_reference_id` survives on the
         // session; the `subscription_data.metadata` copy is what every later
@@ -434,6 +508,7 @@ async function checkoutFor(
           client_id: client.clientId,
           plan_key: planKey,
           billing_day: billingDay,
+          promo_code_id: promoCodeId,
         },
 
         // Saves the card for the recurring charge and makes the terms explicit
@@ -441,36 +516,34 @@ async function checkoutFor(
         // authorising them.
         payment_method_collection: "always",
         billing_address_collection: "auto",
-        allow_promotion_codes: false,
+        ...(promoCodeId
+          ? { discounts: [{ promotion_code: promoCodeId }] }
+          : { allow_promotion_codes: true }),
       },
       {
-        // Not time-bucketed. A stable key per (client, price) means a burst of
-        // retries collapses to one session; once that session is consumed or
-        // expires, `openSessionFor` above stops finding it and a genuinely new
-        // attempt gets a new key because the previous one is no longer open.
-        idempotencyKey: `checkout:${client.clientId}:${price.id}:${billingDay || "now"}`,
+        // Not time-bucketed. A stable key per (client, price, promo) means a
+        // burst of retries collapses to one session; once that session is
+        // consumed or expires, `openSessionFor` stops finding it and a
+        // genuinely new attempt gets a new key because the previous one is no
+        // longer open.
+        idempotencyKey: `checkout:${client.clientId}:${input.priceId}:${billingDay || "now"}:${promoCodeId || "nopromo"}`,
       },
     );
 
-    if (!session.url) {
-      return {
-        ok: false,
-        reason: "stripe_failed",
-        message: "Stripe did not return a checkout page. Please try again.",
-      };
-    }
+  if (!input.promoCodeId) return create("");
 
-    return { ok: true, url: session.url, sessionId: session.id, reused: false };
+  try {
+    return await create(input.promoCodeId);
   } catch (error) {
-    console.error("[stripe:checkout] failed", {
+    // Only a refusal of the request. An outage is not a reason to quietly
+    // charge someone the full price they were told would be discounted.
+    if ((error as { type?: string } | null)?.type !== "StripeInvalidRequestError") throw error;
+    console.error("[stripe:checkout] promo refused, continuing without it", {
       clientId: client.clientId,
+      promoCodeId: input.promoCodeId,
       message: error instanceof Error ? error.message : "unknown",
     });
-    return {
-      ok: false,
-      reason: "stripe_failed",
-      message: "We could not start checkout just now. Please try again.",
-    };
+    return create("");
   }
 }
 

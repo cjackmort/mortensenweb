@@ -27,6 +27,8 @@ import { businessDate } from "@/lib/billing/period";
 import { LAST_BILLING_DAY, ordinal } from "@/lib/billing/billing-day";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { stripeConfigured, TEST_PLAN } from "@/lib/payments/stripe";
+import { listPromoOptions } from "@/lib/payments/promos";
+import { getClientPromo } from "@/db/repositories/admin/promos";
 import { isOpen } from "@/lib/requests/status";
 import { ActivateForm, ReissueForm } from "./credential-forms";
 import { ProfilePanel } from "./profile-forms";
@@ -345,10 +347,13 @@ async function Billing(props: {
   invoices: Invoices;
 }) {
   const db = await getDb();
-  const [plans, compPlans, comp] = await Promise.all([
+  const cardPayments = stripeConfigured();
+  const [plans, compPlans, comp, promos, savedPromo] = await Promise.all([
     listAssignablePlans(db),
     listActivePlans(db),
     getClientComp(props.ctx, db, props.clientPublicId),
+    cardPayments ? listPromoOptions() : Promise.resolve([]),
+    getClientPromo(props.ctx, db, props.clientPublicId),
   ]);
 
   // Today's date as the suggestion, so a client set up today pays today.
@@ -360,7 +365,7 @@ async function Billing(props: {
       plan={props.billingPlan}
       plans={plans}
       defaultDay={today > LAST_BILLING_DAY ? 1 : today}
-      cardPayments={stripeConfigured()}
+      cardPayments={cardPayments}
       invoices={props.invoices}
       compPlans={compPlans
         .filter((plan) => plan.key !== TEST_PLAN.key)
@@ -370,6 +375,14 @@ async function Billing(props: {
           includedChangesPerMonth: plan.includedChangesPerMonth,
         }))}
       comp={comp}
+      promos={promos.map((promo) => ({
+        id: promo.id,
+        code: promo.code,
+        terms: promo.terms,
+        expiresOn: promo.expiresAt?.toISOString().slice(0, 10) ?? null,
+        firstTimeOnly: promo.firstTimeOnly,
+      }))}
+      savedPromo={savedPromo?.promoCode ? `${savedPromo.promoCode}: ${savedPromo.promoTerms ?? ""}` : null}
     />
   );
 }

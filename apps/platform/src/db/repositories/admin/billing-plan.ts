@@ -55,6 +55,10 @@ export interface BillingPlanView {
   providerStatus: string | null;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
+  /** A promo on their Stripe subscription. See `discountApplies`. */
+  discountLabel: string | null;
+  discountedPriceCents: number | null;
+  discountEndsAt: Date | null;
 }
 
 /** The client's current plan, preferring the one a processor is billing. */
@@ -73,6 +77,9 @@ export async function getBillingPlan(
       providerStatus: subscriptions.providerStatus,
       currentPeriodEnd: subscriptions.currentPeriodEnd,
       cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      discountLabel: subscriptions.discountLabel,
+      discountedPriceCents: subscriptions.discountedPriceCents,
+      discountEndsAt: subscriptions.discountEndsAt,
     })
     .from(subscriptions)
     .leftJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))

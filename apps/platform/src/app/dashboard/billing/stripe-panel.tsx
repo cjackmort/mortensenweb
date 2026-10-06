@@ -46,7 +46,14 @@ function formatMoney(cents: number, currency: string): string {
 
 function formatDate(value: Date | string | null): string | null {
   if (!value) return null;
-  const date = typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
+  // A bare `YYYY-MM-DD` is read as local midnight, not UTC midnight, so it
+  // cannot land on the day before. The dates this panel receives are full ISO
+  // timestamps, though, and appending a time to one of those makes it invalid
+  // — which blanked "Paid through" and "Next payment" until it was handled.
+  const date =
+    typeof value === "string"
+      ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value)
+      : value;
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
@@ -66,6 +73,8 @@ export function StripePanel({
   paidThrough,
   nextChargeOn,
   nextChargeCents,
+  promo,
+  checkoutPromo,
   history,
   canManage,
   offerPlanKey,
@@ -80,6 +89,10 @@ export function StripePanel({
   paidThrough: string | null;
   nextChargeOn: string | null;
   nextChargeCents: number | null;
+  /** A promo they are on. `endsAt` is an ISO string, or null for no end. */
+  promo: { label: string; monthlyCents: number; endsAt: string | null } | null;
+  /** A promo saved for their checkout, as "CODE: terms". */
+  checkoutPromo: string | null;
   history: StripePaymentRow[];
   canManage: boolean;
   /** The plan to offer when they are not subscribed. Null hides the offer. */
@@ -138,6 +151,17 @@ export function StripePanel({
             </>
           ) : null}
 
+          {promo ? (
+            <>
+              <dt>Promo</dt>
+              <dd>
+                {formatMoney(promo.monthlyCents, currency)} a month
+                {promo.endsAt ? <> until {formatDate(promo.endsAt)}</> : null} &middot;{" "}
+                {promo.label}
+              </dd>
+            </>
+          ) : null}
+
           {/* Only shown once something has actually settled. An empty
               paid-through beside an active subscription would read as paid. */}
           {paidThrough ? (
@@ -183,6 +207,13 @@ export function StripePanel({
             {starting ? "Starting…" : "Set up automatic payment"}
           </button>
           <p className="hint">
+            {checkoutPromo ? (
+              <>
+                Your promo, {checkoutPromo}, is applied on the checkout page.{" "}
+              </>
+            ) : (
+              <>Have a promo code? You can enter it on the checkout page. </>
+            )}
             You&rsquo;ll authorise the recurring payment on Stripe&rsquo;s own
             checkout page, and can cancel it any time.
           </p>

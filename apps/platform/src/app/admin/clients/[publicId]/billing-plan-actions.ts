@@ -5,6 +5,7 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { assignBillingPlan } from "@/db/repositories/admin/billing-plan";
+import { attachPromo } from "@/db/repositories/admin/promos";
 import { beginCheckoutForClient } from "@/db/repositories/client/stripe-checkout";
 import { parseBillingDay } from "@/lib/billing/billing-day";
 
@@ -70,4 +71,26 @@ export async function createPaymentLinkAction(
   });
 
   return outcome.ok ? { ok: true, url: outcome.url } : { ok: false, message: outcome.message };
+}
+
+export type PromoFormResult = { ok: boolean; message: string };
+
+export async function attachPromoAction(
+  _previous: PromoFormResult | null,
+  formData: FormData,
+): Promise<PromoFormResult> {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") {
+    return { ok: false, message: "Only an admin can do that." };
+  }
+
+  const clientPublicId = String(formData.get("clientPublicId") ?? "").trim();
+  const promoCodeId = String(formData.get("promoCodeId") ?? "").trim() || null;
+  if (!clientPublicId) return { ok: false, message: "No client specified." };
+
+  const db = await getDb();
+  const result = await attachPromo(adminContextFrom(user), db, { clientPublicId, promoCodeId });
+
+  revalidatePath(`/admin/clients/${clientPublicId}`);
+  return result;
 }

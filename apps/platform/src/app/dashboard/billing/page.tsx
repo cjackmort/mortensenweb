@@ -148,6 +148,12 @@ export default async function BillingPage({
             paidThrough={stripePanel.paidThrough?.toISOString() ?? null}
             nextChargeOn={stripePanel.nextChargeOn?.toISOString() ?? null}
             nextChargeCents={stripePanel.nextChargeCents}
+            promo={
+              stripePanel.promo
+                ? { ...stripePanel.promo, endsAt: stripePanel.promo.endsAt?.toISOString() ?? null }
+                : null
+            }
+            checkoutPromo={stripePanel.checkoutPromo}
             history={stripePanel.history}
             canManage={stripePanel.canManage}
             offerPlanKey={offerPlanKey}

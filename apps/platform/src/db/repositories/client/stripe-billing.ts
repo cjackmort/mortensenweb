@@ -5,6 +5,7 @@ import {
   billingStatusFor,
   type BillingStatus,
 } from "@/lib/billing/stripe-status";
+import { discountApplies, effectiveMonthlyCents } from "@/lib/payments/promos";
 import { stripeConfigured } from "@/lib/payments/stripe";
 import type { TenantContext } from "../context";
 
@@ -52,6 +53,10 @@ export interface StripeBillingPanel {
    */
   nextChargeOn: Date | null;
   nextChargeCents: number | null;
+  /** A promo they are on: what it is, what they pay meanwhile, and until when. */
+  promo: { label: string; monthlyCents: number; endsAt: Date | null } | null;
+  /** A promo an operator saved for their checkout, as "CODE: terms". */
+  checkoutPromo: string | null;
   history: StripePaymentRow[];
   /** Whether to offer the Stripe Customer Portal button. */
   canManage: boolean;
@@ -66,6 +71,11 @@ export async function getStripeBillingPanel(
       clientId: clients.id,
       compPlanId: clients.compPlanId,
       stripeCustomerId: clients.stripeCustomerId,
+      promoCode: clients.promoCode,
+      promoTerms: clients.promoTerms,
+      discountLabel: subscriptions.discountLabel,
+      discountedPriceCents: subscriptions.discountedPriceCents,
+      discountEndsAt: subscriptions.discountEndsAt,
       planName: servicePlans.name,
       monthlyPriceCents: subscriptions.monthlyPriceCents,
       currency: subscriptions.currency,
@@ -106,6 +116,8 @@ export async function getStripeBillingPanel(
       paidThrough: null,
       nextChargeOn: null,
       nextChargeCents: null,
+      promo: null,
+      checkoutPromo: null,
       history: [],
       canManage: false,
     };
@@ -162,6 +174,24 @@ export async function getStripeBillingPanel(
     status.state === "processing" ||
     status.state === "action_required";
 
+  // The promo price while it lasts. The next charge is discounted only if the
+  // promo is still running on the day it is taken.
+  const promo =
+    row.discountLabel && discountApplies(row)
+      ? { label: row.discountLabel, monthlyCents: row.discountedPriceCents!, endsAt: row.discountEndsAt }
+      : null;
+  const nextCharge =
+    row.monthlyPriceCents === null
+      ? null
+      : effectiveMonthlyCents(
+          {
+            monthlyPriceCents: row.monthlyPriceCents,
+            discountedPriceCents: row.discountedPriceCents,
+            discountEndsAt: row.discountEndsAt,
+          },
+          row.currentPeriodEnd ?? new Date(),
+        );
+
   return {
     available: stripeConfigured(),
     status,
@@ -170,7 +200,9 @@ export async function getStripeBillingPanel(
     currency: row.currency ?? "USD",
     paidThrough: hasSettledInvoice ? row.currentPeriodEnd : null,
     nextChargeOn: willRenew ? row.currentPeriodEnd : null,
-    nextChargeCents: willRenew ? row.monthlyPriceCents : null,
+    nextChargeCents: willRenew ? nextCharge : null,
+    promo,
+    checkoutPromo: row.promoCode ? `${row.promoCode}: ${row.promoTerms ?? ""}` : null,
     history: historyRows.map((p) => ({
       publicId: p.publicId,
       amountCents: p.amountCents,
