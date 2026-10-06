@@ -8,6 +8,7 @@ import { organizationForClient } from "@/db/repositories/admin/briefs";
 import { saveBusinessProfile } from "@/db/repositories/admin/business-profile";
 import { sendProfileToSite } from "@/db/repositories/admin/profile-sync";
 import { parseProfileForm, PROFILE_FIELDS } from "@/lib/business-profile";
+import { normaliseSiteUrl, readProfileFromSite } from "@/lib/profile-autofill-fetch";
 
 /**
  * The client's general information: saving it, and putting it on the site.
@@ -95,4 +96,41 @@ function submittedValues(formData: FormData): Record<string, string> {
   return Object.fromEntries(
     PROFILE_FIELDS.map((field) => [field.key, String(formData.get(field.key) ?? "")]),
   );
+}
+
+export type AutofillResult =
+  | { ok: true; message: string; found: Record<string, string>; siteUrl: string }
+  | { ok: false; message: string; siteUrl?: string };
+
+/**
+ * Read their existing website and offer what it says.
+ *
+ * Returns suggestions only. The form puts them in empty fields, marked, and
+ * nothing is stored until the operator presses Save.
+ */
+export async function autofillProfileAction(
+  _previous: AutofillResult | null,
+  formData: FormData,
+): Promise<AutofillResult> {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") {
+    return { ok: false, message: "Only an admin can do that." };
+  }
+
+  const siteUrl = normaliseSiteUrl(String(formData.get("siteUrl") ?? ""));
+  if (!siteUrl) return { ok: false, message: "Enter their website address." };
+
+  const outcome = await readProfileFromSite(siteUrl);
+  if (!outcome.ok) return { ...outcome, siteUrl };
+
+  const count = Object.keys(outcome.found).length;
+  return {
+    ok: true,
+    found: outcome.found,
+    siteUrl,
+    message:
+      count === 0
+        ? "Their site didn't say anything we could use. Fill it in by hand."
+        : `Found ${count} detail${count === 1 ? "" : "s"} on ${outcome.pagesRead} page${outcome.pagesRead === 1 ? "" : "s"}. They're in the empty fields below, marked. Check them, then save.`,
+  };
 }

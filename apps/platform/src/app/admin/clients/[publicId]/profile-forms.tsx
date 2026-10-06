@@ -7,8 +7,10 @@ import {
   type ProfileField,
 } from "@/lib/business-profile";
 import {
+  autofillProfileAction,
   saveProfileAction,
   sendProfileAction,
+  type AutofillResult,
   type ProfileResult,
 } from "./profile-actions";
 
@@ -27,16 +29,21 @@ interface ProfilePanelProps {
   sites: { publicId: string; name: string }[];
   updatedAt: string | null;
   lastAppliedAt: string | null;
+  /** Where to read their details from: their current website, or our site's domain. */
+  siteUrl: string | null;
 }
 
 function Field({
   field,
   value,
   error,
+  suggested,
 }: {
   field: ProfileField;
   value: string;
   error?: string;
+  /** Filled from their website and not yet saved. */
+  suggested?: boolean;
 }) {
   const id = `profile-${field.key}`;
   const hintId = field.hint ? `${id}-hint` : undefined;
@@ -51,8 +58,13 @@ function Field({
   };
 
   return (
-    <div className={field.kind === "text" ? "profile-field profile-field-wide" : "profile-field"}>
-      <label htmlFor={id}>{field.label}</label>
+    <div
+      className={`${field.kind === "text" ? "profile-field profile-field-wide" : "profile-field"}${suggested ? " is-suggested" : ""}`}
+    >
+      <label htmlFor={id}>
+        {field.label}
+        {suggested && <span className="profile-suggested"> from their website, check before saving</span>}
+      </label>
       {field.kind === "text" ? (
         <textarea {...common} rows={field.key === "hours" || field.key === "address" ? 3 : 4} />
       ) : (
@@ -82,12 +94,22 @@ function formatDate(iso: string | null): string | null {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function ProfilePanel({ clientPublicId, details, sites, updatedAt, lastAppliedAt }: ProfilePanelProps) {
+export function ProfilePanel({ clientPublicId, details, sites, updatedAt, lastAppliedAt, siteUrl }: ProfilePanelProps) {
   const [saveState, saveAction, saving] = useActionState<ProfileResult | null, FormData>(saveProfileAction, null);
   const [sendState, sendAction, sending] = useActionState<ProfileResult | null, FormData>(sendProfileAction, null);
+  const [fillState, fillAction, filling] = useActionState<AutofillResult | null, FormData>(autofillProfileAction, null);
+
+  // Suggestions go only where nothing is filled in: what the operator typed
+  // or saved always wins over what a web page said.
+  const suggestions = fillState?.ok ? fillState.found : {};
+  const suggestedKeys = new Set(
+    Object.keys(suggestions).filter((key) => !details[key]?.trim()),
+  );
+  const withSuggestions = { ...details };
+  for (const key of suggestedKeys) withSuggestions[key] = suggestions[key]!;
 
   // A refused save shows what was typed, not what was stored.
-  const values = saveState?.values ?? details;
+  const values = saveState?.values ?? withSuggestions;
   const filled = PROFILE_FIELDS.filter((f) => details[f.key]).length;
   const changedSinceSent =
     updatedAt !== null && (lastAppliedAt === null || new Date(updatedAt) > new Date(lastAppliedAt));
@@ -102,7 +124,38 @@ export function ProfilePanel({ clientPublicId, details, sites, updatedAt, lastAp
         {lastAppliedAt && <> Last put on the site {formatDate(lastAppliedAt)}.</>}
       </p>
 
-      <form action={saveAction} className="profile-form" noValidate>
+      <form action={fillAction} className="profile-autofill">
+        <div>
+          <label htmlFor="profile-site-url">Fill in from their website</label>
+          <input
+            id="profile-site-url"
+            name="siteUrl"
+            type="text"
+            inputMode="url"
+            defaultValue={fillState?.siteUrl ?? siteUrl ?? ""}
+            placeholder="theirbusiness.com"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </div>
+        <button type="submit" className="secondary" disabled={filling}>
+          {filling ? "Reading their site…" : "Fill in"}
+        </button>
+      </form>
+      {fillState && (
+        <p className={fillState.ok ? "notice notice-info" : "error"} role="status">
+          {fillState.message}
+        </p>
+      )}
+
+      <form
+        // Remounted when suggestions arrive, so the fields show them.
+        key={fillState?.ok ? `filled-${Object.keys(suggestions).join(",")}` : "saved"}
+        action={saveAction}
+        className="profile-form"
+        noValidate
+      >
         <input type="hidden" name="clientPublicId" value={clientPublicId} />
 
         {PROFILE_GROUPS.map((group) => (
@@ -115,6 +168,7 @@ export function ProfilePanel({ clientPublicId, details, sites, updatedAt, lastAp
                   field={field}
                   value={values[field.key] ?? ""}
                   error={saveState?.errors?.[field.key]}
+                  suggested={!saveState && suggestedKeys.has(field.key)}
                 />
               ))}
             </div>

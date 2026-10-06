@@ -558,6 +558,23 @@ describe("moving a hand-billed client onto Stripe", () => {
       .where(eq(subscriptions.id, manual.id));
     expect(retained[0]?.status).toBe("active");
   });
+
+  it("records the day Stripe charges on, not the day they signed up", async () => {
+    // Checkout anchored on the 15th: they signed up on the 1st, but every
+    // payment after the first falls on the 15th.
+    const anchored = subscriptionObject({
+      billing_cycle_anchor: Math.floor(Date.parse("2026-09-15T12:00:00Z") / 1000),
+    } as Partial<Stripe.Subscription>);
+    stripeState.subscriptions.set(SUBSCRIPTION, anchored);
+
+    await processStripeEvent(db, event("customer.subscription.created", anchored));
+
+    const rows = await db
+      .select({ billingDay: subscriptions.billingDay })
+      .from(subscriptions)
+      .where(eq(subscriptions.provider, "stripe"));
+    expect(rows[0]?.billingDay).toBe(15);
+  });
 });
 
 describe("checkout completion", () => {

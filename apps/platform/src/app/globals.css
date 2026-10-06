@@ -3473,3 +3473,288 @@ button.link:focus-visible {
 .media-sidebar .field-hint {
   margin-top: 0.6rem;
 }
+
+/* --------------------------------------------------------------------------
+   Choosing a plan — the cards side by side, the popular one lifted
+   -------------------------------------------------------------------------- */
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--stack);
+  align-items: stretch;
+  margin-bottom: var(--stack);
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: var(--pane-pad);
+  background: var(--pane-face);
+  border: 1px solid var(--border);
+  box-shadow: var(--pane-highlight), var(--pane-shadow);
+}
+
+.plan-card.is-lifted {
+  border-color: var(--accent);
+  box-shadow: var(--pane-highlight), var(--pane-shadow-lift), 0 0 0 1px var(--accent);
+}
+
+.plan-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plan-card-head h2 {
+  margin: 0;
+  font: 500 1.35rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.plan-tag {
+  font: 500 0.68rem / 1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.plan-price {
+  margin: 0;
+  color: var(--muted);
+}
+
+.plan-price strong {
+  font: 500 2.1rem / 1 var(--display);
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.plan-value {
+  margin: -0.4rem 0 0;
+  font-size: 0.88rem;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.plan-description,
+.plan-best-for {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.plan-best-for {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.plan-features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+}
+
+.plan-features li {
+  position: relative;
+  padding-left: 1.4rem;
+}
+
+.plan-features li::before {
+  content: "";
+  position: absolute;
+  left: 0.15rem;
+  top: 0.35em;
+  width: 0.55rem;
+  height: 0.3rem;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+}
+
+/* The button sits at the foot of every card, so they line up across the row. */
+.plan-card > button {
+  margin-top: auto;
+  width: 100%;
+}
+
+.plan-footnote {
+  max-width: 44rem;
+  font-size: 0.9rem;
+}
+
+/* --------------------------------------------------------------------------
+   Client page — a button per setting instead of one long scroll
+   -------------------------------------------------------------------------- */
+
+/* The section's name under the client's, on a section page. */
+.masthead-sub {
+  display: block;
+  margin-top: 0.35rem;
+  font: 500 0.78rem / 1.2 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--stack);
+  margin-bottom: var(--stack);
+}
+
+.section-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 9rem;
+  padding: var(--pane-pad);
+  background: var(--pane-face);
+  border: 1px solid var(--border);
+  box-shadow: var(--pane-highlight), var(--pane-shadow);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    box-shadow 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+
+.section-tile:hover,
+.section-tile:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--pane-highlight), var(--pane-shadow-lift);
+  transform: translateY(-2px);
+  color: var(--text);
+}
+
+.section-tile-title {
+  font: 500 1.25rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.section-tile-title::after {
+  content: " →";
+  color: var(--accent);
+}
+
+.section-tile-blurb {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+/* Where the setting stands, pinned to the foot so the row lines up. */
+.section-tile-status {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font: 500 0.74rem / 1.4 var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+
+.section-tile-status.needs-attention {
+  color: var(--warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-tile,
+  .section-tile:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Inside a section: back to the overview, and the other settings one tap away. */
+.section-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: var(--stack);
+}
+
+.section-switcher a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.section-switcher a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.section-switcher a[aria-current="page"] {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.section-switcher .section-switcher-back {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A payment link, ready to copy. */
+.payment-link {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.payment-link input {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+/* A hint after a whole form, not after a field: drawn up, it sat on top of
+   the form's button. */
+form + .field-hint {
+  margin-top: 1rem;
+}
+
+/* "Fill in from their website": the address and its button on one line. */
+.profile-autofill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.profile-autofill > div {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.profile-autofill input {
+  margin-bottom: 0;
+}
+
+/* A field filled from their website and not saved yet. */
+.profile-field.is-suggested input,
+.profile-field.is-suggested textarea {
+  border-color: var(--warning);
+  background: var(--warning-wash);
+}
+
+.profile-suggested {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--warning);
+}

@@ -15,6 +15,10 @@ import type { StorageDriver, StoredObject } from "./index";
 
 const LOCAL_ROOT = process.env.ATTACHMENT_DIR ?? "./.attachments";
 const MEDIA_LOCAL_ROOT = process.env.MEDIA_DIR ?? "./.media";
+const THUMBNAIL_LOCAL_ROOT = process.env.THUMBNAIL_DIR ?? "./.thumbnails";
+
+/** One home-page picture per site: `t/<site public id>.jpg`, overwritten daily. */
+const THUMBNAIL_KEY_PATTERN = /^t\/[0-9A-HJKMNP-TV-Z]{26}\.jpg$/;
 
 /** Keys we generate: two hex segments and an extension. Nothing else is valid. */
 const KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f]{32}\.[a-z0-9]{1,5}$/;
@@ -318,10 +322,40 @@ export function mediaDriver(): StorageDriver {
   return cachedMedia;
 }
 
-/** Testing hook: drop both cached drivers. */
+let cachedThumbnails: StorageDriver | undefined;
+
+/**
+ * Pictures of client home pages for the admin tiles.
+ *
+ * Its own store because nothing in it is a client's upload: every object is
+ * regenerated daily and losing one costs a day's wait, not a photograph.
+ */
+export function thumbnailDriver(): StorageDriver {
+  if (cachedThumbnails) return cachedThumbnails;
+
+  if (onNetlify()) {
+    cachedThumbnails = new NetlifyBlobsDriver("thumbnails", THUMBNAIL_KEY_PATTERN);
+    return cachedThumbnails;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("No production storage driver is configured for site thumbnails.");
+  }
+
+  cachedThumbnails = new LocalDiskDriver(THUMBNAIL_LOCAL_ROOT, THUMBNAIL_KEY_PATTERN);
+  return cachedThumbnails;
+}
+
+/** Where a site's home-page picture lives. */
+export function thumbnailKey(sitePublicId: string): string {
+  return `t/${sitePublicId}.jpg`;
+}
+
+/** Testing hook: drop every cached driver. */
 export function resetStorageDrivers(): void {
   cached = undefined;
   cachedMedia = undefined;
+  cachedThumbnails = undefined;
 }
 
 // ---------------------------------------------------------------------------

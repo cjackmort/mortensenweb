@@ -71,6 +71,11 @@ const PUBLIC_PATHS = [
   // verification is one of them, so a client is never shown a preview that was
   // built, deployed and serving correctly the whole time.
   "/api/cron",
+  // The thumbnail job: a GitHub Action photographing client home pages. Same
+  // shape as the scheduler: no session, CRON_SECRET in a header, refused
+  // without it. Only `/api/thumbnails`; the admin's own read of a picture is
+  // `/api/sites/…/thumbnail` and stays behind sign-in.
+  "/api/thumbnails",
   // The care plans, fetched by mortensenweb.com's build. A build server has no
   // session, and every figure in it is already on the public pricing page.
   "/api/plans",

@@ -21,6 +21,7 @@ import {
   subscriptionIdFromInvoice,
 } from "@/lib/payments/stripe";
 import { unlockClientFeatures } from "./entitlements";
+import { billingDayFromAnchor } from "@/lib/billing/billing-day";
 import { retireHandBilledPlans } from "./hand-billed-plans";
 import { settleOneOffCheckout } from "./stripe-one-off";
 
@@ -290,6 +291,12 @@ async function mirrorSubscription(
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     currentPeriodEnd: periodEndSeconds ? new Date(periodEndSeconds * 1000) : null,
     recurringEnabledAt: now,
+    // The day Stripe actually charges on: the anchor, which is the day the
+    // operator chose when checkout set one, and the signup day otherwise.
+    billingDay: billingDayFromAnchor(
+      (subscription as unknown as { billing_cycle_anchor?: number }).billing_cycle_anchor ??
+        subscription.start_date,
+    ),
   };
 
   const updated = await db
@@ -310,13 +317,6 @@ async function mirrorSubscription(
         ...values,
         publicId: newPublicId(),
         clientId,
-        // The portal's own billing day, kept in its 1–28 range. Only used by
-        // paths that predate Stripe; `currentPeriodEnd` is the real answer to
-        // "when do they next pay".
-        billingDay: Math.min(
-          28,
-          Math.max(1, new Date(subscription.start_date * 1000).getUTCDate()),
-        ),
         startedOn: businessDate(new Date(subscription.start_date * 1000)),
       })
       .onConflictDoNothing({

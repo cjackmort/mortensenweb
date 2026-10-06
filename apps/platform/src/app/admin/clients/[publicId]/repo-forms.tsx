@@ -7,7 +7,6 @@ import {
   setAllowlistAction,
   type RepoActionResult,
 } from "./repo-actions";
-import { connectAnalyticsAction, type SiteActionResult } from "./site-actions";
 
 /**
  * Everything that makes a site workable, in one place.
@@ -19,7 +18,7 @@ import { connectAnalyticsAction, type SiteActionResult } from "./site-actions";
  * ready to be worked on?* It should be answerable by looking once.
  *
  * The order is the order things happen: point at the code, confirm where it
- * deploys, connect analytics, then allow the agent to work.
+ * deploys, then allow the agent to work. Analytics has its own section.
  */
 
 export interface ConnectedRepo {
@@ -58,16 +57,12 @@ const RULE = {
 
 export function RepositoryPanel({
   sitePublicId,
-  clientPublicId,
   siteName,
   connected,
-  umamiWebsiteId,
 }: {
   sitePublicId: string;
-  clientPublicId: string;
   siteName: string;
   connected: ConnectedRepo | null;
-  umamiWebsiteId: string | null;
 }) {
   const [connectState, connectAction, connecting] = useActionState<
     RepoActionResult | null,
@@ -81,10 +76,6 @@ export function RepositoryPanel({
     RepoActionResult | null,
     FormData
   >(installTokensAction, null);
-  const [umamiState, umamiAction, savingUmami] = useActionState<
-    SiteActionResult | null,
-    FormData
-  >(connectAnalyticsAction, null);
 
   const previewsReady = Boolean(connected?.netlifySiteName);
 
@@ -197,41 +188,7 @@ export function RepositoryPanel({
         </form>
       </details>
 
-      {/* ---- 2. Analytics ------------------------------------------------- */}
-      <hr style={RULE} />
-
-      <h3 style={{ fontSize: "0.95rem", marginTop: 0 }}>Analytics</h3>
-
-      {umamiState &&
-        (umamiState.ok ? (
-          <p className="notice notice-success">Analytics connection saved.</p>
-        ) : (
-          <p className="error">{umamiState.message}</p>
-        ))}
-
-      <form action={umamiAction}>
-        <input type="hidden" name="clientPublicId" value={clientPublicId} />
-        <input type="hidden" name="sitePublicId" value={sitePublicId} />
-
-        <label htmlFor="umamiWebsiteId">Umami website ID</label>
-        <input
-          id="umamiWebsiteId"
-          name="umamiWebsiteId"
-          defaultValue={umamiWebsiteId ?? ""}
-          placeholder="4f5eaf4e-5e3e-4545-b742-d2fb05e1a911"
-        />
-        <p className="field-hint">
-          Umami &rarr; Websites &rarr; the site &rarr; Edit. The{" "}
-          <code>data-website-id</code> from the tracking snippet, not the API
-          key. Leave blank to disconnect.
-        </p>
-
-        <button type="submit" className="secondary" disabled={savingUmami}>
-          {savingUmami ? "Saving…" : "Save analytics"}
-        </button>
-      </form>
-
-      {/* ---- 3. Permission ------------------------------------------------ */}
+      {/* ---- 2. Permission ------------------------------------------------ */}
       {connected && (
         <>
           <hr style={RULE} />

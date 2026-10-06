@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import type { BillingState } from "@/lib/billing/stripe-status";
 import type { StripePaymentRow } from "@/db/repositories/client/stripe-billing";
@@ -162,6 +163,14 @@ export function StripePanel({
         <p className="notice">
           Your website stays online. Update your card to clear the outstanding
           payment.
+        </p>
+      ) : null}
+
+      {state === "not_subscribed" ? (
+        <p>
+          <Link className="button secondary" href="/dashboard/choose-plan">
+            Compare plans
+          </Link>
         </p>
       ) : null}
 
