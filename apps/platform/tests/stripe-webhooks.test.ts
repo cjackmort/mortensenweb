@@ -6,6 +6,7 @@ import {
   auditLog,
   clients,
   organizations,
+  paymentRequests,
   payments,
   servicePlans,
   subscriptions,
@@ -34,6 +35,8 @@ let close: () => Promise<void>;
 const stripeState = {
   subscriptions: new Map<string, Stripe.Subscription>(),
   customers: new Map<string, Stripe.Customer>(),
+  /** What `invoices.list({ status: "paid" })` answers. */
+  paidInvoices: [] as Stripe.Invoice[],
 };
 
 vi.mock("@/lib/payments/stripe", async () => {
@@ -63,7 +66,7 @@ vi.mock("@/lib/payments/stripe", async () => {
         // The reconciliation pass reads these. Empty is the right default:
         // the gating test is about whether it runs at all, not what it finds.
         invoices: {
-          list: async () => ({ data: [] }),
+          list: async () => ({ data: stripeState.paidInvoices }),
         },
       }) as never,
   };
@@ -179,6 +182,7 @@ afterAll(async () => {
 beforeEach(async () => {
   // Fresh tenant per test so nothing leaks between them.
   await db.delete(auditLog);
+  await db.delete(paymentRequests);
   await db.delete(payments);
   await db.delete(webhookDeliveries);
   await db.delete(subscriptions);
@@ -219,6 +223,7 @@ beforeEach(async () => {
 
   stripeState.subscriptions.clear();
   stripeState.customers.clear();
+  stripeState.paidInvoices = [];
   stripeState.subscriptions.set(SUBSCRIPTION, subscriptionObject());
 });
 
@@ -768,5 +773,249 @@ describe("promos", () => {
 
     const row = (await db.select().from(subscriptions))[0]!;
     expect(row.discountedPriceCents).toBe(5000);
+  });
+});
+
+/**
+ * The first real payment: Scott Mortensen Fine Arts paid the $1 test plan by
+ * card on 2026-10-06. Stripe settled it, but every delivery to the portal was
+ * refused at the signature check (the signing secret on Netlify did not match
+ * the endpoint), so not one event arrived. The hourly reconciliation noticed
+ * both the subscription and the invoice within the hour, and only wrote them
+ * into an audit row nothing displayed. These are the repairs it now makes.
+ */
+describe("reconciliation repairs what the webhook missed", () => {
+  it("records a settled invoice whose webhook never arrived", async () => {
+    stripeState.paidInvoices = [invoiceObject()];
+
+    const result = await runScheduledReconcile(db);
+    expect(result.ran).toBe(true);
+
+    const ledger = await db.select().from(payments);
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]!.amountCents).toBe(10000);
+    expect(ledger[0]!.idempotencyKey).toBe("stripe_invoice:in_test_1");
+
+    // Exactly what the receiver would have done: the subscription mirrored and
+    // linked, and the features the payment buys switched on.
+    const subs = await db.select().from(subscriptions);
+    expect(subs).toHaveLength(1);
+    expect(ledger[0]!.subscriptionId).toBe(subs[0]!.id);
+
+    const client = await db
+      .select({ unlocked: clients.changeRequestsUnlockedAt })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1);
+    expect(client[0]!.unlocked).not.toBeNull();
+
+    if (result.ran) {
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ kind: "missing_payment", repaired: true }),
+      );
+    }
+  });
+
+  it("records it once, however many times the job and the receiver see it", async () => {
+    stripeState.paidInvoices = [invoiceObject()];
+
+    await runScheduledReconcile(db);
+    // The delayed delivery turning up after the job already recorded it.
+    await processStripeEvent(db, event("invoice.paid", invoiceObject()));
+    // Clears the hourly gate so the job runs a second time.
+    await db.delete(auditLog);
+    await runScheduledReconcile(db);
+
+    expect(await db.select().from(payments)).toHaveLength(1);
+  });
+
+  it("mirrors a subscription whose events never arrived", async () => {
+    const result = await runScheduledReconcile(db);
+
+    const subs = await db.select().from(subscriptions);
+    expect(subs).toHaveLength(1);
+    expect(subs[0]!.provider).toBe("stripe");
+    expect(subs[0]!.status).toBe("active");
+    if (result.ran) {
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ kind: "missing_subscription", repaired: true }),
+      );
+    }
+  });
+
+  it("flags rather than records an invoice no client claims", async () => {
+    stripeState.subscriptions.clear();
+    stripeState.paidInvoices = [invoiceObject({ customer: "cus_stranger", parent: null })];
+
+    const result = await runScheduledReconcile(db);
+
+    expect(await db.select().from(payments)).toHaveLength(0);
+    if (result.ran) {
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ kind: "missing_payment", repaired: false }),
+      );
+    }
+  });
+
+  it("tells the operator when a complimentary client is still being charged", async () => {
+    const comp = await db
+      .select({ id: servicePlans.id })
+      .from(servicePlans)
+      .where(eq(servicePlans.key, "comp-unlimited"))
+      .limit(1);
+    await db.update(clients).set({ compPlanId: comp[0]!.id }).where(eq(clients.id, clientId));
+    stripeState.paidInvoices = [invoiceObject()];
+
+    const result = await runScheduledReconcile(db);
+
+    // The money is still recorded (it arrived), the comp is untouched, and the
+    // contradiction is put in front of a person.
+    expect(await db.select().from(payments)).toHaveLength(1);
+    expect(await db.select().from(subscriptions)).toHaveLength(0);
+    if (result.ran) {
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ kind: "comp_billed", repaired: false }),
+      );
+    }
+  });
+});
+
+describe("matching a subscription's first invoice", () => {
+  it("finds the client from the subscription's metadata when the customer link is missing", async () => {
+    // A subscription invoice carries no metadata of its own; checkout's
+    // client_id is on `parent.subscription_details`. Reading only
+    // `invoice.metadata` left the first payment hanging on the stored
+    // customer id, which is the link that is missing on a first payment.
+    await db.update(clients).set({ stripeCustomerId: null }).where(eq(clients.id, clientId));
+
+    const outcome = await processStripeEvent(
+      db,
+      event(
+        "invoice.paid",
+        invoiceObject({
+          parent: {
+            subscription_details: {
+              subscription: SUBSCRIPTION,
+              metadata: { client_id: clientId },
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(outcome.status).toBe("processed");
+    expect(await db.select().from(payments)).toHaveLength(1);
+  });
+
+  it("links the first payment to its subscription even before the subscription event", async () => {
+    await processStripeEvent(db, event("invoice.paid", invoiceObject()));
+
+    const sub = (await db.select().from(subscriptions))[0]!;
+    const payment = (await db.select().from(payments))[0]!;
+    expect(payment.subscriptionId).toBe(sub.id);
+  });
+
+  it("refuses when the metadata and the stored customer name different clients", async () => {
+    const otherOrg = (
+      await db
+        .insert(organizations)
+        .values({
+          publicId: newPublicId(),
+          name: "Other Co",
+          slug: `other-${Math.random().toString(36).slice(2, 8)}`,
+          kind: "client",
+        })
+        .returning()
+    )[0]!;
+    const other = (
+      await db
+        .insert(clients)
+        .values({ publicId: newPublicId(), organizationId: otherOrg.id })
+        .returning()
+    )[0]!;
+
+    // The customer is stored on `clientId`; the metadata says `other`.
+    const outcome = await processStripeEvent(
+      db,
+      event("invoice.paid", invoiceObject({ metadata: { client_id: other.id } })),
+    );
+
+    expect(outcome.status).toBe("unmatched");
+    expect(await db.select().from(payments)).toHaveLength(0);
+  });
+});
+
+describe("the hand-raised invoice Stripe now charges for", () => {
+  // Stripe's subscription starts 2026-09-01 at $100 a month.
+  async function invoice(overrides: Partial<typeof paymentRequests.$inferInsert> = {}) {
+    return (
+      await db
+        .insert(paymentRequests)
+        .values({
+          publicId: newPublicId(),
+          clientId,
+          reference: `MW-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          amountCents: 10000,
+          dueOn: "2026-09-10",
+          status: "open",
+          method: "venmo",
+          createdAt: new Date("2026-08-28T12:00:00Z"),
+          ...overrides,
+        })
+        .returning()
+    )[0]!;
+  }
+
+  async function statusOf(id: string) {
+    const rows = await db
+      .select({ status: paymentRequests.status })
+      .from(paymentRequests)
+      .where(eq(paymentRequests.id, id));
+    return rows[0]!.status;
+  }
+
+  it("is cancelled once the subscription is active, so the client is not asked twice", async () => {
+    const open = await invoice();
+
+    await processStripeEvent(db, event("customer.subscription.created", subscriptionObject()));
+
+    expect(await statusOf(open.id)).toBe("cancelled");
+  });
+
+  it("is left for the operator when the client has started paying it another way", async () => {
+    // Pressing "Pay with Venmo" may mean money is on its way for this very
+    // invoice. Cancelling it would leave that money nowhere to be confirmed.
+    const venmo = await invoice({ initiatedAt: new Date("2026-08-30T12:00:00Z") });
+    const declared = await invoice({ status: "awaiting_confirmation" });
+    const card = await invoice({ provider: "stripe", providerReference: "cs_open_1" });
+
+    await processStripeEvent(db, event("customer.subscription.created", subscriptionObject()));
+
+    expect(await statusOf(venmo.id)).toBe("open");
+    expect(await statusOf(declared.id)).toBe("awaiting_confirmation");
+    expect(await statusOf(card.id)).toBe("open");
+  });
+
+  it("leaves anything that is not the same month's bill", async () => {
+    const olderDebt = await invoice({ dueOn: "2026-08-15" });
+    const raisedLater = await invoice({ createdAt: new Date("2026-09-05T00:00:00Z") });
+    const otherAmount = await invoice({ amountCents: 25000 });
+    const extraChange = await invoice({ purpose: "extra_change" });
+
+    await processStripeEvent(db, event("customer.subscription.created", subscriptionObject()));
+
+    expect(await statusOf(olderDebt.id)).toBe("open");
+    expect(await statusOf(raisedLater.id)).toBe("open");
+    expect(await statusOf(otherAmount.id)).toBe("open");
+    expect(await statusOf(extraChange.id)).toBe("open");
+  });
+
+  it("is left alone while the first Stripe payment has not gone through", async () => {
+    const open = await invoice();
+    stripeState.subscriptions.set(SUBSCRIPTION, subscriptionObject({ status: "incomplete" }));
+
+    await processStripeEvent(db, event("customer.subscription.created", subscriptionObject()));
+
+    expect(await statusOf(open.id)).toBe("open");
   });
 });

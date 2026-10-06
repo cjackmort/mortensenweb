@@ -1,6 +1,6 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { auditLog, subscriptions } from "@/db/schema";
+import { auditLog, paymentRequests, subscriptions } from "@/db/schema";
 import { businessDate } from "@/lib/billing/period";
 
 /**
@@ -17,6 +17,9 @@ import { businessDate } from "@/lib/billing/period";
  * payment failed leaves the client on the plan they had, still billed the way
  * they were. Square subscriptions are left alone: a Square row stands for a
  * live mandate on another processor, which has to be cancelled there.
+ *
+ * The hand-raised invoice for that same month goes with it — see
+ * `supersedeHandInvoices`.
  */
 export async function retireHandBilledPlans(
   db: Database,
@@ -24,6 +27,9 @@ export async function retireHandBilledPlans(
     clientId: string;
     organizationId: string;
     stripeSubscriptionId: string;
+    /** When Stripe started billing, and what it charges each month. */
+    stripeStartedAt: Date;
+    stripeMonthlyCents: number;
   },
 ): Promise<void> {
   const today = businessDate(new Date());
@@ -45,7 +51,9 @@ export async function retireHandBilledPlans(
     )
     .returning({ publicId: subscriptions.publicId });
 
-  if (retired.length === 0) return;
+  const superseded = await supersedeHandInvoices(db, input);
+
+  if (retired.length === 0 && superseded.length === 0) return;
 
   await db.insert(auditLog).values({
     organizationId: input.organizationId,
@@ -55,6 +63,61 @@ export async function retireHandBilledPlans(
     metadata: {
       source: "stripe_webhook",
       retired: retired.map((r) => r.publicId),
+      invoicesCancelled: superseded.map((r) => r.reference),
     },
   });
+}
+
+/**
+ * Cancel the hand-raised invoice that Stripe's subscription now charges for.
+ *
+ * The usual way onto Stripe is: the operator raises this month's invoice, and
+ * the client, offered both, sets up card payments instead of paying it. Left
+ * alone, that invoice stays "open" beside a subscription that has already
+ * collected the same month — the client is shown a bill they have paid, and
+ * the reminder ladder chases them for it.
+ *
+ * Every condition below is a reason to leave an invoice for a person instead,
+ * because cancelling one that was really owed writes off a debt silently:
+ *
+ *  - **Raised before Stripe started.** One raised afterwards was raised for a
+ *    client already on Stripe, so it is for something else.
+ *  - **Due on or after Stripe's start.** One due earlier is for a period
+ *    Stripe never covered — an old debt, not this month's.
+ *  - **For exactly the monthly price Stripe charges.** Anything else is not
+ *    the same bill.
+ *  - **Nobody has started paying it.** Not declared paid, not opened in
+ *    Venmo, no card or Square checkout attached. Any of those may mean money
+ *    is on its way for it, and cancelling would leave that money nowhere to
+ *    land: the operator's confirm button only appears on unsettled invoices.
+ *
+ * Only `purpose = subscription`: an extra change is bought on its own.
+ */
+async function supersedeHandInvoices(
+  db: Database,
+  input: {
+    clientId: string;
+    stripeStartedAt: Date;
+    stripeMonthlyCents: number;
+  },
+): Promise<{ reference: string }[]> {
+  if (input.stripeMonthlyCents <= 0) return [];
+
+  return db
+    .update(paymentRequests)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(
+      and(
+        eq(paymentRequests.clientId, input.clientId),
+        eq(paymentRequests.purpose, "subscription"),
+        inArray(paymentRequests.status, ["open", "overdue"]),
+        eq(paymentRequests.amountCents, input.stripeMonthlyCents),
+        lte(paymentRequests.createdAt, input.stripeStartedAt),
+        isNotNull(paymentRequests.dueOn),
+        gte(paymentRequests.dueOn, businessDate(input.stripeStartedAt)),
+        isNull(paymentRequests.initiatedAt),
+        isNull(paymentRequests.providerReference),
+      ),
+    )
+    .returning({ reference: paymentRequests.reference });
 }

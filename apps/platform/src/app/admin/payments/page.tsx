@@ -17,6 +17,11 @@ import {
 } from "@/db/repositories/admin/finance";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { DEFAULT_DUNNING_CONFIG } from "@/lib/billing/dunning";
+import {
+  stripeSyncStatus,
+  type StripeSyncStatus,
+} from "@/db/repositories/admin/stripe-reconcile";
+import { stripeConfigured } from "@/lib/payments/stripe";
 import { MonthlyBillingTable } from "./monthly-billing";
 import { AddExpenseForm, DeleteExpenseButton } from "./finance-forms";
 
@@ -66,7 +71,7 @@ export default async function AdminPaymentsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, expenseRows, ledgerTotals] =
+  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, expenseRows, ledgerTotals, stripeSync] =
     await Promise.all([
       listOverduePaymentRequests(ctx, db),
       listClientBillingStatus(ctx, db),
@@ -74,6 +79,7 @@ export default async function AdminPaymentsPage() {
       sumPaymentsReceivedInMonth(ctx, db),
       listExpenses(ctx, db),
       expenseTotals(ctx, db),
+      stripeConfigured() ? stripeSyncStatus(db) : Promise.resolve(null),
     ]);
 
   const awaiting = rows.filter((r) => r.awaitingConfirmation);
@@ -118,6 +124,8 @@ export default async function AdminPaymentsPage() {
             <p className="stat-note">hosting is never affected</p>
           </div>
         </div>
+
+        {stripeSync && <StripeSyncCard status={stripeSync} />}
 
         <section className="card">
           <div className="card-head">
@@ -316,6 +324,83 @@ export default async function AdminPaymentsPage() {
         </section>
       </main>
     </>
+  );
+}
+
+/**
+ * Whether Stripe and the portal agree, from the hourly check.
+ *
+ * Shown only when there is something to say. A healthy sync is one line of
+ * muted text; a payment that reached the portal only through the check is
+ * spelled out with what to fix, because the usual cause, a signing secret
+ * that does not match, is invisible from anywhere else in the portal.
+ */
+function StripeSyncCard({ status }: { status: StripeSyncStatus }) {
+  const lastRun = status.lastRunAt
+    ? status.lastRunAt.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "never";
+  const healthy =
+    status.ok && status.needsReview.length === 0 && status.recoveredRecently === 0;
+
+  if (healthy) {
+    return (
+      <p className="muted" style={{ fontSize: "0.82rem" }}>
+        Stripe and the portal agree. Last checked {lastRun}.
+      </p>
+    );
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Stripe sync</h2>
+        <span className="muted">checked {lastRun}</span>
+      </div>
+
+      {!status.ok && (
+        <p className="error" style={{ marginTop: 0 }}>
+          The last check could not reach Stripe{status.error ? `: ${status.error}` : "."}
+        </p>
+      )}
+
+      {status.recoveredRecently > 0 && (
+        <p style={{ marginTop: 0 }}>
+          <span className="pill pill-warning">webhooks not arriving</span>{" "}
+          {status.recoveredRecently} payment{status.recoveredRecently === 1 ? "" : "s"} in the
+          last 30 days reached the portal only through this hourly check, not from Stripe
+          directly. In Stripe, open Developers → Webhooks → the portal endpoint and look at a
+          failed delivery: a 401 means <code>STRIPE_WEBHOOK_SECRET</code> on Netlify does not
+          match that endpoint&rsquo;s signing secret (change it, then redeploy).
+        </p>
+      )}
+
+      {status.repaired.length > 0 && (
+        <>
+          <p className="muted" style={{ marginBottom: "0.4rem" }}>Fixed by the last check</p>
+          <ul style={{ marginTop: 0 }}>
+            {status.repaired.map((f) => (
+              <li key={`${f.kind}:${f.reference}`}>{f.detail}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {status.needsReview.length > 0 && (
+        <>
+          <p className="muted" style={{ marginBottom: "0.4rem" }}>Needs you</p>
+          <ul style={{ marginTop: 0 }}>
+            {status.needsReview.map((f) => (
+              <li key={`${f.kind}:${f.reference}`}>{f.detail}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 
