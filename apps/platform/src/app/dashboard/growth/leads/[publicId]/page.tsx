@@ -7,6 +7,8 @@ import { openLead } from "@/db/repositories/client/leads";
 import { formatDateTime } from "@/lib/time";
 import { DeleteLeadForm, LeadStatusForm } from "../lead-controls";
 import { RefreshOnRead } from "../refresh-on-read";
+import { LeadReplyForm } from "../reply-form";
+import { listLeadReplies, replyIdentity } from "@/db/repositories/client/lead-replies";
 
 /**
  * One enquiry: who, how to reach them, what they said, and where it stands.
@@ -47,6 +49,11 @@ export default async function LeadPage({
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
+
+  const [replies, identity] = await Promise.all([
+    listLeadReplies(db, ctx, publicId),
+    replyIdentity(db, ctx),
+  ]);
 
   // The rest of what they filled in. Name, email, phone and message are
   // already shown above as the heading, the buttons and the message itself;
@@ -107,6 +114,47 @@ export default async function LeadPage({
               <a href={lead.pageUrl} target="_blank" rel="noopener noreferrer nofollow">
                 {lead.pageUrl}
               </a>
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Reply</h2>
+        </div>
+        <div className="panel-body">
+          {replies.length > 0 && (
+            <ol className="lead-thread">
+              {replies.map((reply) => (
+                <li key={reply.publicId}>
+                  <p className="lead-thread-meta">
+                    {reply.sentByName ?? "You"} · {formatDateTime(reply.createdAt)}
+                    {reply.status === "failed" && (
+                      <span className="pill pill-danger">Not delivered</span>
+                    )}
+                    {reply.status === "not_sent" && (
+                      <span className="pill pill-warning">Not emailed</span>
+                    )}
+                  </p>
+                  <p className="lead-thread-body">{reply.body}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {lead.email ? (
+            <LeadReplyForm
+              publicId={lead.publicId}
+              customerEmail={lead.email}
+              businessName={identity.businessName}
+              replyTo={identity.replyTo}
+              readOnly={ctx.impersonating}
+            />
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              They didn&rsquo;t leave an email address
+              {telHref ? ", so the way to answer is to call them." : "."}
             </p>
           )}
         </div>

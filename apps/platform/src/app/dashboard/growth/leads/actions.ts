@@ -6,6 +6,7 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { deleteLead, isLeadStatus, setLeadStatus } from "@/db/repositories/client/leads";
+import { sendLeadReply } from "@/db/repositories/client/lead-replies";
 
 /**
  * Lead mutations. Both re-derive the tenant from the session: a server action
@@ -73,4 +74,35 @@ export async function deleteLeadAction(formData: FormData): Promise<void> {
 
   revalidatePath("/dashboard", "layout");
   redirect("/dashboard/growth/leads?deleted=1");
+}
+
+export async function sendLeadReplyAction(
+  _previous: LeadActionResult | null,
+  formData: FormData,
+): Promise<LeadActionResult> {
+  const session = await context();
+  if (!session) return { ok: false, message: "Please sign in again." };
+
+  const publicId = String(formData.get("lead") ?? "");
+  const body = String(formData.get("body") ?? "");
+
+  let result;
+  try {
+    result = await sendLeadReply(session.db, session.ctx, publicId, body);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "That enquiry no longer exists." };
+    }
+    throw error;
+  }
+  if (!result.ok) return result;
+
+  refresh(publicId);
+  return {
+    ok: true,
+    message:
+      result.status === "sent"
+        ? "Sent. Their answer will come to your email."
+        : "Saved, but not emailed — sending isn't set up on this server.",
+  };
 }

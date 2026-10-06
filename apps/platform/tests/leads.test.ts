@@ -18,17 +18,15 @@ import {
   setLeadStatus,
 } from "@/db/repositories/client/leads";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
-import { buildLeadReceivedEmail } from "@/lib/email/lead-received";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
 
 /**
  * The leads inbox.
  *
- * Three things here would fail silently in production rather than loudly:
- * a delivery landing in the wrong client's inbox, a deleted customer coming
- * back on the next import, and an email built from a stranger's form text
- * carrying their markup. Each has a test below that would catch it.
+ * Two things here would fail silently in production rather than loudly: a
+ * delivery landing in the wrong client's inbox, and a deleted customer coming
+ * back on the next import. Each has a test below that would catch it.
  */
 
 let db: Database;
@@ -299,29 +297,6 @@ describe("the client's inbox", () => {
   });
 });
 
-describe("the new-lead email", () => {
-  it("escapes everything the stranger typed, and replies to them", () => {
-    const message = buildLeadReceivedEmail({
-      contactName: "Pat",
-      businessName: "Acme Plumbing",
-      portalUrl: "https://portal.example.com",
-      lead: {
-        publicId: "LEAD1",
-        name: "<img src=x onerror=alert(1)>",
-        email: "dana@example.test",
-        phone: null,
-        message: "<script>steal()</script>",
-      },
-    });
-    expect(message.html).not.toContain("<script>");
-    expect(message.html).not.toContain("<img src=x");
-    expect(message.html).toContain("&lt;script&gt;");
-    expect(message.replyTo).toBe("dana@example.test");
-    expect(message.subject).not.toMatch(/[\r\n]/);
-    expect(message.html).toContain("https://portal.example.com/dashboard/growth/leads/LEAD1");
-  });
-});
-
 describe("the webhook endpoint", () => {
   async function deliver(sitePublicId: string, body: string, token: string | null) {
     const { POST } = await import("@/app/api/webhooks/netlify-forms/[sitePublicId]/route");
@@ -340,7 +315,7 @@ describe("the webhook endpoint", () => {
     expect(response.status).toBe(503);
   });
 
-  it("records a signed delivery in that site's client's inbox and emails them once", async () => {
+  it("records a signed delivery in that site's client's inbox, and sends no email of its own", async () => {
     vi.stubEnv("NETLIFY_FORMS_WEBHOOK_SECRET", "master");
     const payload = submission({ data: { name: "Webhook Walt", email: "walt@example.test" } });
     const body = JSON.stringify(payload);
@@ -355,9 +330,9 @@ describe("the webhook endpoint", () => {
 
     const [row] = await db.select().from(leads).where(eq(leads.providerSubmissionId, payload.id));
     expect(row!.organizationId).toBe(acme.organizationId);
-    expect(row!.notifiedAt).not.toBeNull();
-    expect(sent.filter((m) => m.subject.includes("Webhook Walt"))).toHaveLength(1);
-    expect(sent[0]!.replyTo).toBe("walt@example.test");
+    expect(row!.readAt).toBeNull();
+    // Netlify's own notification tells the client; a second email was noise.
+    expect(sent).toHaveLength(0);
   });
 
   it("refuses a delivery signed for one site but sent to another site's address", async () => {

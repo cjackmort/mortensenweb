@@ -3896,3 +3896,42 @@ form + .field-hint {
     padding: 0 0.6rem;
   }
 }
+
+/* Replies sent from the portal, oldest first, above the box for the next. */
+.lead-thread {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.lead-thread li {
+  border-left: 3px solid var(--accent-fill);
+  padding: 0.15rem 0 0.15rem 0.9rem;
+}
+
+.lead-thread li + li {
+  margin-top: 1rem;
+}
+
+.lead-thread-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.35rem;
+  font: 500 0.68rem / 1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lead-thread-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A hint under a textarea, not tucked up under an input. */
+.lead-reply-hint {
+  margin-top: 0.5rem;
+}
