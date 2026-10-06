@@ -31,11 +31,18 @@ import { seedTenant, type SeededTenant } from "./helpers/tenant";
 const deleted: string[] = [];
 const failing = new Set<string>();
 
+// Library photos live in the media store. The attachments store is a
+// different bucket with a different key format, and a purge aimed at it
+// removes nothing — so it is mocked here as one that must never be touched.
 vi.mock("@/lib/storage/driver", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/storage/driver")>();
+  const wrongStore = () => {
+    throw new Error("purged the attachments store instead of the media store");
+  };
   return {
     ...actual,
-    storageDriver: () => ({
+    storageDriver: () => ({ put: wrongStore, get: wrongStore, delete: wrongStore }),
+    mediaDriver: () => ({
       put: async () => {
         throw new Error("not used here");
       },

@@ -6,7 +6,7 @@ import {
   mediaDerivatives,
   requestAssets,
 } from "@/db/schema";
-import { storageDriver } from "@/lib/storage/driver";
+import { mediaDriver } from "@/lib/storage/driver";
 import { BLOCKING_STATUSES } from "@/lib/requests/status";
 import { assertMutable, type TenantContext } from "../context";
 import { releaseStorage } from "./media-quota";
@@ -108,7 +108,9 @@ async function purgeOne(
     (key): key is string => Boolean(key),
   );
 
-  const driver = storageDriver();
+  // The media store, not the attachments one: library photos and their sizes
+  // live there, under the media key format the other store refuses.
+  const driver = mediaDriver();
   try {
     for (const key of keys) await driver.delete(key);
   } catch (error) {
