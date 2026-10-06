@@ -3411,3 +3411,57 @@ button.link:focus-visible {
   flex-basis: 100%;
   margin: 0;
 }
+
+/* --------------------------------------------------------------------------
+   "Make a request" — the one way into Requests from the client's home page
+   -------------------------------------------------------------------------- */
+
+.request-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+}
+
+.request-cta-copy {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+
+.request-cta-copy h2 {
+  margin-bottom: 0.5rem;
+}
+
+.request-cta-copy p {
+  margin: 0;
+  max-width: 40rem;
+}
+
+.request-cta-ready {
+  margin-top: 0.85rem !important;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.request-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* Deleting photos for good asks once more, in place. */
+.media-confirm {
+  margin: 0 0 1.25rem;
+}
+
+.media-confirm .actions {
+  margin-top: 0.75rem;
+}
+
+/* The pane's heading sits one level down, so the pane rule above misses it. */
+.request-cta-copy h2 {
+  font: 500 clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem) / 1.15 var(--display);
+  letter-spacing: -0.02em;
+  color: var(--text);
+}

@@ -148,7 +148,7 @@ const PILL: Record<ChangeRequestStatus, string> = {
   approved: "pill-accent",
   dispatched: "pill-accent",
   pr_open: "pill-accent",
-  changes_requested: "pill-warning",
+  changes_requested: "pill-accent",
   merged: "pill-accent",
   deployed: "pill-info",
   verified: "pill-success",
@@ -176,7 +176,7 @@ const LABEL: Record<ChangeRequestStatus, string> = {
   approved: "approved",
   dispatched: "being worked on",
   pr_open: "in review",
-  changes_requested: "needs your input",
+  changes_requested: "making your changes",
   merged: "ready to publish",
   deployed: "published, checking",
   verified: "done",
@@ -285,8 +285,10 @@ export function effectSummary(status: string): string {
     // cancelling is a normal thing to do and not a failure.
     case "closed":
       return "This one was called off. Nothing changed on your site.";
+    // The client asked for changes to a preview: the agent redoes it from
+    // their notes, so this is our move, not theirs.
     case "changes_requested":
-      return "We need something from you before this can go ahead.";
+      return "You asked for changes — we're making them and will send you a new preview.";
     case "needs_operator":
       // Never "too complex" or anything implying their request was a problem.
       // It is our system deferring to a person, which is our business, not

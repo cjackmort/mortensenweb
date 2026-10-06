@@ -62,7 +62,10 @@ export function RequestTimeline({ entries }: { entries: TimelineEntry[] }) {
       <details className="timeline">
         <summary>
           What happened
-          <span className="muted"> · {entries.length} updates</span>
+          <span className="muted">
+            {" "}
+            · {entries.length} {entries.length === 1 ? "update" : "updates"}
+          </span>
         </summary>
         <ol className="timeline-list">
           {entries.map((e, i) => (
