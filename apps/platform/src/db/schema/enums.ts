@@ -510,3 +510,20 @@ export const mediaUploadStatusEnum = pgEnum("media_upload_status", [
   "completed",
   "aborted",
 ]);
+
+/**
+ * Where a lead stands, as the client tells it.
+ *
+ * Every value is set by a person. Nothing in the portal infers that a lead was
+ * contacted or won — a reply sent from the client's own phone is invisible to
+ * us, and a guessed "won" would flatter the monthly report with a sale nobody
+ * made. `archived` is for the enquiry that was never a customer (a supplier, a
+ * job seeker), kept out of the counts without being deleted.
+ */
+export const leadStatusEnum = pgEnum("lead_status", [
+  "new",
+  "contacted",
+  "won",
+  "lost",
+  "archived",
+]);

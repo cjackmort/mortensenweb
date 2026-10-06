@@ -356,3 +356,95 @@ export async function findSiteByRepo(
     branch: match.build_settings?.repo_branch ?? null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Forms
+// ---------------------------------------------------------------------------
+
+/**
+ * A form submission as Netlify returns it, from the API or a webhook — the
+ * two bodies share this shape. Every field is optional because the payload is
+ * untrusted input until `parseSubmission` has validated it.
+ */
+export interface NetlifySubmissionPayload {
+  id?: unknown;
+  form_name?: unknown;
+  created_at?: unknown;
+  email?: unknown;
+  name?: unknown;
+  data?: unknown;
+  ordered_human_fields?: unknown;
+}
+
+/**
+ * Verified (non-spam) submissions, newest first, one page at a time.
+ *
+ * Bounded by `maxPages` because a backfill runs inside a request: a site that
+ * has collected thousands of submissions over the years is imported most
+ * recent first, and anything older than the limit stays on Netlify, which is
+ * where it already was.
+ */
+export async function listFormSubmissions(
+  siteId: string,
+  { maxPages = 5 }: { maxPages?: number } = {},
+): Promise<NetlifySubmissionPayload[]> {
+  const all: NetlifySubmissionPayload[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data } = await netlifyRequest<NetlifySubmissionPayload[]>(
+      `/sites/${encodeURIComponent(siteId)}/submissions?per_page=100&page=${page}`,
+    );
+    if (!Array.isArray(data) || data.length === 0) break;
+    all.push(...data);
+    if (data.length < 100) break;
+  }
+  return all;
+}
+
+interface NetlifyHook {
+  id: string;
+  type?: string;
+  event?: string;
+  data?: { url?: string } | null;
+}
+
+/**
+ * Point a site's `submission_created` notifications at the portal.
+ *
+ * Any existing hook aimed at the same URL is removed first, so connecting
+ * twice — or reconnecting after the secret rotated — leaves exactly one. A
+ * hook aimed anywhere else is the operator's and is left alone.
+ */
+export async function connectFormsWebhook(input: {
+  siteId: string;
+  url: string;
+  signatureSecret: string;
+}): Promise<{ hookId: string }> {
+  const site = encodeURIComponent(input.siteId);
+  const { data: existing } = await netlifyRequest<NetlifyHook[]>(
+    `/hooks?site_id=${site}`,
+  );
+
+  for (const hook of Array.isArray(existing) ? existing : []) {
+    if (hook.event === "submission_created" && hook.data?.url === input.url) {
+      await netlifyRequest(`/hooks/${encodeURIComponent(hook.id)}`, {
+        method: "DELETE",
+        allowStatuses: [404],
+      });
+    }
+  }
+
+  const { data } = await netlifyRequest<NetlifyHook>(`/hooks?site_id=${site}`, {
+    method: "POST",
+    body: {
+      site_id: input.siteId,
+      type: "url",
+      event: "submission_created",
+      data: { url: input.url, signature_secret: input.signatureSecret },
+    },
+  });
+
+  if (!data?.id) {
+    throw new NetlifyApiError("Netlify did not return the new hook's id.", 502);
+  }
+  return { hookId: data.id };
+}
