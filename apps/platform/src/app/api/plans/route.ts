@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  BUILD_COMMITMENT_MONTHS,
-  BUILD_PRICE_CENTS,
-  BUILD_WITH_CARE_CENTS,
-  OVERAGE_CENTS,
-  PLANS,
-} from "@mortensenweb/plans";
+import { BUILDS, GROWTH_FEATURES, OVERAGE_CENTS, PLANS } from "@mortensenweb/plans";
 
 /**
  * The care plans, for the public site's build.
@@ -30,11 +24,11 @@ export const dynamic = "force-static";
 export function GET() {
   return NextResponse.json({
     plans: PLANS,
+    growthFeatures: GROWTH_FEATURES,
     overageCents: OVERAGE_CENTS,
-    build: {
-      priceCents: BUILD_PRICE_CENTS,
-      withCareCents: BUILD_WITH_CARE_CENTS,
-      commitmentMonths: BUILD_COMMITMENT_MONTHS,
-    },
+    // Three standalone builds since 2026-10-06, replacing `build` (one price
+    // and a discount behind a twelve-month commitment). The standalone site
+    // repository reads this at build time and must be updated with it.
+    builds: BUILDS,
   });
 }

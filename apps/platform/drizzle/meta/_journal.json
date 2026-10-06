@@ -190,6 +190,13 @@
       "when": 1789600000000,
       "tag": "0025_lead_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789700000000,
+      "tag": "0026_plans_2026_10",
+      "breakpoints": true
     }
   ]
 }
