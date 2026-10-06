@@ -34,15 +34,16 @@ export function FormsInboxPanel({
 
       <p className="muted" style={{ marginTop: 0 }}>
         {connectedAt
-          ? `Connected ${connectedAt}. Contact-form submissions arrive in the client's Growth tab and they are emailed for each one.`
+          ? `Connected ${connectedAt}. Contact-form submissions arrive in the client's Growth tab, where they can reply.`
           : "Not connected. The site's form still works, but enquiries only reach Netlify and its notification email."}
       </p>
       <p className="field-hint">
         Connecting registers a signed Netlify webhook and imports the enquiries
-        Netlify already holds, without emailing about them. Afterwards, turn off
-        any email notification set up for this form in Netlify, or the client
-        will get two emails per enquiry. The site&rsquo;s form needs Netlify
-        form detection enabled.
+        Netlify already holds. The portal sends no email of its own about a new
+        enquiry — Netlify&rsquo;s form notification does that, so make sure one
+        is set up in Netlify (Forms → Form notifications) going to the
+        client&rsquo;s address. The site&rsquo;s form needs Netlify form
+        detection enabled.
       </p>
 
       <button type="submit" className={connectedAt ? "secondary" : ""} disabled={pending || !hasHosting}>

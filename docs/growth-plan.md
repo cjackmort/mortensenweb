@@ -50,8 +50,9 @@ button, never as a dead link.
 2. Apply migration `0024_leads` (CI does it on merge). It must reach
    production before `0024_promos`; see the note at the top of the migration.
 3. For each client: admin → client → Website → **Leads inbox → Connect**.
-4. In Netlify, turn off any email notification on that site's form, or the
-   client gets two emails per enquiry.
+4. In Netlify, make sure the site's form has an email notification going to
+   the client (Forms → Form notifications). The portal sends no email of its
+   own about a new enquiry.
 5. The site's form must be a Netlify form (`data-netlify="true"`) with form
    detection enabled on the site.
 
@@ -87,9 +88,17 @@ bold, a count on the Growth tab. Each lead shows name, email, phone and message
 as submitted), the page it came from, and a status the client sets: **New →
 Contacted → Won / Lost**, or **Archived**. Email and phone are links.
 
-**Notification:** one email to the client per new lead, linking to it. Netlify's
-own email notification for the site should be switched off once the hook is
-connected, or the client gets two.
+**Notification:** Netlify's own form notification email. The portal sends
+none of its own — a second message about the same enquiry was noise.
+
+**Replying:** the client answers from the enquiry's page. The reply is sent
+through Resend from our domain under the business's name, with the client's
+address as reply-to and a copy to them, so the customer's answer lands in the
+client's normal inbox. No mailbox connection: sending *as* a Gmail address
+from a service fails Gmail's sender checks, and connecting Gmail would need a
+Google security review and a separate integration per mail provider. A later
+version can route answers back into the portal through per-enquiry reply
+addresses (Cloudflare Email Routing) so the whole thread lives there.
 
 **What it does not do:** decide whether a lead is real. `inquiries.ts` already
 separates accepted, spam and qualified, and *qualified* is only ever set by a
