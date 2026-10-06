@@ -183,6 +183,8 @@ export async function listSitesWithAnalytics(
       repoDefaultBranch: repositoryConnections.defaultBranch,
       previewUrlStyle: sites.previewUrlStyle,
       previewMode: sites.previewMode,
+      netlifySiteId: sites.netlifySiteId,
+      formsConnectedAt: sites.formsConnectedAt,
     })
     .from(sites)
     .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))

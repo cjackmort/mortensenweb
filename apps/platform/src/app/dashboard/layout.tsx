@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { AppShell } from "@/components/app-shell";
+import { getDb } from "@/db/client";
+import { tenantContextFrom } from "@/db/repositories/context";
+import { countUnreadLeads } from "@/db/repositories/client/leads";
 
 /**
  * The chrome for every client page, rendered once by the layout rather than
@@ -25,5 +28,24 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
   if (user.role === "admin") redirect("/admin");
-  return <AppShell user={user}>{children}</AppShell>;
+
+  // One indexed count per page view. A failure loses the badge, never the
+  // page: the inbox itself is one tap away and shows the truth.
+  let unreadLeads = 0;
+  if (user.organizationId) {
+    try {
+      unreadLeads = await countUnreadLeads(
+        await getDb(),
+        tenantContextFrom(user, user.organizationId),
+      );
+    } catch (error) {
+      console.error("[dashboard] unread lead count failed", error);
+    }
+  }
+
+  return (
+    <AppShell user={user} unreadLeads={unreadLeads}>
+      {children}
+    </AppShell>
+  );
 }

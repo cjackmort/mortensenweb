@@ -3758,3 +3758,141 @@ form + .field-hint {
   font-size: 0.8rem;
   color: var(--warning);
 }
+
+/* ------------------------------------------------------------- growth */
+
+/* The unread count on the Growth tab. Filled, so it reads as "something is
+   waiting" from across the room, and mono to sit with the tab labels. */
+.nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin-left: 0.45rem;
+  padding: 0 0.35rem;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font: 600 0.62rem / 1 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.lead-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lead-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+/* Each row is one link, so the whole row is the tap target on a phone. */
+.lead-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem var(--pane-pad);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.lead-row:hover,
+.lead-row:focus-visible {
+  background: var(--surface-sunk);
+}
+
+.lead-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.lead-row-name {
+  font-weight: 500;
+}
+
+/* Two signals for unread — weight and the "New" pill — so it never depends
+   on noticing a colour alone. */
+.lead-unread .lead-row-name {
+  font-weight: 700;
+}
+
+.lead-row-when {
+  font: 500 0.68rem / 1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lead-row-preview {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.lead-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.lead-pager {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+}
+
+.lead-back {
+  margin: 0 0 1rem;
+}
+
+.lead-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.lead-contact .button {
+  overflow-wrap: anywhere;
+}
+
+.lead-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 0 0 1.25rem;
+}
+
+.lead-fields dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lead-status-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Five views do not fit a phone-width panel head at the segmented control's
+   normal padding; tighter segments, and a scroll inside the control rather
+   than the panel clipping the last one. */
+.lead-views {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (max-width: 30rem) {
+  .lead-views a {
+    padding: 0 0.6rem;
+  }
+}

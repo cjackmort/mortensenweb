@@ -11,6 +11,7 @@ import {
   setAnalyticsConnection,
   setSitePreviewMode,
 } from "@/db/repositories/admin/sites";
+import { connectSiteForms } from "@/db/repositories/admin/leads";
 
 /**
  * Site and analytics actions.
@@ -164,4 +165,46 @@ export async function connectAnalyticsAction(
 
   revalidatePath(`/admin/clients/${clientPublicId}`);
   return { ok: true };
+}
+
+export type FormsInboxResult = { ok: true; message: string } | { ok: false; message: string };
+
+/**
+ * Connect a site's contact forms to the client's leads inbox: register the
+ * Netlify webhook and import what Netlify already holds. Safe to press again —
+ * it replaces the hook rather than adding a second, and the import skips
+ * what is already in the inbox.
+ */
+export async function connectFormsInboxAction(
+  _previous: FormsInboxResult | null,
+  formData: FormData,
+): Promise<FormsInboxResult> {
+  const ctx = await requireAdmin();
+  const db = await getDb();
+
+  const clientPublicId = String(formData.get("clientPublicId") ?? "");
+  const sitePublicId = String(formData.get("sitePublicId") ?? "");
+
+  let detail;
+  try {
+    detail = await getClientDetail(ctx, db, clientPublicId);
+    await requireOrganizationSite(ctx, db, detail.organization.id, sitePublicId);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "That site is not on this client." };
+    }
+    throw error;
+  }
+
+  const result = await connectSiteForms(ctx, db, sitePublicId);
+  if (!result.ok) return result;
+
+  revalidatePath(`/admin/clients/${clientPublicId}`);
+  return {
+    ok: true,
+    message:
+      result.imported > 0
+        ? `Connected. Imported ${result.imported} earlier ${result.imported === 1 ? "enquiry" : "enquiries"}.`
+        : "Connected. New enquiries will appear in the client's Growth tab.",
+  };
 }
