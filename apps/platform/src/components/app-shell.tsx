@@ -38,6 +38,9 @@ const CLIENT_NAV: NavItem[] = [
   // separate Visitors page repeated the same headline numbers, which is two
   // places to look for one answer.
   { href: "/dashboard", label: "Your site" },
+  // Second, because it is the one tab with something new in it on any given
+  // day: a customer wrote in. See `docs/growth-plan.md`.
+  { href: "/dashboard/growth", label: "Growth" },
   { href: "/dashboard/requests", label: "Requests" },
   // Between Requests and Billing rather than at the end, because the library is
   // part of asking for a change — a client uploads photos and then refers to
@@ -48,9 +51,12 @@ const CLIENT_NAV: NavItem[] = [
 
 export function AppShell({
   user,
+  unreadLeads = 0,
   children,
 }: {
   user: AuthenticatedUser;
+  /** Shown on the Growth tab. Counted by the client layout; admins have no inbox. */
+  unreadLeads?: number;
   children: React.ReactNode;
 }) {
   const isAdmin = user.role === "admin";
@@ -99,7 +105,15 @@ export function AppShell({
           </div>
         </div>
 
-        <NavLinks items={isAdmin ? ADMIN_NAV : CLIENT_NAV} />
+        <NavLinks
+          items={
+            isAdmin
+              ? ADMIN_NAV
+              : CLIENT_NAV.map((item) =>
+                  item.href === "/dashboard/growth" ? { ...item, count: unreadLeads } : item,
+                )
+          }
+        />
       </header>
 
       {children}

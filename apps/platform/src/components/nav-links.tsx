@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 export interface NavItem {
   href: string;
   label: string;
+  /** A count shown beside the label — unread leads on Growth. Zero shows nothing. */
+  count?: number;
 }
 
 /**
@@ -63,6 +65,12 @@ export function NavLinks({ items }: { items: NavItem[] }) {
               aria-current={active ? "page" : undefined}
             >
               {item.label}
+              {item.count ? (
+                <span className="nav-count">
+                  {item.count > 99 ? "99+" : item.count}
+                  <span className="sr-only"> unread</span>
+                </span>
+              ) : null}
             </Link>
           );
         })}
