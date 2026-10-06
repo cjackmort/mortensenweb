@@ -179,8 +179,10 @@ interface BlobStore {
   delete: (key: string) => Promise<unknown>;
 }
 
+type BlobsModule = typeof import("@netlify/blobs");
+
 class NetlifyBlobsDriver implements StorageDriver {
-  private store?: Promise<BlobStore>;
+  private blobs?: Promise<BlobsModule>;
 
   /**
    * Production writes to the global store; everything else writes to a
@@ -207,21 +209,36 @@ class NetlifyBlobsDriver implements StorageDriver {
   ) {}
 
   /**
-   * Resolved on first use, not in the constructor.
+   * Built on every call, never cached. Only the module import is cached.
    *
-   * Built eagerly, a driver that is constructed and never used leaves a promise
-   * nobody awaits — and if resolving it rejects, that is an unhandled rejection
+   * `getStore` and `getDeployStore` copy the Blobs token out of the
+   * invocation's environment into the client they construct, and Netlify
+   * issues that token per invocation. Drivers live as long as the function
+   * instance, so a cached store kept presenting the first token after it had
+   * expired. The scheduler gate had the same bug, and every read failed from
+   * about twenty minutes into each hour. Here that would fail uploads,
+   * derivative jobs, signed reads and the sweeper on any warm instance.
+   * Constructing a store makes no request, so doing it per call costs nothing.
+   *
+   * The import is started on first use, not in the constructor. Started
+   * eagerly, a driver that is constructed and never used leaves a promise
+   * nobody awaits — and if the import rejects, that is an unhandled rejection
    * with no call site to blame it on. Deferring it means the failure surfaces at
    * the `put` or `get` that actually wanted the store, which is where the caller
-   * can report it and where the asset's `failure_reason` gets written.
+   * can report it and where the asset's `failure_reason` gets written. A failed
+   * import is forgotten, so the next call tries again.
    */
-  private resolveStore(): Promise<BlobStore> {
-    this.store ??= import("@netlify/blobs").then((m) =>
+  private async resolveStore(): Promise<BlobStore> {
+    this.blobs ??= import("@netlify/blobs").catch((error: unknown) => {
+      this.blobs = undefined;
+      throw error;
+    });
+    const m = await this.blobs;
+    return (
       isProductionContext()
         ? m.getStore({ name: this.storeName, consistency: "strong" })
-        : m.getDeployStore({ name: this.storeName, consistency: "strong" }),
+        : m.getDeployStore({ name: this.storeName, consistency: "strong" })
     ) as never;
-    return this.store;
   }
 
   async put(input: {
