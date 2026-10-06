@@ -19,6 +19,12 @@
 --
 -- The old rows are kept, inactive, so history that names them still resolves.
 --
+-- The mapping is written into each UPDATE rather than held in a temporary
+-- table. Production migrates over Neon's HTTP driver, which runs every
+-- statement as its own request with no session between them: a temp table
+-- created in one statement does not exist in the next. PGlite keeps one
+-- session, so the suite passed and the preview database caught it.
+--
 -- `when` is 1789700000000, above 0025_lead_replies' 1789600000000. Drizzle's
 -- migrator skips anything below the highest applied `when`, silently.
 -- Hand-written, as 0016 onwards are.
@@ -48,33 +54,38 @@ ON CONFLICT ("key") DO UPDATE SET
   "active" = excluded."active",
   "stripe_price_lookup_key" = excluded."stripe_price_lookup_key";
 --> statement-breakpoint
-CREATE TEMPORARY TABLE "plan_moves" ("old_key" text PRIMARY KEY, "new_key" text NOT NULL);
---> statement-breakpoint
-INSERT INTO "plan_moves" VALUES
+UPDATE "subscriptions" s SET "plan_id" = n."id"
+FROM (VALUES
   ('care-lite', 'care'),
   ('care-basic', 'growth'),
   ('care-plus', 'pro'),
-  ('care-unlimited', 'pro');
---> statement-breakpoint
-UPDATE "subscriptions" s SET "plan_id" = n."id"
-FROM "plan_moves" m
+  ('care-unlimited', 'pro')
+) AS m("old_key", "new_key")
 JOIN "service_plans" o ON o."key" = m."old_key"
 JOIN "service_plans" n ON n."key" = m."new_key"
 WHERE s."plan_id" = o."id";
 --> statement-breakpoint
 UPDATE "prospects" p SET "plan_id" = n."id"
-FROM "plan_moves" m
+FROM (VALUES
+  ('care-lite', 'care'),
+  ('care-basic', 'growth'),
+  ('care-plus', 'pro'),
+  ('care-unlimited', 'pro')
+) AS m("old_key", "new_key")
 JOIN "service_plans" o ON o."key" = m."old_key"
 JOIN "service_plans" n ON n."key" = m."new_key"
 WHERE p."plan_id" = o."id";
 --> statement-breakpoint
 UPDATE "clients" c SET "comp_plan_id" = n."id"
-FROM "plan_moves" m
+FROM (VALUES
+  ('care-lite', 'care'),
+  ('care-basic', 'growth'),
+  ('care-plus', 'pro'),
+  ('care-unlimited', 'pro')
+) AS m("old_key", "new_key")
 JOIN "service_plans" o ON o."key" = m."old_key"
 JOIN "service_plans" n ON n."key" = m."new_key"
 WHERE c."comp_plan_id" = o."id";
 --> statement-breakpoint
 UPDATE "service_plans" SET "active" = false
 WHERE "key" IN ('care-lite', 'care-basic', 'care-plus', 'care-unlimited');
---> statement-breakpoint
-DROP TABLE "plan_moves";
