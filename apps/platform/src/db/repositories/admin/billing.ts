@@ -143,11 +143,25 @@ export type ConfirmResult =
  * second call matches zero rows and returns `alreadyConfirmed` instead of
  * inserting a second payment for the same invoice.
  */
+export interface ConfirmPaymentInput {
+  method: PaymentMethod;
+  receivedOn: string;
+  note?: string;
+  /**
+   * Set when a processor reported the money rather than a person. Stored on
+   * the ledger row so a refund or dispute can be traced back to it, and so a
+   * client can open their receipt.
+   */
+  provider?: string;
+  providerReference?: string;
+  receiptUrl?: string | null;
+}
+
 export async function confirmPaymentReceived(
   ctx: AdminContext,
   db: Database,
   requestPublicId: string,
-  input: { method: PaymentMethod; receivedOn: string; note?: string },
+  input: ConfirmPaymentInput,
 ): Promise<ConfirmResult> {
   const rows = await db
     .select({
@@ -218,6 +232,9 @@ export async function confirmPaymentReceived(
         amountCents: request.amountCents,
         currency: request.currency,
         method: input.method,
+        provider: input.provider ?? null,
+        providerReference: input.providerReference ?? null,
+        receiptUrl: input.receiptUrl ?? null,
         idempotencyKey,
         coversPeriodStart: request.coversPeriodStart,
         coversPeriodEnd: request.coversPeriodEnd,
@@ -299,7 +316,15 @@ export async function confirmPaymentReceived(
   // who buys capacity before submitting anything that month simply gets a
   // fresh allowance created at their first submission with the plan's
   // figure; the guard below avoids silently losing what they bought.
-  if (request.purpose === "extra_change" && request.coversPeriodStart) {
+  //
+  // Only the call that actually claimed the request credits it. Two
+  // confirmations racing past the status check above would otherwise both
+  // reach this point, and the client would get two changes for one payment.
+  if (
+    claimed.length > 0 &&
+    request.purpose === "extra_change" &&
+    request.coversPeriodStart
+  ) {
     const raised = await db
       .update(changeAllowances)
       .set({ included: sql`${changeAllowances.included} + 1` })
@@ -480,10 +505,16 @@ export interface ClientBillingStatus {
   } | null;
   standing: PaymentStanding;
   /**
+   * Stripe charges this client's card every month. Their invoices are
+   * Stripe's, so none should be raised here.
+   */
+  billedByStripe: boolean;
+  /**
    * Whether an operator can raise a new invoice right now. False while one is
    * already open — the same "no second invoice on top of an unsettled one"
    * rule `beginCheckout` enforces for a client raising their own, so the
-   * reference an operator is tracking can't be orphaned by a second one.
+   * reference an operator is tracking can't be orphaned by a second one —
+   * and always false for a client billed by Stripe, who would pay twice.
    */
   canRaise: boolean;
 }
@@ -523,6 +554,7 @@ export async function listClientBillingStatus(
       organizationName: organizations.name,
       dunningExemptUntil: clients.dunningExemptUntil,
       monthlyPriceCents: subscriptions.monthlyPriceCents,
+      provider: subscriptions.provider,
     })
     .from(clients)
     .innerJoin(organizations, eq(clients.organizationId, organizations.id))
@@ -538,6 +570,22 @@ export async function listClientBillingStatus(
     // again here because this query doesn't go through that function.
     .where(and(isNull(clients.archivedAt), eq(clients.isInternal, false)))
     .orderBy(organizations.name);
+
+  // One row per client. A client can briefly hold two active plans — the
+  // hand-billed one and the Stripe one replacing it — and would otherwise be
+  // listed twice. The Stripe row wins: it is what they are actually charged.
+  const byClient = new Map<
+    string,
+    (typeof clientRows)[number] & { billedByStripe: boolean }
+  >();
+  for (const row of clientRows) {
+    const seen = byClient.get(row.clientId);
+    const isStripe = row.provider === "stripe";
+    byClient.set(row.clientId, {
+      ...(isStripe || !seen ? row : seen),
+      billedByStripe: isStripe || (seen?.billedByStripe ?? false),
+    });
+  }
 
   const requestRows = await db
     .select({
@@ -561,7 +609,7 @@ export async function listClientBillingStatus(
     }
   }
 
-  return clientRows.map((c) => {
+  return [...byClient.values()].map((c) => {
     const latest = latestByClient.get(c.clientId) ?? null;
 
     const standing = paymentStanding(
@@ -588,7 +636,9 @@ export async function listClientBillingStatus(
           }
         : null,
       standing,
-      canRaise: !latest || !UNSETTLED.has(latest.status),
+      billedByStripe: c.billedByStripe,
+      canRaise:
+        !c.billedByStripe && (!latest || !UNSETTLED.has(latest.status)),
     };
   });
 }

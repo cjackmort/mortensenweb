@@ -248,4 +248,43 @@ describe("listClientBillingStatus", () => {
     expect(rows[0]!.monthlyPriceCents).toBeNull();
     expect(rows[0]!.canRaise).toBe(true);
   });
+
+  it("does not offer to invoice by hand a client Stripe is already charging", async () => {
+    const client = await seedClient("card-client", null);
+    await db.insert(subscriptions).values({
+      publicId: newPublicId(),
+      clientId: client.clientId,
+      planId,
+      monthlyPriceCents: 9900,
+      startedOn: "2026-09-01",
+      status: "active",
+      provider: "stripe",
+      providerSubscriptionId: "sub_card_client",
+      providerStatus: "past_due",
+    });
+
+    const rows = await listClientBillingStatus(admin, db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.billedByStripe).toBe(true);
+    expect(rows[0]!.canRaise).toBe(false);
+  });
+
+  it("lists a client once even if they briefly hold two active plans", async () => {
+    const client = await seedClient("two-plans", 9900);
+    await db.insert(subscriptions).values({
+      publicId: newPublicId(),
+      clientId: client.clientId,
+      planId,
+      monthlyPriceCents: 9900,
+      startedOn: "2026-09-01",
+      status: "active",
+      provider: "stripe",
+      providerSubscriptionId: "sub_two_plans",
+      providerStatus: "active",
+    });
+
+    const rows = await listClientBillingStatus(admin, db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.billedByStripe).toBe(true);
+  });
 });

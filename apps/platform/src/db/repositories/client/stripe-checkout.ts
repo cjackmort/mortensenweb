@@ -56,7 +56,7 @@ export type StripeCheckoutOutcome =
       message: string;
     };
 
-interface ResolvedClient {
+export interface ResolvedClient {
   clientId: string;
   publicId: string;
   businessName: string;
@@ -65,7 +65,7 @@ interface ResolvedClient {
   compPlanId: string | null;
 }
 
-async function resolveClient(
+export async function resolveClient(
   db: Database,
   ctx: TenantContext,
 ): Promise<ResolvedClient | null> {
@@ -99,7 +99,7 @@ async function resolveClient(
  * overwrite the first, orphaning an invoice history under a customer nothing
  * points at any more.
  */
-async function ensureCustomer(
+export async function ensureCustomer(
   db: Database,
   client: ResolvedClient,
 ): Promise<string> {

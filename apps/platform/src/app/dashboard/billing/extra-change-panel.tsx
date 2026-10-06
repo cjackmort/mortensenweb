@@ -47,7 +47,7 @@ export function ExtraChangePanel({ amountLabel }: { amountLabel: string }) {
           <PayPanel
             requestPublicId={state.requestPublicId}
             venmoUrl={state.venmoUrl}
-            cardAvailable={state.cardAvailable}
+            cardProvider={state.cardProvider}
             reference={state.reference}
             amount={state.amount}
           />

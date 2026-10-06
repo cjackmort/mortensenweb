@@ -496,6 +496,70 @@ describe("failed payments", () => {
   });
 });
 
+describe("moving a hand-billed client onto Stripe", () => {
+  // The plan an operator assigned before the client had a card on file. Left
+  // active beside the Stripe one, the client would have two plans: every
+  // `limit(1)` lookup picks one at random and the monthly billing list offers
+  // to invoice by hand somebody Stripe is already charging.
+  async function handBilledPlan() {
+    const plan = await db
+      .select({ id: servicePlans.id })
+      .from(servicePlans)
+      .where(eq(servicePlans.key, "care-basic"))
+      .limit(1);
+    return (
+      await db
+        .insert(subscriptions)
+        .values({
+          publicId: newPublicId(),
+          clientId,
+          planId: plan[0]!.id,
+          monthlyPriceCents: 10000,
+          startedOn: "2026-06-01",
+          status: "active",
+        })
+        .returning()
+    )[0]!;
+  }
+
+  it("retires the hand-billed plan once the Stripe subscription is active", async () => {
+    const manual = await handBilledPlan();
+
+    await processStripeEvent(
+      db,
+      event("customer.subscription.created", subscriptionObject()),
+    );
+
+    const rows = await db.select().from(subscriptions);
+    const active = rows.filter((r) => r.status === "active");
+    expect(active).toHaveLength(1);
+    expect(active[0]!.provider).toBe("stripe");
+
+    const retired = rows.find((r) => r.id === manual.id)!;
+    expect(retired.status).toBe("cancelled");
+    expect(retired.endedOn).not.toBeNull();
+  });
+
+  it("keeps the hand-billed plan while the first Stripe payment has not gone through", async () => {
+    const manual = await handBilledPlan();
+    stripeState.subscriptions.set(
+      SUBSCRIPTION,
+      subscriptionObject({ status: "incomplete" }),
+    );
+
+    await processStripeEvent(
+      db,
+      event("customer.subscription.created", subscriptionObject()),
+    );
+
+    const retained = await db
+      .select({ status: subscriptions.status })
+      .from(subscriptions)
+      .where(eq(subscriptions.id, manual.id));
+    expect(retained[0]?.status).toBe("active");
+  });
+});
+
 describe("checkout completion", () => {
   it("links the subscription without recording a payment", async () => {
     // Visiting the success URL, and even completing checkout, is not proof of

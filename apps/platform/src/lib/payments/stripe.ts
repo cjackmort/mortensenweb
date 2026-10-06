@@ -63,6 +63,30 @@ export function allLookupKeys(): string[] {
   return Object.values(PRICE_LOOKUP_KEYS);
 }
 
+/**
+ * Events the webhook receiver acts on. Anything else is acknowledged and dropped.
+ *
+ * Here rather than beside the receiver so `scripts/stripe-setup.ts` can
+ * subscribe the endpoint to exactly this list without loading the database.
+ *
+ * An allowlist rather than a denylist, matching the GitHub and Square
+ * receivers: enabling a new event type in the Stripe dashboard should not
+ * silently start changing billing state in a build that has never seen it.
+ */
+export const HANDLED_STRIPE_EVENTS = new Set([
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+  "invoice.paid",
+  "invoice.payment_failed",
+  "invoice.payment_action_required",
+  "charge.refunded",
+  "charge.dispute.created",
+]);
+
 export interface StripeMode {
   /** True when the configured secret key is a live key. */
   livemode: boolean;
