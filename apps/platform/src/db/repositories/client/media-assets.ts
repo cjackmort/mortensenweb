@@ -7,7 +7,6 @@ import {
   mediaDerivatives,
   mediaFolders,
   mediaUsages,
-  requestAssets,
 } from "@/db/schema";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
@@ -18,6 +17,9 @@ import {
 import { displayDimensions } from "@/lib/media/probe";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 import { requireOwnFolder } from "./media-folders";
+import { heldByChangesInProgress } from "./media-purge";
+
+export { purgeAssets, type PurgeOutcome } from "./media-purge";
 
 /**
  * Assets in the media library, tenant-scoped.
@@ -33,8 +35,9 @@ import { requireOwnFolder } from "./media-folders";
  *  - **Trash** (`deleted_at` set) hides an asset from the library and from the
  *    request picker. The bytes stay. This is what a client's Delete button
  *    does, and it is reversible from the Trash view.
- *  - **Purge** removes the objects. Nothing in the client UI reaches it; it is
- *    the sweeper's job, and it refuses anything a request still references.
+ *  - **Purge** removes the objects and the record, freeing the space. Reached
+ *    only from the Trash view — "Delete forever" and "Empty trash" — and it
+ *    refuses anything a change in progress still uses. See `media-purge.ts`.
  *
  * A one-step permanent delete is deliberately not offered. The cost of keeping
  * bytes a client meant to discard is storage; the cost of the other mistake is
@@ -370,25 +373,11 @@ export async function trashAssets(
     return { ok: false, message: "Nothing was selected.", blocked: [] };
   }
 
-  const referenced = await db
-    .select({
-      assetPublicId: mediaAssets.publicId,
-      assetName: mediaAssets.originalFilename,
-      assetTitle: mediaAssets.title,
-      requestTitle: changeRequests.title,
-      requestStatus: changeRequests.status,
-    })
-    .from(requestAssets)
-    .innerJoin(mediaAssets, eq(mediaAssets.id, requestAssets.assetId))
-    .innerJoin(changeRequests, eq(changeRequests.id, requestAssets.requestId))
-    .where(
-      and(
-        eq(mediaAssets.organizationId, ctx.organizationId),
-        inArray(mediaAssets.publicId, publicIds),
-        // A closed request no longer needs its inputs held. An open one does.
-        sql`${changeRequests.status} NOT IN ('closed', 'rejected', 'rolled_back')`,
-      ),
-    );
+  // Held only while the change using it is in progress. A finished one —
+  // merged, live, closed — no longer needs its inputs: the site has its own
+  // copy. The old test listed only the closed statuses, so a photo from any
+  // change that went live could never leave the library.
+  const referenced = await heldByChangesInProgress(db, ctx.organizationId, publicIds);
 
   const blockedIds = new Set(referenced.map((r) => r.assetPublicId));
   const removable = publicIds.filter((id) => !blockedIds.has(id));
@@ -399,7 +388,7 @@ export async function trashAssets(
       ok: false,
       blocked: [...blockedIds],
       message: first
-        ? `"${first.assetTitle ?? first.assetName}" is being used by your request "${first.requestTitle}", so it can't be deleted yet. It will be free once that change is finished.`
+        ? `"${first.assetName}" is being used by your request "${first.requestTitle}", so it can't be deleted yet. It will be free once that change is finished.`
         : "Those images are in use by a change request.",
     };
   }

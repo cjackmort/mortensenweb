@@ -10,8 +10,10 @@ import { Uploader } from "./uploader";
 import {
   createFolderAction,
   deleteFolderAction,
+  emptyTrashAction,
   moveAssetsAction,
   moveFolderAction,
+  purgeAssetsAction,
   renameFolderAction,
   restoreAssetsAction,
   retryAssetAction,
@@ -64,6 +66,9 @@ export function MediaLibrary({
   const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState(search);
+  // Deleting forever asks once more, in words, before it runs: it is the one
+  // action in the library that cannot be taken back.
+  const [confirming, setConfirming] = useState<"selection" | "all" | null>(null);
 
   const folderLabel = useMemo(() => {
     if (currentFolder === null) return "All images";
@@ -87,6 +92,7 @@ export function MediaLibrary({
     if (trash) params.set("trash", "1");
 
     setSelected(new Set());
+    setConfirming(null);
     router.push(`/dashboard/media${params.size ? `?${params}` : ""}`);
   }
 
@@ -343,7 +349,61 @@ export function MediaLibrary({
         <div className="card">
           <div className="card-head">
             <h2>{trashed ? "Trash" : folderLabel}</h2>
+            {trashed && assets.length > 0 && (
+              <button
+                type="button"
+                className="secondary small"
+                disabled={pending}
+                onClick={() => setConfirming("all")}
+              >
+                Empty trash
+              </button>
+            )}
           </div>
+
+          {trashed && (
+            <p className="field-hint" style={{ marginTop: "-0.5rem" }}>
+              Photos here still count toward your storage. Delete them forever
+              to free the space.
+            </p>
+          )}
+
+          {confirming && !(confirming === "selection" && selected.size === 0) && (
+            <div className="notice notice-danger media-confirm" role="alertdialog" aria-labelledby="media-confirm-title">
+              <p id="media-confirm-title" style={{ marginTop: 0 }}>
+                <strong>
+                  {confirming === "all"
+                    ? "Delete everything in the trash forever?"
+                    : `Delete ${selected.size === 1 ? "this photo" : `these ${selected.size} photos`} forever?`}
+                </strong>{" "}
+                They&rsquo;ll be removed from your library and your storage, and
+                can&rsquo;t be brought back. Anything a change in progress still
+                uses is kept.
+              </p>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={pending}
+                  onClick={() => {
+                    if (confirming === "all") runFolderAction(emptyTrashAction, {});
+                    else withSelection(purgeAssetsAction);
+                    setConfirming(null);
+                  }}
+                >
+                  {pending ? "Deleting…" : "Delete forever"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={pending}
+                  onClick={() => setConfirming(null)}
+                >
+                  Keep them
+                </button>
+              </div>
+            </div>
+          )}
 
           <form
             className="media-search"
@@ -384,14 +444,24 @@ export function MediaLibrary({
               </span>
 
               {trashed ? (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={pending}
-                  onClick={() => withSelection(restoreAssetsAction)}
-                >
-                  Restore
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={pending}
+                    onClick={() => withSelection(restoreAssetsAction)}
+                  >
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={pending}
+                    onClick={() => setConfirming("selection")}
+                  >
+                    Delete forever
+                  </button>
+                </>
               ) : (
                 <>
                   <label htmlFor="bulk-move" className="visually-hidden">
