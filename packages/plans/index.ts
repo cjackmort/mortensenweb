@@ -310,6 +310,8 @@ export interface Build {
   priceCents: number;
   /** Who it is for, in the client's terms. */
   who: string;
+  /** `who` in a few words, for a dropdown option. */
+  short: string;
   includes: string[];
 }
 
@@ -319,6 +321,7 @@ export const BUILDS: Build[] = [
     name: "Launch",
     priceCents: 10000,
     who: "Just starting out — no website yet, little or no presence online.",
+    short: "just starting out",
     includes: [
       "A finished site, launched on your domain",
       "Up to five pages, written with you",
@@ -330,6 +333,7 @@ export const BUILDS: Build[] = [
     name: "Revamp",
     priceCents: 50000,
     who: "You have a website that people already visit, and it's time for a better one.",
+    short: "replacing a site people already visit",
     includes: [
       "Everything in Launch",
       "Your existing content moved across",
@@ -341,6 +345,7 @@ export const BUILDS: Build[] = [
     name: "Established",
     priceCents: 100000,
     who: "A well-known business with years of content and search rankings to protect.",
+    short: "a well-established business",
     includes: [
       "Everything in Revamp",
       "A larger site, planned page by page",
