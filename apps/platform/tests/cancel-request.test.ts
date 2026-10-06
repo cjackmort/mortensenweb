@@ -622,13 +622,14 @@ describe("a request that was dispatched more than once", () => {
         createdAt: older,
       });
 
-      // The retry, which the client approved.
+      // The retry, which the operator released and the client approved.
       await db.insert(agentJobs).values({
         publicId: newPublicId(),
         requestId: created.id,
         status: "pr_open",
         previewUrl: "https://preview-2.example",
         previewVerifiedAt: newer,
+        operatorReleasedAt: newer,
         clientDecision: "approved",
         clientDecisionAt: newer,
         createdAt: newer,

@@ -14,6 +14,7 @@ import {
 } from "@/db/repositories/client/media-folders";
 import {
   moveAssets,
+  purgeAssets,
   restoreAssets,
   selectFolderContents,
   trashAssets,
@@ -193,6 +194,40 @@ export async function trashAssetsAction(
   if (!session) return SIGN_IN_AGAIN;
 
   const result = await trashAssets(session.db, session.ctx, selectedIds(formData));
+  refresh();
+  return { ok: result.ok, message: result.message };
+}
+
+/**
+ * Delete trashed images for good, freeing the space they hold.
+ *
+ * Only ever reaches images already in the trash (the repository refuses
+ * anything else), so nothing leaves the library in one click.
+ */
+export async function purgeAssetsAction(
+  _previous: MediaActionResult | null,
+  formData: FormData,
+): Promise<MediaActionResult> {
+  const session = await context();
+  if (!session) return SIGN_IN_AGAIN;
+
+  const ids = selectedIds(formData);
+  if (ids.length === 0) return { ok: false, message: "Nothing was selected." };
+
+  const result = await purgeAssets(session.db, session.ctx, ids);
+  refresh();
+  return { ok: result.ok, message: result.message };
+}
+
+/** Everything in the trash, for good. */
+export async function emptyTrashAction(
+  _previous: MediaActionResult | null,
+  _formData: FormData,
+): Promise<MediaActionResult> {
+  const session = await context();
+  if (!session) return SIGN_IN_AGAIN;
+
+  const result = await purgeAssets(session.db, session.ctx);
   refresh();
   return { ok: result.ok, message: result.message };
 }

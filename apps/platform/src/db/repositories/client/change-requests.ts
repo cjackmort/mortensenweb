@@ -38,13 +38,17 @@ export async function listChangeRequests(
       updatedAt: changeRequests.updatedAt,
 
       // The preview, so a request in the history says where to look rather
-      // than only how far along it is. Only a verified one: an unfetched URL
-      // is a link that may 404, and a client following a broken preview
-      // concludes the work is broken rather than merely unfinished.
+      // than only how far along it is. Only a verified one — an unfetched URL
+      // is a link that may 404 — and only one the operator has released: the
+      // approval panel already waited for that, and the history linking to a
+      // preview nobody had checked undid the whole point of the check.
       previewUrl: sql<string | null>`case
         when ${agentJobs.previewVerifiedAt} is not null
+          and ${agentJobs.operatorReleasedAt} is not null
         then ${agentJobs.previewUrl}
       end`,
+      /** False while a built preview waits on the operator: still "making". */
+      previewReleased: sql<boolean>`${agentJobs.operatorReleasedAt} is not null`,
       previewDecision: agentJobs.clientDecision,
     })
     .from(changeRequests)

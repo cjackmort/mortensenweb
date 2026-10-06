@@ -37,7 +37,7 @@ export default function ErrorBoundary({
   }, [error]);
 
   return (
-    <main className="page">
+    <main className="shell">
       <div className="card">
         <div className="card-head">
           <h2>Something went wrong at our end</h2>

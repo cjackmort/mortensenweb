@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable, TimeSeriesChart } from "@/components/charts";
-import { RequestProgress } from "@/components/request-progress";
 import { EventPanels } from "@/components/event-panels";
 import { categoriseEvents } from "@/lib/analytics/events";
 import { AnalyticsFilterBar } from "@/components/analytics-filters";
@@ -14,10 +13,8 @@ import {
   type AnalyticsFilters,
 } from "@/lib/analytics/filters";
 import { VisitorsSkeleton } from "@/components/skeletons";
-import { CancelRequestButton } from "./requests/cancel-button";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import { listChangeRequests } from "@/db/repositories/client/change-requests";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { resolveClientAnalytics } from "@/lib/analytics/resolve";
 import {
@@ -26,19 +23,19 @@ import {
   type Breakdown,
   type RangeDays,
 } from "@/lib/analytics/umami";
-import { formatDate, formatTime } from "@/lib/time";
-import { isCancellable, openCount, stageIndex } from "@/lib/requests/status";
+import { formatTime } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Client dashboard.
  *
- * Two things a client opens this for, in order: **is anything waiting on me**,
- * and **is anyone looking at my site**. The page is laid out in that order.
- * A preview needing approval sits directly under the title; an in-progress
- * request comes next, because it is the one thing on the page they can act
- * on; the visitor figures follow.
+ * Their website, and how it is doing. Requests live on the Requests tab —
+ * this page used to carry them too, and a client looking for "is anyone
+ * visiting" had to scroll past a progress track to find out. What stays is
+ * one clear way in: a "Make a request" button, which also says when a change
+ * is waiting for them to look at, since that is the one thing on the portal
+ * where nothing happens until they act.
  *
  * The visitor figures stream. Everything above them needs only the portal's
  * own database, and answers in tens of milliseconds; the figures need up to
@@ -93,14 +90,9 @@ export default async function ClientDashboard({
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
 
-  const [requests, awaitingApproval] = await Promise.all([
-    listChangeRequests(db, ctx, { limit: 5 }),
-    // The same query the Requests page uses to build its panel — one source,
-    // so the banner and the panel cannot disagree about what is waiting.
-    listPreviewsAwaitingDecision(db, ctx),
-  ]);
-
-  const openRequests = openCount(requests);
+  // The same query the Requests page uses to build its panel — one source,
+  // so this page and that one cannot disagree about what is waiting.
+  const awaitingApproval = await listPreviewsAwaitingDecision(db, ctx);
 
   // Analytics is kicked off here, before any HTML is sent, and awaited inside
   // the boundary below. Starting it early means the eight analytics calls run
@@ -108,13 +100,6 @@ export default async function ClientDashboard({
   // Filters, not just the day count: the provider query narrows too, so the
   // breakdowns and the headline figures agree with each other.
   const analytics = resolveClientAnalytics(db, ctx, filters);
-
-  const requestsPanel = (
-    <RecentRequests
-      requests={requests}
-      openRequests={openRequests}
-    />
-  );
 
   return (
     <>
@@ -126,42 +111,11 @@ export default async function ClientDashboard({
           </Suspense>
         </div>
 
-        {/* Directly under the title. A preview waiting on the client is the
-            only thing on this page where nothing happens until they act. It
-            links to the approval panel, not to the preview itself: opening
-            the preview from here would show them the change with no way to
-            say yes to it. */}
-        {awaitingApproval.length > 0 && (
-          <div className="notice notice-action">
-            <strong>
-              {awaitingApproval.length === 1
-                ? "Your change is ready to look at."
-                : `${awaitingApproval.length} changes are ready to look at.`}
-            </strong>{" "}
-            {awaitingApproval.length === 1 && awaitingApproval[0] && (
-              <span className="muted">{awaitingApproval[0].requestTitle}</span>
-            )}
-            <p style={{ margin: "0.5rem 0 0" }}>
-              Nothing changes on your site until you approve it.
-            </p>
-            <p style={{ margin: "0.75rem 0 0" }}>
-              <Link className="button" href="/dashboard/requests#awaiting-approval">
-                Review it now
-              </Link>
-            </p>
-          </div>
-        )}
-
-        {/* Something in progress goes above the figures. On a phone the old
-            order put it sixteen screens down, under four panels of numbers
-            the client could only look at. */}
-        {openRequests > 0 && requestsPanel}
+        <MakeARequest waiting={awaitingApproval.map((p) => p.requestTitle)} />
 
         <Suspense fallback={<VisitorsSkeleton />}>
           <VisitorPanels analytics={analytics} days={days} filters={filters} />
         </Suspense>
-
-        {openRequests === 0 && requestsPanel}
       </main>
     </>
   );
@@ -368,71 +322,41 @@ async function VisitorPanels({
   );
 }
 
-function RecentRequests({
-  requests,
-  openRequests,
-}: {
-  requests: Awaited<ReturnType<typeof listChangeRequests>>;
-  openRequests: number;
-}) {
+/**
+ * The way into Requests, and the one request-shaped thing this page says.
+ *
+ * Always the same button, so a client learns where it is. When a change is
+ * waiting for them, the pane says so and offers to take them to it — a
+ * preview nobody looks at is a change that never goes live.
+ */
+function MakeARequest({ waiting }: { waiting: string[] }) {
+  const ready = waiting.length > 0;
+
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>{openRequests > 0 ? "In progress" : "Recent requests"}</h2>
-        <span className="panel-head-actions">
-          <Link href="/dashboard/requests">
-            {requests.length === 0 ? "Request a change" : "All requests"}
-          </Link>
-        </span>
+    <section className="card request-cta">
+      <div className="request-cta-copy">
+        <h2>Want something changed?</h2>
+        <p className="muted">
+          Tell us what you&rsquo;d like and we&rsquo;ll make it on a preview
+          first. Nothing changes on your site until you&rsquo;ve seen it and
+          said yes.
+        </p>
+        {ready && (
+          <p className="request-cta-ready">
+            {waiting.length === 1
+              ? <>Your change &ldquo;{waiting[0]}&rdquo; is ready to look at.</>
+              : <>{waiting.length} changes are ready to look at.</>}
+          </p>
+        )}
       </div>
-
-      <div className="panel-body">
-        {requests.length === 0 ? (
-          <div className="empty">
-            <p className="empty-title">No requests yet.</p>
-            <p>
-              Anything you&rsquo;d like changed on your site — send it over and
-              we&rsquo;ll pick it up.
-            </p>
-            <p style={{ marginTop: "1rem" }}>
-              <Link className="button" href="/dashboard/requests">
-                Request a change
-              </Link>
-            </p>
-          </div>
-        ) : (
-          <>
-            {requests.map((r) => (
-              <div key={r.publicId} className="request-item">
-                <div className="request-head">
-                  <p className="request-title">{r.title}</p>
-                  <span className="muted" style={{ fontSize: "0.8rem" }}>
-                    sent {formatDate(r.createdAt)}
-                  </span>
-                </div>
-                <RequestProgress status={r.status} stage={stageIndex(r.status)} />
-
-                {/* Also here, not only on Requests. A cancel control the
-                    client cannot find is one that does not exist — the
-                    request stays open and the one-per-site rule then blocks
-                    them from raising anything else. */}
-                {isCancellable(r.status) && (
-                  <CancelRequestButton
-                    requestPublicId={r.publicId}
-                    hasPreview={Boolean(r.previewUrl)}
-                  />
-                )}
-              </div>
-            ))}
-            {openRequests > 0 && (
-              <p
-                className="muted"
-                style={{ margin: "1rem 0 0", fontSize: "0.85rem" }}
-              >
-                {openRequests} still in progress.
-              </p>
-            )}
-          </>
+      <div className="request-cta-actions">
+        <Link className="button" href="/dashboard/requests">
+          Make a request
+        </Link>
+        {ready && (
+          <Link className="button secondary" href="/dashboard/requests#awaiting-approval">
+            Look at {waiting.length === 1 ? "it" : "them"}
+          </Link>
         )}
       </div>
     </section>

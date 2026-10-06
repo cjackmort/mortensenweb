@@ -240,7 +240,7 @@ export function RequestForm({
     return (
       <div className="card">
         <div className="card-head">
-          <h2>Request a change</h2>
+          <h2>Make a request</h2>
         </div>
         <div className="notice">
           <p style={{ marginTop: 0 }}>
@@ -260,8 +260,8 @@ export function RequestForm({
     return (
       <div className="card">
         <div className="notice notice-success" style={{ marginBottom: "1rem" }}>
-          <strong>Request sent.</strong> We&rsquo;ll pick this up and you&rsquo;ll
-          see it in the list below.
+          <strong>Request sent.</strong> We&rsquo;ll pick this up — you can
+          follow it under &ldquo;Your changes&rdquo; below.
           {state.attached > 0 && (
             <>
               {" "}
@@ -321,7 +321,7 @@ export function RequestForm({
   return (
     <form ref={formRef} className="card" action={formAction}>
       <div className="card-head">
-        <h2>Request a change</h2>
+        <h2>Make a request</h2>
       </div>
 
       {/* Minted once per composed request. The server uses it to recognise a
@@ -402,12 +402,12 @@ export function RequestForm({
         </p>
       )}
 
-      <label htmlFor="title">What would you like changed?</label>
+      <label htmlFor="title">Title</label>
       <input
         id="title"
         name="title"
         type="text"
-        placeholder="New photos on the services page"
+        placeholder="e.g. New photos on the services page"
         required
         minLength={3}
         maxLength={200}
@@ -415,19 +415,16 @@ export function RequestForm({
         onChange={(event) => setTitle(event.target.value)}
       />
 
-      <label htmlFor="description">Tell us what you want</label>
+      <label htmlFor="description">Description</label>
       <textarea
         id="description"
         name="description"
         rows={7}
-        placeholder="Describe it however you'd say it out loud. Where it is, what it should say, what you don't like about it now — as much or as little as you want."
+        placeholder="Say it however you'd say it out loud — where on the site, what it should say or show."
         value={description}
         onChange={(event) => setDescription(event.target.value)}
       />
-      <p className="field-hint">
-        No need to be technical. We&rsquo;ll work out the details and send you a
-        preview before anything changes on your site.
-      </p>
+      <p className="field-hint">No need to be technical — we&rsquo;ll work out the details.</p>
 
       {/* One site is the normal case, so the picker only appears when the
           choice is real. Two questions where one has a single possible answer
@@ -459,9 +456,8 @@ export function RequestForm({
 
       <label htmlFor="media-picker-label">Images (optional)</label>
       <p id="media-picker-label" className="field-hint">
-        Choose from your media library. Photos are uploaded there separately, at
-        full quality, so sending a request never waits on an upload and never
-        fails because of one.
+        Pick from your photos. To add new ones, upload them in{" "}
+        <a href="/dashboard/media">Media</a> first.
       </p>
 
       <AssetPicker

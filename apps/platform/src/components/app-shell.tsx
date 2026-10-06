@@ -62,11 +62,29 @@ export function AppShell({
 
   return (
     <div className="app">
+      {/* The tabs live inside the sticky header, so they never scroll away
+          from the page they navigate. */}
       <header className="topbar">
         <div className="topbar-inner">
-          <Link className="brand" href={isAdmin ? "/admin" : "/dashboard"}>
-            Mortensen Web Co.{" "}
-            <span>{isAdmin ? "Admin" : "Portal"}</span>
+          {/* mortensenweb.com's lockup: the M. mark, the wordmark with "Web"
+              in the blue, and "Co." in mono. */}
+          <Link
+            className="brand"
+            href={isAdmin ? "/admin" : "/dashboard"}
+            aria-label={`Mortensen Web Co. ${isAdmin ? "Admin" : "Portal"}`}
+          >
+            <span className="brand-mark" aria-hidden="true">
+              M<i />
+            </span>
+            <span className="brand-word" aria-hidden="true">
+              Mortensen<em>Web</em>
+            </span>
+            <span className="brand-co" aria-hidden="true">
+              Co.
+            </span>
+            <span className="brand-role" aria-hidden="true">
+              {isAdmin ? "Admin" : "Portal"}
+            </span>
           </Link>
 
           <div className="topbar-meta">
@@ -74,24 +92,15 @@ export function AppShell({
               {user.name ?? user.email}
             </span>
             <form action={endSession}>
-              <button
-                type="submit"
-                className="secondary"
-                style={{
-                  width: "auto",
-                  minHeight: "2rem",
-                  padding: "0.25rem 0.7rem",
-                  fontSize: "0.82rem",
-                }}
-              >
+              <button type="submit" className="secondary small">
                 Sign out
               </button>
             </form>
           </div>
         </div>
-      </header>
 
-      <NavLinks items={isAdmin ? ADMIN_NAV : CLIENT_NAV} />
+        <NavLinks items={isAdmin ? ADMIN_NAV : CLIENT_NAV} />
+      </header>
 
       {children}
     </div>
