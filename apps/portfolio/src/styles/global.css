@@ -1487,3 +1487,11 @@ img {
   margin-left: 0.3em;
   vertical-align: baseline;
 }
+
+/* Three builds since 2026-10-06. Two columns until there is room for three,
+   so a price never sits in a column narrower than its own figure. */
+@media (min-width: 64rem) {
+  .builds--three {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
