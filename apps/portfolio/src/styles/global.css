@@ -53,8 +53,15 @@
   --sans: "Schibsted Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --text-xs: clamp(0.72rem, 0.7rem + 0.1vw, 0.78rem);
-  --text-sm: clamp(0.86rem, 0.82rem + 0.2vw, 0.95rem);
+  /* Raised 2026-10-06 for readability. The labels, eyebrows and badges set
+     in --text-xs are uppercase monospace, the slowest style to read, and at
+     the old 11.6-12.5px they were the hardest text on the site. 13-14px keeps
+     the look and makes them legible on a phone. */
+  --text-xs: clamp(0.8125rem, 0.79rem + 0.12vw, 0.875rem);
+  --text-sm: clamp(0.9375rem, 0.91rem + 0.15vw, 1rem);
+  /* Anything a visitor clicks: nav links and buttons. A step above the
+     labels, because a button a visitor cannot read is one they do not press. */
+  --text-ui: clamp(0.875rem, 0.85rem + 0.12vw, 0.9375rem);
   --text-base: clamp(1rem, 0.96rem + 0.25vw, 1.125rem);
   --text-lg: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
   --text-xl: clamp(1.5rem, 1.2rem + 1.4vw, 2.2rem);
@@ -233,8 +240,8 @@ img {
   gap: 0.6em;
   min-height: 3rem;
   padding: 0 1.4rem;
-  font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.1em;
+  font: 500 var(--text-ui) / 1 var(--mono);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   border: 1px solid var(--ink);
   background: var(--ink);
@@ -373,8 +380,8 @@ img {
 }
 
 .nav__link {
-  font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.1em;
+  font: 500 var(--text-ui) / 1 var(--mono);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-2);
   padding: 0.9rem 0;
@@ -426,7 +433,10 @@ img {
 /* A phone gets the page links as a second row under the masthead. */
 .subnav {
   display: none;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  /* Five links spread across the phone's width rather than bunched left,
+     so the strip reads as a menu, not as something cut off. */
+  justify-content: space-between;
   border-bottom: 1px solid var(--rule);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -440,8 +450,11 @@ img {
   display: flex;
   align-items: center;
   min-height: 44px;
+  /* The label size rather than --text-ui, and tighter tracking: all five
+     have to fit a 375px phone without scrolling. At --text-ui the last link
+     was cut in half at the screen edge, which reads as broken. */
   font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
@@ -930,11 +943,12 @@ img {
   padding: 0.45rem 0.6rem;
 }
 
+/* The card's title, so it reads as one: the plan name was a small grey
+   uppercase label, quieter than the price under it. */
 .plan__name {
-  font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font: 600 var(--text-lg) / 1.2 var(--sans);
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .plan__price {
@@ -1069,7 +1083,8 @@ img {
 
 .build__note {
   margin-top: var(--space-5);
-  max-width: 52rem;
+  /* 52rem ran to about 110 characters a line; 65ch is a comfortable read. */
+  max-width: 65ch;
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--muted);
@@ -1146,7 +1161,7 @@ img {
   display: block;
   margin-top: 0.3rem;
   max-width: 22rem;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--muted);
 }
@@ -1189,7 +1204,7 @@ img {
   .compare th,
   .compare td {
     padding: 0.7rem 0.45rem;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
   }
 }
 
@@ -1206,12 +1221,13 @@ img {
   max-width: 40rem;
 }
 
+/* Questions a visitor reads and answers, so set as sentences rather than
+   uppercase monospace labels — "Which build sounds like you?" in capitals
+   was the hardest line on the form to read. */
 .form label {
   display: block;
-  font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  font: 600 var(--text-sm) / 1.35 var(--sans);
+  color: var(--ink);
   margin-bottom: 0.45rem;
 }
 
@@ -1280,19 +1296,24 @@ img {
 
 .ask legend {
   padding: 0;
-  font: 500 var(--text-xs) / 1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  font: 600 var(--text-sm) / 1.35 var(--sans);
+  color: var(--ink);
   margin-bottom: 0.45rem;
 }
 
 /* Off-screen rather than display:none, so the group stays keyboard-reachable
    and arrow keys still move between the two options. */
-.ask__radio {
+/* Scoped under .form so it outranks `.form input`, whose width: 100%,
+   padding and min-height used to win: the hidden radios were full-width and
+   sat past the right edge, making the page 24px wider than a phone screen. */
+.form .ask__radio {
   position: absolute;
   width: 1px;
   height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
   opacity: 0;
   pointer-events: none;
 }
