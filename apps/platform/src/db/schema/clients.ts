@@ -132,6 +132,20 @@ export const clients = pgTable(
      */
     stripeCustomerId: text("stripe_customer_id"),
 
+    /**
+     * A Stripe promotion code an operator attached for this client's next
+     * checkout, so a promo offered in a pitch reaches the payment page without
+     * the client having to type it.
+     *
+     * The code and its terms are copied at the moment of attaching, for
+     * display only. What is charged is always decided by Stripe at checkout,
+     * which also re-checks that the code is still active — a promo that has
+     * expired since is dropped rather than failing their checkout.
+     */
+    promoCodeId: text("promo_code_id"),
+    promoCode: text("promo_code"),
+    promoTerms: text("promo_terms"),
+
     isDemo: boolean("is_demo").notNull().default(false),
     /**
      * The agency's own site, running through this same pipeline. Not a
@@ -365,6 +379,22 @@ export const subscriptions = pgTable(
       .notNull()
       .default(false),
 
+    /**
+     * A promo on the subscription, mirrored from Stripe.
+     *
+     * `monthly_price_cents` stays the plan's list price, because that is what
+     * the client returns to when the promo ends. These say what they actually
+     * pay meanwhile. Without them a client on 50% off sees "$100 a month" on
+     * their billing page and every revenue total counts the full price.
+     *
+     * `discount_ends_at` is null for a promo with no end date. Readers treat a
+     * past end date as no discount rather than waiting for Stripe to announce
+     * the end: see `effectiveMonthlyCents`.
+     */
+    discountLabel: text("discount_label"),
+    discountedPriceCents: integer("discounted_price_cents"),
+    discountEndsAt: timestamp("discount_ends_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -380,6 +410,10 @@ export const subscriptions = pgTable(
       t.providerSubscriptionId,
     ),
     check("subscriptions_price_non_negative", sql`${t.monthlyPriceCents} >= 0`),
+    check(
+      "subscriptions_discounted_price_non_negative",
+      sql`${t.discountedPriceCents} IS NULL OR ${t.discountedPriceCents} >= 0`,
+    ),
     check(
       "subscriptions_billing_day_range",
       sql`${t.billingDay} BETWEEN 1 AND 28`,
