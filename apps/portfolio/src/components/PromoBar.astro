@@ -1,0 +1,100 @@
+---
+import { PROMO } from "../data/promo";
+
+/**
+ * The promo banner, above the masthead on every page.
+ *
+ * Expiry is checked twice. At build time, so a deploy after the end date
+ * leaves it out of the HTML; and in the visitor's browser, because this is a
+ * static site and nothing redeploys it on the day an offer ends. The inline
+ * script runs as soon as the bar is parsed, before first paint, so an expired
+ * offer is never shown and then snatched away.
+ */
+
+// The end of the last day, in the visitor's own time zone for the browser
+// check. At build time the server's clock is close enough: the browser check
+// is the one that decides on the day itself.
+const endsAt = PROMO ? new Date(`${PROMO.endsOn}T23:59:59`) : null;
+const show = PROMO !== null && endsAt !== null && !Number.isNaN(endsAt.getTime()) && endsAt > new Date();
+const href = PROMO?.href ?? "/contact/";
+const linkLabel = PROMO?.linkLabel ?? "Start a project";
+---
+
+{
+  show && PROMO && (
+    <Fragment>
+      <aside class="promo" aria-label="Current offer" data-ends={PROMO.endsOn}>
+        <div class="wrap promo__inner">
+          <p class="promo__text">
+            {PROMO.headline}
+            {PROMO.code && (
+              <>
+                {" "}Use code <code class="promo__code">{PROMO.code}</code>.
+              </>
+            )}
+          </p>
+          <a class="promo__link" href={href} data-umami-event="cta: promo banner">
+            {linkLabel} <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </aside>
+      <script is:inline>
+        (() => {
+          const bar = document.currentScript?.previousElementSibling;
+          const ends = bar?.getAttribute("data-ends");
+          if (bar && ends && new Date(`${ends}T23:59:59`) < new Date()) bar.remove();
+        })();
+      </script>
+    </Fragment>
+  )
+}
+
+<style>
+  .promo {
+    background: var(--dark);
+    color: var(--on-dark);
+  }
+
+  .promo__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-5);
+    padding-block: var(--space-3);
+  }
+
+  .promo__text {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .promo__code {
+    font: 500 var(--text-xs) / 1 var(--mono);
+    letter-spacing: 0.06em;
+    padding: 0.2em 0.45em;
+    border: 1px solid var(--dark-rule);
+    white-space: nowrap;
+  }
+
+  /* On-dark ink with an underline rather than blue: --blue on --dark is
+     2.86:1, unreadable as text this size. */
+  .promo__link {
+    font: 500 var(--text-xs) / 1 var(--mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--on-dark);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    white-space: nowrap;
+  }
+
+  .promo__link:hover {
+    color: var(--white);
+  }
+
+  .promo__link:focus-visible {
+    outline: 2px solid var(--on-dark);
+    outline-offset: 3px;
+  }
+</style>
