@@ -3,6 +3,8 @@ import { InternalPanel } from "./internal-forms";
 import { LaunchPanel } from "./launch-forms";
 import { RepositoryPanel } from "./repo-forms";
 import { AddSiteForm, PreviewModeForm } from "./site-forms";
+import { FormsInboxPanel } from "./forms-inbox";
+import { formatDate } from "@/lib/time";
 
 export type SiteRow = Awaited<ReturnType<typeof listSitesWithAnalytics>>[number];
 
@@ -79,6 +81,18 @@ export function WebsiteSection({
               liveVerifiedAt={site.liveVerifiedAt}
               automationEnabled={site.automationEnabled ?? false}
               hasRepository={Boolean(site.repoOwner)}
+            />
+          </section>
+
+          <section className="card">
+            <div className="card-head">
+              <h2>Leads inbox</h2>
+            </div>
+            <FormsInboxPanel
+              clientPublicId={clientPublicId}
+              sitePublicId={site.publicId}
+              connectedAt={site.formsConnectedAt ? formatDate(site.formsConnectedAt) : null}
+              hasHosting={Boolean(site.netlifySiteId)}
             />
           </section>
 

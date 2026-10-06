@@ -93,6 +93,15 @@ export const sites = pgTable(
       onDelete: "set null",
     }),
 
+    /**
+     * The Netlify outgoing webhook that delivers this site's form submissions
+     * to the leads inbox. Kept so reconnecting replaces the hook rather than
+     * adding a second one — two hooks would deliver every lead twice, and
+     * while the upsert absorbs that, the client would get two emails.
+     */
+    formsHookId: text("forms_hook_id"),
+    formsConnectedAt: timestamp("forms_connected_at", { withTimezone: true }),
+
     /** Portfolio gate. The public query hard-filters on this column. */
     publicDisplayApproved: boolean("public_display_approved")
       .notNull()

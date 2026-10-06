@@ -13,6 +13,7 @@ import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
 import { reconcileStorageReservations } from "@/db/repositories/client/media-quota";
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
+import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -23,9 +24,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Ten jobs that have to run whether or not anyone is looking. The first six
+ * Eleven jobs that have to run whether or not anyone is looking. The first six
  * are the loop's own; jobs 7-9 keep the media library's storage honest and
- * job 10 is the net under Stripe's webhooks:
+ * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -57,6 +58,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      interrupted release does not slowly cost a client room.
  *  10. **Stripe reconciliation.** Self-gated to at most hourly; a net for lost
  *      webhooks rather than something a client is waiting on.
+ *  11. **Lead import.** Self-gated to six-hourly; re-reads connected sites'
+ *      form submissions so a delivery missed while the portal was down still
+ *      reaches the client's inbox.
  *
  * ## Not every call runs them
  *
@@ -198,6 +202,9 @@ export async function POST(request: Request): Promise<Response> {
     // something a client is waiting on, so it yields the tick's budget to the
     // jobs above and skips most runs on its own.
     ["stripeReconciled", () => runScheduledReconcile(db)],
+    // The same kind of net, for contact-form submissions. Self-gated to every
+    // six hours; one Netlify call per connected site.
+    ["leadsImported", () => runScheduledLeadImport(db)],
   ];
 
   const failed: string[] = [];
