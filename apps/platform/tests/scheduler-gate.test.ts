@@ -110,8 +110,10 @@ function awakeUntil(store = globalStore): string | undefined {
 beforeEach(() => {
   globalStore = new FakeStore();
   deployStore = new FakeStore();
-  getStore.mockClear();
-  getDeployStore.mockClear();
+  // Reset rather than clear, so a test's own implementation does not leak into
+  // the next; resetting a `vi.fn(impl)` restores `impl`.
+  getStore.mockReset();
+  getDeployStore.mockReset();
   resetGateStore();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -231,6 +233,39 @@ describe("the gate on Netlify", () => {
     expect(getStore).not.toHaveBeenCalled();
     expect(awakeUntil(deployStore)).toBe(minutes(45).toISOString());
     expect(globalStore.entries.size).toBe(0);
+  });
+
+  it("uses each invocation's own Blobs token, not the first one it saw", async () => {
+    // Netlify issues the Blobs token per invocation, and `getStore` copies it
+    // into the client it builds. The first version cached the store, kept the
+    // first token past its expiry, and read every later tick as `unreadable` —
+    // which fails open and wakes the database. In production that was forty
+    // minutes of every hour.
+    const shared = new FakeStore().entries;
+    const byToken = new Map<string, FakeStore>();
+    getStore.mockImplementation(() => {
+      const token = process.env.NETLIFY_BLOBS_CONTEXT ?? "";
+      let store = byToken.get(token);
+      if (!store) {
+        store = new FakeStore();
+        store.entries = shared;
+        byToken.set(token, store);
+      }
+      return store;
+    });
+
+    onNetlify();
+    vi.stubEnv("NETLIFY_BLOBS_CONTEXT", "first-invocation");
+    await recordSchedulerRun(T0);
+    expect((await checkGate(minutes(5))).run).toBe(false);
+
+    // That token expires; the next invocation arrives with a new one.
+    byToken.get("first-invocation")!.failing = true;
+    vi.stubEnv("NETLIFY_BLOBS_CONTEXT", "later-invocation");
+
+    expect(await checkGate(minutes(25))).toMatchObject({ run: false, reason: "idle" });
+    expect(await keepSchedulerAwake("github pull_request", minutes(70))).toBe(true);
+    expect(await recordSchedulerRun(minutes(30))).toBe(true);
   });
 });
 

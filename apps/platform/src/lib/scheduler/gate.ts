@@ -129,10 +129,22 @@ interface GateStore {
   ) => Promise<{ modified: boolean }>;
 }
 
-let store: Promise<GateStore> | undefined;
+type BlobsModule = typeof import("@netlify/blobs");
+
+let blobsModule: Promise<BlobsModule> | undefined;
 
 /**
  * The gate's store, or null where there is no gate.
+ *
+ * Built on every call, never cached. `getStore` copies the Blobs token out of
+ * the invocation's environment into the client it constructs, and Netlify
+ * issues that token per invocation. The first version of this file cached the
+ * store for the life of the function instance, so it kept presenting the first
+ * token after that token had expired: from about twenty minutes into each hour
+ * every read failed, every tick read as `unreadable`, failed open and woke the
+ * database — and the compute was awake two-thirds of the time instead of
+ * almost never. Constructing a store makes no request, so doing it per call
+ * costs nothing. The module import is what is cached.
  *
  * Production uses the global store and everything else a deploy-scoped one, as
  * the storage driver does: a test submission on a deploy preview must not keep
@@ -145,27 +157,25 @@ let store: Promise<GateStore> | undefined;
 function gateStore(): Promise<GateStore> | null {
   if (!onNetlify()) return null;
 
-  store ??= import("@netlify/blobs")
-    .then(
-      (m) =>
-        (isProductionContext()
-          ? m.getStore({ name: STORE_NAME, consistency: "strong" })
-          : m.getDeployStore({
-              name: STORE_NAME,
-              consistency: "strong",
-            })) as unknown as GateStore,
-    )
-    .catch((error: unknown) => {
-      store = undefined;
-      throw error;
-    });
+  blobsModule ??= import("@netlify/blobs").catch((error: unknown) => {
+    blobsModule = undefined;
+    throw error;
+  });
 
-  return store;
+  return blobsModule.then(
+    (m) =>
+      (isProductionContext()
+        ? m.getStore({ name: STORE_NAME, consistency: "strong" })
+        : m.getDeployStore({
+            name: STORE_NAME,
+            consistency: "strong",
+          })) as unknown as GateStore,
+  );
 }
 
-/** Testing hook: forget the cached store. */
+/** Testing hook: forget the imported module. */
 export function resetGateStore(): void {
-  store = undefined;
+  blobsModule = undefined;
 }
 
 function readInstant(value: unknown): Date | null {
