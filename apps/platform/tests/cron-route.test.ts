@@ -38,6 +38,7 @@ const jobs = {
   sweepExpiredUploads: job("sweepExpiredUploads"),
   reconcileStorageReservations: job("reconcileStorageReservations"),
   runScheduledReconcile: job("runScheduledReconcile"),
+  runScheduledLeadImport: job("runScheduledLeadImport"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -97,6 +98,10 @@ vi.mock("@/db/repositories/admin/stripe-reconcile", () => ({
   runScheduledReconcile: (...a: unknown[]) => jobs.runScheduledReconcile(...a),
 }));
 
+vi.mock("@/db/repositories/admin/leads", () => ({
+  runScheduledLeadImport: (...a: unknown[]) => jobs.runScheduledLeadImport(...a),
+}));
+
 const SECRET = "test-cron-secret";
 
 /** Every result key the endpoint is expected to report, by feature. */
@@ -111,7 +116,8 @@ const LOOP_KEYS = [
 ];
 const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"];
 const STRIPE_KEYS = ["stripeReconciled"];
-const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS];
+const LEAD_KEYS = ["leadsImported"];
+const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS];
 
 function request(
   secret: string | null = SECRET,
@@ -147,7 +153,7 @@ afterEach(() => {
 });
 
 describe("the scheduled endpoint", () => {
-  it("runs every job the three features registered", async () => {
+  it("runs every job the four features registered", async () => {
     const response = await post();
     const body = await response.json();
 
