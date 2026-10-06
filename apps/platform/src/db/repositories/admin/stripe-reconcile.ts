@@ -431,7 +431,14 @@ export async function adminBillingSummary(
   const active = await db
     .select({
       count: sql<number>`count(*)::int`,
-      total: sql<number>`coalesce(sum(${subscriptions.monthlyPriceCents}), 0)::int`,
+      // What is actually charged: the promo price while a promo runs. The
+      // same rule as `effectiveMonthlyCents`, in SQL.
+      total: sql<number>`coalesce(sum(
+        CASE WHEN ${subscriptions.discountedPriceCents} IS NOT NULL
+              AND (${subscriptions.discountEndsAt} IS NULL OR ${subscriptions.discountEndsAt} > now())
+             THEN ${subscriptions.discountedPriceCents}
+             ELSE ${subscriptions.monthlyPriceCents} END
+      ), 0)::int`,
     })
     .from(subscriptions)
     .innerJoin(clients, eq(clients.id, subscriptions.clientId))

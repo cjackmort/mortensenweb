@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
+import { discountApplies } from "@/lib/payments/promos";
 import {
   listClientBillingStatus,
   listOverduePaymentRequests,
@@ -148,7 +149,16 @@ export default async function AdminPaymentsPage() {
                         </Link>
                       </td>
                       <td data-label="Plan">
-                        {formatCurrency(s.monthlyPriceCents, s.currency)}/mo
+                        {discountApplies(s) ? (
+                          <>
+                            {formatCurrency(s.discountedPriceCents!, s.currency)}/mo{" "}
+                            <span className="muted">
+                              <s>{formatCurrency(s.monthlyPriceCents, s.currency)}</s> {s.discountLabel}
+                            </span>
+                          </>
+                        ) : (
+                          <>{formatCurrency(s.monthlyPriceCents, s.currency)}/mo</>
+                        )}
                       </td>
                       <td data-label="Billing day">day {s.billingDay}</td>
                       <td data-label="Charged via">

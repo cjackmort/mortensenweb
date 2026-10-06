@@ -380,6 +380,49 @@ every charge lands as `NEEDS REVIEW`. Check it is set before enrolling anyone.
 
 ---
 
+## Running a promo
+
+Promos are Stripe promotion codes. The portal never makes one; it offers them
+at checkout, lets an operator attach one to a client, and reads back what each
+subscription actually pays. The published prices on the site and in
+`@mortensenweb/plans` never change for a promo.
+
+**Making one** (Stripe dashboard, same steps in sandbox and live):
+
+1. Product catalogue → Coupons → New. Percentage or amount off, and a
+   duration: once, a number of months, or forever.
+2. On that coupon, add a promotion code: the text clients type (`SPRING50`),
+   plus any limits — an expiry date, a redemption cap, first-time customers
+   only.
+
+**Getting it to clients** — any of these, together or alone:
+
+- **They type it.** Every subscription checkout has a promo code box, unless
+  an operator attached a promo for them (Stripe allows one or the other).
+- **An operator attaches it.** Admin → the client → Billing → Promo lists every
+  active code. Not yet paying by card: it is saved and applied to their
+  checkout, both the payment link and their own button. Already paying by
+  card: it goes onto the live subscription from their next payment, replacing
+  any promo already there. Taking a promo *off* a live subscription is done in
+  Stripe, deliberately — it raises what somebody pays.
+- **The website says so.** Fill in `PROMO` in
+  `apps/portfolio/src/data/promo.ts` and deploy. The banner hides itself after
+  its end date.
+
+**What the portal shows.** `subscriptions.monthly_price_cents` stays the list
+price, which is what the client returns to. The promo price, its label and its
+end date are mirrored onto `discount_*` columns by the webhook, and every
+reader — the client's billing page, the admin billing card, recurring revenue
+— uses the promo price until the end date passes. A promo attached for a
+checkout is re-checked at checkout: one that has expired since is dropped, and
+one Stripe refuses for that customer (a first-time-only code, say) is retried
+without, so a promo is never the reason somebody cannot pay.
+
+**The build price.** A promo on the build is not a Stripe code: raise the
+build invoice at the lower amount and say why in its note.
+
+---
+
 ## Going live
 
 The account was activated for live payments on 2026-10-05. The code was
