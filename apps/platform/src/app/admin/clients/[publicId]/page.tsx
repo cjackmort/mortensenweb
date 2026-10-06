@@ -2,74 +2,69 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
-import { adminContextFrom, NotFoundError } from "@/db/repositories/context";
 import {
+  adminContextFrom,
+  NotFoundError,
+  type AdminContext,
+} from "@/db/repositories/context";
+import {
+  getClientComp,
   getClientDetail,
   listOrganizationUsers,
 } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import { listClientPaymentRequests } from "@/db/repositories/admin/billing";
-import { StatRow } from "@/components/analytics-summary";
-import { TimeSeriesChart } from "@/components/charts";
-import { demoAnalytics } from "@/lib/analytics/demo";
-import { demoReason } from "@/lib/analytics/resolve";
-import {
-  fetchAnalytics,
-  isUmamiConfigured,
-  type AnalyticsState,
-  type AnalyticsSummary,
-} from "@/lib/analytics/umami";
-import { formatCurrency } from "@/lib/payments/venmo";
 import { listBriefs } from "@/db/repositories/admin/briefs";
-import { ActivateForm, ReissueForm } from "./credential-forms";
-import { AddSiteForm, PreviewModeForm } from "./site-forms";
-import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
-import { BriefForm, DispatchBriefForm } from "./brief-forms";
-import { LaunchPanel } from "./launch-forms";
-import { RepositoryPanel } from "./repo-forms";
-import { CompPanel } from "./comp-forms";
-import { InternalPanel } from "./internal-forms";
 import { listActivePlans } from "@/db/repositories/admin/prospects";
-import { getClientComp } from "@/db/repositories/admin/clients";
 import { getBusinessProfile } from "@/db/repositories/admin/business-profile";
+import {
+  getBillingPlan,
+  listAssignablePlans,
+  type BillingPlanView,
+} from "@/db/repositories/admin/billing-plan";
+import { PROFILE_FIELDS, profileEntries } from "@/lib/business-profile";
+import { businessDate } from "@/lib/billing/period";
+import { LAST_BILLING_DAY, ordinal } from "@/lib/billing/billing-day";
+import { formatCurrency } from "@/lib/payments/venmo";
+import { stripeConfigured, TEST_PLAN } from "@/lib/payments/stripe";
+import { isOpen } from "@/lib/requests/status";
+import { ActivateForm, ReissueForm } from "./credential-forms";
 import { ProfilePanel } from "./profile-forms";
-
-const BRIEF_PILL: Record<string, string> = {
-  draft: "pill-neutral",
-  submitted: "pill-info",
-  dispatched: "pill-accent",
-  applied: "pill-success",
-  cancelled: "pill-neutral",
-};
-
-const INVOICE_PILL: Record<string, string> = {
-  draft: "pill-neutral",
-  open: "pill-info",
-  awaiting_confirmation: "pill-warning",
-  paid: "pill-success",
-  overdue: "pill-danger",
-  cancelled: "pill-neutral",
-  written_off: "pill-neutral",
-};
+import { BillingSection } from "./billing-section";
+import { WebsiteSection } from "./website-section";
+import { AnalyticsSection } from "./analytics-section";
+import { BriefsSection, RequestsSection } from "./work-sections";
+import {
+  SECTIONS,
+  SectionGrid,
+  SectionSwitcher,
+  sectionFrom,
+  type SectionKey,
+  type SectionSummaries,
+} from "./sections";
 
 export const dynamic = "force-dynamic";
 
 /**
  * One client, and the operator actions that belong to them.
  *
+ * The overview is who they are and who can sign in, then a button per
+ * setting; each setting opens on its own (`?section=…`) rather than as one
+ * more card in a long scroll. See `sections.tsx`.
+ *
  * Gated twice, like every admin surface: middleware keeps unauthenticated
  * visitors out, and `adminContextFrom` refuses a session that is not an active
  * admin. The second is the load-bearing one.
  *
  * A client that does not exist renders 404 rather than an error, matching the
- * repository's `NotFoundError` contract — admin surfaces have no cross-tenant
- * exposure, but keeping the same shape everywhere means the one place it *does*
- * matter is not a special case someone has to remember.
+ * repository's `NotFoundError` contract.
  */
 export default async function ClientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ publicId: string }>;
+  searchParams: Promise<{ section?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -77,6 +72,7 @@ export default async function ClientDetailPage({
   if (user.role !== "admin") redirect("/dashboard");
 
   const { publicId } = await params;
+  const section = sectionFrom((await searchParams).section);
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
@@ -88,51 +84,38 @@ export default async function ClientDetailPage({
     throw error;
   }
 
-  const [portalUsers, siteRows, invoices, briefs, compPlans, comp, profile] = await Promise.all([
-    listOrganizationUsers(ctx, db, detail.organization.id),
-    listSitesWithAnalytics(ctx, db, detail.organization.id),
-    listClientPaymentRequests(ctx, db, detail.organization.id),
-    listBriefs(ctx, db, detail.organization.id),
-    listActivePlans(db),
-    getClientComp(ctx, db, publicId),
-    getBusinessProfile(db, detail.organization.id),
+  const { client, organization, requests } = detail;
+  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan] = await Promise.all([
+    listOrganizationUsers(ctx, db, organization.id),
+    listSitesWithAnalytics(ctx, db, organization.id),
+    listClientPaymentRequests(ctx, db, organization.id),
+    listBriefs(ctx, db, organization.id),
+    getBusinessProfile(db, organization.id),
+    getBillingPlan(db, client.id),
   ]);
 
-  const { client, organization, subscription, requests } = detail;
-  const activated = portalUsers.length > 0;
-
-  // One snapshot per site with analytics attached, fetched here rather than
-  // through `resolveClientAnalytics` — that helper re-derives "the site" from
-  // a `TenantContext`, which this page doesn't have one of (there's no
-  // client session here to scope it to, by design: viewing this page is the
-  // whole point, not a stand-in for logging in as the client). This page
-  // already has the site rows directly from `listSitesWithAnalytics`, so it
-  // fetches per site instead of re-deriving them.
-  const analyticsBySite = new Map<
-    string,
-    { state: AnalyticsState; data: AnalyticsSummary; showingDemo: boolean }
-  >();
-  const umamiReady = isUmamiConfigured();
-  await Promise.all(
-    siteRows.map(async (site) => {
-      const state: AnalyticsState = site.umamiWebsiteId
-        ? await fetchAnalytics(site.umamiWebsiteId, 30)
-        : umamiReady
-          ? { kind: "not_connected" }
-          : { kind: "not_configured" };
-      analyticsBySite.set(site.publicId, {
-        state,
-        data: state.kind === "ok" ? state.data : demoAnalytics(site.publicId, 30),
-        showingDemo: state.kind !== "ok",
-      });
-    }),
-  );
+  const summaries = summarise({
+    billingPlan,
+    overdue: invoices.some((inv) => inv.status === "overdue"),
+    filled: profileEntries(profile?.details).length,
+    sites: siteRows,
+    briefs,
+    requests,
+  });
 
   return (
-    <>
-      <main className="shell">
+    <main className="shell">
       <div className="masthead">
-        <h1>{organization.name}</h1>
+        <h1>
+          {section ? (
+            <>
+              {organization.name}
+              <span className="masthead-sub">{SECTIONS.find((s) => s.key === section)?.title}</span>
+            </>
+          ) : (
+            organization.name
+          )}
+        </h1>
         <span className="muted">
           <Link href="/admin/clients">← All clients</Link>
         </span>
@@ -140,467 +123,299 @@ export default async function ClientDetailPage({
 
       {client.isDemo && (
         <p className="notice">
-          <span className="badge">Demo</span> This is seeded demo data, not a
-          real client.
+          <span className="badge">Demo</span> This is seeded demo data, not a real client.
         </p>
       )}
 
-      <section className="card">
-        <h2>Details</h2>
-        <dl className="detail-grid">
-          <dt>Contact</dt>
-          <dd>{client.primaryContactName ?? "—"}</dd>
-          <dt>Email</dt>
-          <dd>{client.primaryContactEmail ?? "—"}</dd>
-          <dt>Phone</dt>
-          <dd>{client.phone ?? "—"}</dd>
-          <dt>Industry</dt>
-          <dd>{client.industry ?? "—"}</dd>
-          <dt>Onboarding</dt>
-          <dd>{client.onboardingStatus}</dd>
-          <dt>Management</dt>
-          <dd>
-            {client.managementState}
-            {client.managementState !== "managed" && (
-              <>
-                {" — "}
-                <span className="muted">
-                  the site stays online; only our work is paused
-                </span>
-              </>
-            )}
-          </dd>
-          <dt>Plan</dt>
-          <dd>
-            {subscription
-              ? `${formatCurrency(subscription.monthlyPriceCents, subscription.currency)}/month, billed on day ${subscription.billingDay}`
-              : "No active subscription"}
-          </dd>
-        </dl>
-      </section>
+      {section ? (
+        <>
+          <SectionSwitcher clientPublicId={client.publicId} current={section} />
+          <Section
+            ctx={ctx}
+            section={section}
+            clientPublicId={client.publicId}
+            organizationName={organization.name}
+            isInternal={client.isInternal}
+            billingPlan={billingPlan}
+            invoices={invoices}
+            briefs={briefs}
+            profile={profile}
+            sites={siteRows}
+            requests={requests}
+          />
+        </>
+      ) : (
+        <>
+          <section className="card">
+            <h2>Details</h2>
+            <dl className="detail-grid">
+              <dt>Contact</dt>
+              <dd>{client.primaryContactName ?? "—"}</dd>
+              <dt>Email</dt>
+              <dd>{client.primaryContactEmail ?? "—"}</dd>
+              <dt>Phone</dt>
+              <dd>{client.phone ?? "—"}</dd>
+              <dt>Industry</dt>
+              <dd>{client.industry ?? "—"}</dd>
+              <dt>Onboarding</dt>
+              <dd>{client.onboardingStatus}</dd>
+              <dt>Management</dt>
+              <dd>
+                {client.managementState}
+                {client.managementState !== "managed" && (
+                  <span className="muted"> — the site stays online; only our work is paused</span>
+                )}
+              </dd>
+            </dl>
+          </section>
 
-      <section className="card" id="general-information">
-        <div className="card-head">
-          <h2>General information</h2>
-        </div>
-        <p className="muted" style={{ marginTop: 0 }}>
-          What the website says about the business. Filled in once, and given to
-          the agent on every request and brief for this client, so nobody has to
-          repeat the phone number or the hours.
-        </p>
-        <ProfilePanel
-          clientPublicId={client.publicId}
-          details={profile?.details ?? {}}
-          sites={siteRows.map((site) => ({ publicId: site.publicId, name: site.name }))}
-          updatedAt={profile?.updatedAt.toISOString() ?? null}
-          lastAppliedAt={profile?.lastAppliedAt?.toISOString() ?? null}
-        />
-      </section>
+          <PortalAccess
+            clientPublicId={client.publicId}
+            contactName={client.primaryContactName}
+            contactEmail={client.primaryContactEmail}
+            accounts={portalUsers}
+          />
 
+          <SectionGrid clientPublicId={client.publicId} summaries={summaries} />
+        </>
+      )}
+    </main>
+  );
+}
+
+type Accounts = Awaited<ReturnType<typeof listOrganizationUsers>>;
+
+function PortalAccess({
+  clientPublicId,
+  contactName,
+  contactEmail,
+  accounts,
+}: {
+  clientPublicId: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  accounts: Accounts;
+}) {
+  if (accounts.length === 0) {
+    return (
       <section className="card">
         <h2>Portal access</h2>
-
-        {activated ? (
-          <>
-            <table>
-              <thead>
-                <tr>
-                  <th>Username</th>
-                  <th>Email</th>
-                  <th>Status</th>
-                  <th>Last sign-in</th>
-                </tr>
-              </thead>
-              <tbody>
-                {portalUsers.map((account) => (
-                  <tr key={account.publicId}>
-                    <td>
-                      <code>{account.username ?? "—"}</code>
-                    </td>
-                    <td>{account.email}</td>
-                    <td>
-                      {account.status !== "active"
-                        ? account.status
-                        : account.mustChangePassword
-                          ? "Temporary password not yet used"
-                          : "Active"}
-                    </td>
-                    <td>
-                      {account.lastLoginAt
-                        ? account.lastLoginAt.toLocaleDateString("en-US")
-                        : "Never"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {portalUsers.map((account) => (
-              <div key={account.publicId} className="action-block">
-                <ReissueForm
-                  clientPublicId={client.publicId}
-                  userPublicId={account.publicId}
-                  email={account.email}
-                />
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-            <p className="muted" style={{ marginTop: 0 }}>
-              This client cannot sign in yet. Activating creates their account
-              and issues a temporary password, shown once.
-            </p>
-            <div className="action-block">
-              <ActivateForm
-                clientPublicId={client.publicId}
-                defaultName={client.primaryContactName}
-                defaultEmail={client.primaryContactEmail}
-              />
-            </div>
-          </>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Sites &amp; analytics ({siteRows.length})</h2>
-
-        {siteRows.length === 0 ? (
-          <>
-            <p className="muted" style={{ marginTop: 0 }}>
-              No site recorded yet. Analytics attaches to a site, so add one
-              before connecting Umami.
-            </p>
-            <div className="action-block">
-              <AddSiteForm
-                clientPublicId={client.publicId}
-                suggestedName={organization.name}
-              />
-            </div>
-          </>
-        ) : (
-          siteRows.map((site) => (
-            <div key={site.publicId} className="action-block">
-              <div className="card-head">
-                <h2>{site.name}</h2>
-                <span
-                  className={`pill ${site.umamiWebsiteId ? "pill-success" : "pill-neutral"}`}
-                >
-                  {site.umamiWebsiteId ? "analytics connected" : "not connected"}
-                </span>
-              </div>
-
-              <dl className="detail-grid" style={{ marginBottom: "1rem" }}>
-                <dt>Domain</dt>
-                <dd>{site.primaryDomain ?? "—"}</dd>
-                <dt>Status</dt>
-                <dd>{site.status}</dd>
-                <dt>Repository</dt>
-                <dd>
-                  {site.repoOwner
-                    ? `${site.repoOwner}/${site.repoName}`
-                    : "not connected"}
-                </dd>
-                <dt>Hosting</dt>
-                <dd>{site.netlifySiteName ?? "not set up"}</dd>
-              </dl>
-
-              <div style={{ marginTop: "1.5rem" }}>
-                <RepositoryPanel
-                  sitePublicId={site.publicId}
-                  clientPublicId={client.publicId}
-                  siteName={site.name}
-                  umamiWebsiteId={site.umamiWebsiteId}
-                  connected={
-                    site.repoOwner && site.repoName
-                      ? {
-                          owner: site.repoOwner,
-                          name: site.repoName,
-                          defaultBranch: site.repoDefaultBranch ?? "main",
-                          allowlisted: site.automationEnabled ?? false,
-                          previewUrlStyle: site.previewUrlStyle ?? "pr_alias",
-                          netlifySiteName: site.netlifySiteName ?? null,
-                        }
-                      : null
-                  }
-                />
-              </div>
-
-              <div style={{ marginTop: "1.5rem" }}>
-                <h3 style={{ fontSize: "0.95rem" }}>Grid thumbnail</h3>
-                <PreviewModeForm
-                  clientPublicId={client.publicId}
-                  sitePublicId={site.publicId}
-                  currentMode={site.previewMode ?? "screenshot"}
-                />
-              </div>
-
-              <div style={{ marginTop: "1.5rem" }}>
-                <h3 style={{ fontSize: "0.95rem" }}>Launch</h3>
-                <LaunchPanel
-                  sitePublicId={site.publicId}
-                  clientPublicId={client.publicId}
-                  domain={site.primaryDomain}
-                  status={site.status}
-                  dnsSentAt={site.dnsInstructionsSentAt}
-                  liveVerifiedAt={site.liveVerifiedAt}
-                  automationEnabled={site.automationEnabled ?? false}
-                  hasRepository={Boolean(site.repoOwner)}
-                />
-              </div>
-
-              {/* Same figures the client sees on their own dashboard, read
-                  here directly — an operator's own site (or their own agency
-                  site) has no reason to need a separate client login just to
-                  check whether anyone's visiting. Shown even before a Umami
-                  ID is set, same as the client dashboard: sample data with an
-                  honest label, not a blank section that looks unbuilt. */}
-              <div style={{ marginTop: "1.5rem" }}>
-                <h3 style={{ fontSize: "0.95rem" }}>Analytics — last 30 days</h3>
-                {(() => {
-                  const snapshot = analyticsBySite.get(site.publicId);
-                  if (!snapshot) return null;
-                  const reason = demoReason(snapshot.state);
-                  return (
-                    <>
-                      {reason && (
-                        <p className="notice" style={{ marginBottom: "1rem" }}>
-                          <span className="badge">Sample data</span> {reason}
-                        </p>
-                      )}
-                      <StatRow data={snapshot.data} comparedTo="previous 30 days" />
-                      <div style={{ marginTop: "1rem" }}>
-                        <TimeSeriesChart series={snapshot.data.series} />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          ))
-        )}
-
-        <CompPanel
-          clientPublicId={client.publicId}
-          plans={compPlans.map((p) => ({
-            key: p.key,
-            name: p.name,
-            includedChangesPerMonth: p.includedChangesPerMonth,
-          }))}
-          currentCompPlanId={comp?.compPlanKey ?? null}
-          currentNote={comp?.compNote ?? null}
-          paidPlanName={comp?.paidPlanName ?? null}
-        />
-
-        <InternalPanel
-          clientPublicId={client.publicId}
-          isInternal={client.isInternal}
-        />
-
-        {!umamiReady && (
-          <p className="notice" style={{ marginTop: "1.25rem", marginBottom: 0 }}>
-            <strong>The portal has no Umami credentials yet.</strong> You can
-            record website IDs now, but no figures will load until{" "}
-            <code>UMAMI_API_BASE_URL</code> and <code>UMAMI_API_KEY</code> are
-            set in the environment.
-          </p>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="card-head">
-          <h2>What they asked for</h2>
-          <span className="muted">{briefs.length}</span>
-        </div>
         <p className="muted" style={{ marginTop: 0 }}>
-          Type what came out of the call. Pressing <em>Save and build</em> hands
-          it to the agent, which opens a pull request and builds a preview — the
-          client approves that preview before anything goes live.
+          This client cannot sign in yet. Activating creates their account and issues a temporary
+          password, shown once.
         </p>
-
         <div className="action-block">
-          <BriefForm
-            clientPublicId={client.publicId}
-            sites={siteRows.map((site) => ({
-              publicId: site.publicId,
-              name: site.name,
-            }))}
-            hasSite={siteRows.length > 0}
+          <ActivateForm
+            clientPublicId={clientPublicId}
+            defaultName={contactName}
+            defaultEmail={contactEmail}
           />
         </div>
-
-        {briefs.length > 0 && (
-          <div className="table-wrap">
-            <table className="stack">
-              <thead>
-                <tr>
-                  <th>Kind</th>
-                  <th>Summary</th>
-                  <th>Status</th>
-                  <th>Written</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {briefs.map((brief) => (
-                  <tr key={brief.publicId}>
-                    <td data-label="Kind">{brief.kind}</td>
-                    <td data-label="Summary">
-                      {/* First line only. The full text is in the issue, and a
-                          wall of call notes in a table row helps nobody. */}
-                      {(
-                        brief.features ??
-                        brief.colourDirection ??
-                        brief.contentNotes ??
-                        brief.body ??
-                        ""
-                      )
-                        .split("\n")[0]
-                        ?.slice(0, 90) || "—"}
-                    </td>
-                    <td data-label="Status">
-                      <span
-                        className={`pill ${BRIEF_PILL[brief.status] ?? "pill-neutral"}`}
-                      >
-                        {brief.status}
-                      </span>
-                    </td>
-                    <td data-label="Written">
-                      {brief.createdAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </td>
-                    <td data-label="">
-                      {brief.status === "draft" && (
-                        <DispatchBriefForm
-                          briefPublicId={brief.publicId}
-                          clientPublicId={client.publicId}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
+    );
+  }
 
-      <section className="card">
-        <div className="card-head">
-          <h2>Billing</h2>
-          {subscription && (
-            <span className="muted">
-              {formatCurrency(subscription.monthlyPriceCents)}/month
-            </span>
-          )}
+  return (
+    <section className="card">
+      <h2>Portal access</h2>
+      <div className="table-wrap">
+        <table className="stack">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Last sign-in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((account) => (
+              <tr key={account.publicId}>
+                <td data-label="Username">
+                  <code>{account.username ?? "—"}</code>
+                </td>
+                <td data-label="Email">{account.email}</td>
+                <td data-label="Status">
+                  {account.status !== "active"
+                    ? account.status
+                    : account.mustChangePassword
+                      ? "Temporary password not yet used"
+                      : "Active"}
+                </td>
+                <td data-label="Last sign-in">
+                  {account.lastLoginAt ? account.lastLoginAt.toLocaleDateString("en-US") : "Never"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {accounts.map((account) => (
+        <div key={account.publicId} className="action-block">
+          <ReissueForm
+            clientPublicId={clientPublicId}
+            userPublicId={account.publicId}
+            email={account.email}
+          />
         </div>
+      ))}
+    </section>
+  );
+}
 
-        {invoices.length === 0 ? (
-          <p className="muted" style={{ marginTop: 0 }}>
-            No payment requests yet.
-          </p>
-        ) : (
-          <div className="table-wrap" style={{ marginBottom: "1.25rem" }}>
-            <table className="stack">
-              <thead>
-                <tr>
-                  <th>Ref</th>
-                  <th>Amount</th>
-                  <th>Due</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.publicId}>
-                    <td data-label="Ref">
-                      <code>{inv.reference}</code>
-                    </td>
-                    <td data-label="Amount">
-                      {formatCurrency(inv.amountCents, inv.currency)}
-                    </td>
-                    <td data-label="Due">{inv.dueOn ?? "—"}</td>
-                    <td data-label="Status">
-                      <span
-                        className={`pill ${INVOICE_PILL[inv.status] ?? "pill-neutral"}`}
-                      >
-                        {inv.status.replace(/_/g, " ")}
-                      </span>
-                      {inv.status === "awaiting_confirmation" && (
-                        <div
-                          className="muted"
-                          style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}
-                        >
-                          Client says they paid — not being chased
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+type Profile = Awaited<ReturnType<typeof getBusinessProfile>>;
+type Sites = Awaited<ReturnType<typeof listSitesWithAnalytics>>;
+type Invoices = Awaited<ReturnType<typeof listClientPaymentRequests>>;
+type Briefs = Awaited<ReturnType<typeof listBriefs>>;
+type Requests = Awaited<ReturnType<typeof getClientDetail>>["requests"];
+
+/** The open section. Each loads only what it needs beyond the shared reads. */
+async function Section(props: {
+  ctx: AdminContext;
+  section: SectionKey;
+  clientPublicId: string;
+  organizationName: string;
+  isInternal: boolean;
+  billingPlan: BillingPlanView | null;
+  invoices: Invoices;
+  briefs: Briefs;
+  profile: Profile;
+  sites: Sites;
+  requests: Requests;
+}) {
+  const { section, clientPublicId, sites } = props;
+
+  switch (section) {
+    case "billing":
+      return <Billing {...props} />;
+    case "general":
+      return (
+        <section className="card" id="general-information">
+          <div className="card-head">
+            <h2>General information</h2>
           </div>
-        )}
-
-        {/* Confirmation sits with the specific invoice it settles, so an
-            operator cannot confirm the wrong one from a shared form. */}
-        {invoices
-          .filter((inv) =>
-            ["open", "overdue", "awaiting_confirmation"].includes(inv.status),
-          )
-          .map((inv) => (
-            <div key={inv.publicId} className="action-block">
-              <ConfirmReceivedForm
-                clientPublicId={client.publicId}
-                requestPublicId={inv.publicId}
-                reference={inv.reference}
-                amount={formatCurrency(inv.amountCents, inv.currency)}
-              />
-            </div>
-          ))}
-
-        <div className="action-block">
-          <RaiseRequestForm
-            clientPublicId={client.publicId}
-            suggestedAmount={
-              subscription
-                ? (subscription.monthlyPriceCents / 100).toFixed(2)
-                : ""
+          <p className="muted" style={{ marginTop: 0 }}>
+            What the website says about the business. Filled in once, and given to the agent on
+            every request and brief for this client, so nobody has to repeat the phone number or
+            the hours.
+          </p>
+          <ProfilePanel
+            clientPublicId={clientPublicId}
+            details={props.profile?.details ?? {}}
+            sites={sites.map((site) => ({ publicId: site.publicId, name: site.name }))}
+            updatedAt={props.profile?.updatedAt.toISOString() ?? null}
+            lastAppliedAt={props.profile?.lastAppliedAt?.toISOString() ?? null}
+            siteUrl={
+              props.profile?.details.website ??
+              (sites[0]?.primaryDomain ? `https://${sites[0].primaryDomain}` : null)
             }
           />
-        </div>
-      </section>
+        </section>
+      );
+    case "website":
+      return (
+        <WebsiteSection
+          clientPublicId={clientPublicId}
+          organizationName={props.organizationName}
+          sites={sites}
+          isInternal={props.isInternal}
+        />
+      );
+    case "analytics":
+      return <AnalyticsSection clientPublicId={clientPublicId} sites={sites} />;
+    case "briefs":
+      return (
+        <BriefsSection
+          clientPublicId={clientPublicId}
+          sites={sites.map((site) => ({ publicId: site.publicId, name: site.name }))}
+          briefs={props.briefs}
+        />
+      );
+    case "requests":
+      return <RequestsSection requests={props.requests} />;
+  }
+}
 
-      <section className="card">
-        <h2>Recent requests ({requests.length})</h2>
-        {requests.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            No change requests yet.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((request) => (
-                <tr key={request.publicId}>
-                  <td>{request.title}</td>
-                  <td>{request.status}</td>
-                  <td>{request.priority}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-      </main>
-    </>
+async function Billing(props: {
+  ctx: AdminContext;
+  clientPublicId: string;
+  isInternal: boolean;
+  billingPlan: BillingPlanView | null;
+  invoices: Invoices;
+}) {
+  const db = await getDb();
+  const [plans, compPlans, comp] = await Promise.all([
+    listAssignablePlans(db),
+    listActivePlans(db),
+    getClientComp(props.ctx, db, props.clientPublicId),
+  ]);
+
+  // Today's date as the suggestion, so a client set up today pays today.
+  const today = Number(businessDate().slice(8, 10));
+
+  return (
+    <BillingSection
+      clientPublicId={props.clientPublicId}
+      plan={props.billingPlan}
+      plans={plans}
+      defaultDay={today > LAST_BILLING_DAY ? 1 : today}
+      cardPayments={stripeConfigured()}
+      invoices={props.invoices}
+      compPlans={compPlans
+        .filter((plan) => plan.key !== TEST_PLAN.key)
+        .map((plan) => ({
+          key: plan.key,
+          name: plan.name,
+          includedChangesPerMonth: plan.includedChangesPerMonth,
+        }))}
+      comp={comp}
+    />
   );
+}
+
+/** One line per button on the overview: where each setting stands. */
+function summarise(input: {
+  billingPlan: BillingPlanView | null;
+  overdue: boolean;
+  filled: number;
+  sites: Sites;
+  briefs: Briefs;
+  requests: Requests;
+}): SectionSummaries {
+  const { billingPlan: plan, sites, briefs, requests } = input;
+  const connected = sites.filter((site) => site.umamiWebsiteId).length;
+  const open = requests.filter((request) => isOpen(request.status)).length;
+  const drafts = briefs.filter((brief) => brief.status === "draft").length;
+  const firstSite = sites[0];
+
+  return {
+    billing: plan
+      ? {
+          status: `${plan.planName ?? "Plan"}, ${formatCurrency(plan.monthlyPriceCents, plan.currency)} on the ${ordinal(plan.billingDay)}${plan.provider === "stripe" ? " · card" : ""}${input.overdue ? " · overdue" : ""}`,
+          attention: input.overdue,
+        }
+      : { status: "No plan yet", attention: true },
+    general: {
+      status: `${input.filled} of ${PROFILE_FIELDS.length} filled in`,
+      attention: input.filled === 0,
+    },
+    website: firstSite
+      ? {
+          status: `${firstSite.primaryDomain ?? firstSite.name} · ${firstSite.status}${sites.length > 1 ? ` · +${sites.length - 1} more` : ""}`,
+        }
+      : { status: "No site yet", attention: true },
+    analytics:
+      sites.length === 0
+        ? { status: "Needs a site first" }
+        : connected === sites.length
+          ? { status: "Connected" }
+          : { status: connected === 0 ? "Not connected" : `${connected} of ${sites.length} connected`, attention: true },
+    briefs: {
+      status: briefs.length === 0 ? "None yet" : `${briefs.length} written${drafts ? ` · ${drafts} draft` : ""}`,
+    },
+    requests: {
+      status: requests.length === 0 ? "None yet" : `${open} in progress · ${requests.length} recent`,
+    },
+  };
 }

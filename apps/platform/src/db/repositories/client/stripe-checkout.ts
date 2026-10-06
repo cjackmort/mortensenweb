@@ -1,15 +1,16 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
-import { clients, organizations, servicePlans } from "@/db/schema";
-import type { PlanKey } from "@mortensenweb/plans";
+import { clients, organizations, servicePlans, subscriptions } from "@/db/schema";
+import { anchorDayFor } from "@/lib/billing/billing-day";
+import { PLANS } from "@mortensenweb/plans";
 import {
   planForLookupKey,
   priceForPlan,
   requireStripe,
   stripeConfigured,
 } from "@/lib/payments/stripe";
-import { type TenantContext } from "../context";
+import { type AdminContext, type TenantContext } from "../context";
 
 /**
  * Starting a Stripe subscription for the signed-in client.
@@ -65,22 +66,50 @@ export interface ResolvedClient {
   compPlanId: string | null;
 }
 
+const RESOLVED_CLIENT = {
+  clientId: clients.id,
+  publicId: clients.publicId,
+  businessName: organizations.name,
+  contactEmail: clients.primaryContactEmail,
+  stripeCustomerId: clients.stripeCustomerId,
+  compPlanId: clients.compPlanId,
+};
+
 export async function resolveClient(
   db: Database,
   ctx: TenantContext,
 ): Promise<ResolvedClient | null> {
   const rows = await db
-    .select({
-      clientId: clients.id,
-      publicId: clients.publicId,
-      businessName: organizations.name,
-      contactEmail: clients.primaryContactEmail,
-      stripeCustomerId: clients.stripeCustomerId,
-      compPlanId: clients.compPlanId,
-    })
+    .select(RESOLVED_CLIENT)
     .from(clients)
     .innerJoin(organizations, eq(organizations.id, clients.organizationId))
     .where(eq(clients.organizationId, ctx.organizationId))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * The plan and payment day an operator assigned, before Stripe takes over.
+ *
+ * The hand-billed row (no provider) is where that choice lives: see
+ * `admin/billing-plan.ts`. Null when nobody has chosen a plan for them yet.
+ */
+export async function assignedPlanFor(
+  db: Database,
+  clientId: string,
+): Promise<{ planKey: string; billingDay: number } | null> {
+  const rows = await db
+    .select({ planKey: servicePlans.key, billingDay: subscriptions.billingDay })
+    .from(subscriptions)
+    .innerJoin(servicePlans, eq(servicePlans.id, subscriptions.planId))
+    .where(
+      and(
+        eq(subscriptions.clientId, clientId),
+        eq(subscriptions.status, "active"),
+        isNull(subscriptions.provider),
+      ),
+    )
     .limit(1);
 
   return rows[0] ?? null;
@@ -192,6 +221,7 @@ async function liveSubscription(
 async function openSessionFor(
   customerId: string,
   priceId: string,
+  billingDay: string,
 ): Promise<Stripe.Checkout.Session | null> {
   const stripe = requireStripe();
   const sessions = await stripe.checkout.sessions.list({
@@ -206,6 +236,9 @@ async function openSessionFor(
     if (session.expires_at && session.expires_at * 1000 < Date.now()) {
       return false;
     }
+    // A checkout made before the operator moved the payment day would start
+    // the subscription on the old one.
+    if ((session.metadata?.billing_day ?? "") !== billingDay) return false;
     return session.line_items?.data.some((item) => item.price?.id === priceId);
   });
 
@@ -225,13 +258,7 @@ export async function beginStripeCheckout(
   ctx: TenantContext,
   input: BeginStripeCheckoutInput,
 ): Promise<StripeCheckoutOutcome> {
-  if (!stripeConfigured()) {
-    return {
-      ok: false,
-      reason: "not_configured",
-      message: "Card payments are not set up yet.",
-    };
-  }
+  if (!stripeConfigured()) return NOT_CONFIGURED;
 
   const client = await resolveClient(db, ctx);
   if (!client) {
@@ -242,6 +269,62 @@ export async function beginStripeCheckout(
     };
   }
 
+  return checkoutFor(db, client, input);
+}
+
+/**
+ * A checkout for the plan an operator assigned, started from the admin side.
+ *
+ * The link it returns is what the operator sends the client, or opens
+ * themselves to test payments. The plan is the assigned one, never a choice
+ * made on this request, so the same rules hold as for the client's own button.
+ */
+export async function beginCheckoutForClient(
+  _ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+  urls: Omit<BeginStripeCheckoutInput, "planKey">,
+): Promise<StripeCheckoutOutcome> {
+  if (!stripeConfigured()) return NOT_CONFIGURED;
+
+  const rows = await db
+    .select(RESOLVED_CLIENT)
+    .from(clients)
+    .innerJoin(organizations, eq(organizations.id, clients.organizationId))
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+  const client = rows[0];
+  if (!client) {
+    return { ok: false, reason: "no_client", message: "No such client." };
+  }
+
+  const assigned = await assignedPlanFor(db, client.clientId);
+  if (!assigned) {
+    return {
+      ok: false,
+      reason: "unknown_plan",
+      message: "Choose their plan first. The link charges whatever plan is saved.",
+    };
+  }
+
+  return checkoutFor(db, client, { ...urls, planKey: assigned.planKey });
+}
+
+function isPublishedPlan(key: string): boolean {
+  return PLANS.some((plan) => plan.key === key);
+}
+
+const NOT_CONFIGURED: StripeCheckoutOutcome = {
+  ok: false,
+  reason: "not_configured",
+  message: "Card payments are not set up yet.",
+};
+
+async function checkoutFor(
+  db: Database,
+  client: ResolvedClient,
+  input: BeginStripeCheckoutInput,
+): Promise<StripeCheckoutOutcome> {
   if (client.compPlanId) {
     return {
       ok: false,
@@ -275,7 +358,14 @@ export async function beginStripeCheckout(
   }
 
   const planKey = planForLookupKey(plan.lookupKey);
-  if (!planKey) {
+  const assigned = await assignedPlanFor(db, client.clientId);
+
+  // A client may choose any published plan, at its published price. Anything
+  // else (the $1 test plan) only when an operator assigned it to them: a form
+  // edited in devtools must not be a way to pay a dollar a month.
+  const offered =
+    planKey !== null && (isPublishedPlan(planKey) || assigned?.planKey === planKey);
+  if (!planKey || !offered) {
     return {
       ok: false,
       reason: "unknown_plan",
@@ -284,7 +374,7 @@ export async function beginStripeCheckout(
   }
 
   try {
-    const price = await priceForPlan(planKey as PlanKey);
+    const price = await priceForPlan(planKey);
     if (!price) {
       return {
         ok: false,
@@ -305,7 +395,12 @@ export async function beginStripeCheckout(
       };
     }
 
-    const reusable = await openSessionFor(customerId, price.id);
+    // The day the operator chose, whichever plan the client picked, unless
+    // that day is today: see `anchorDayFor`.
+    const anchorDay = assigned ? anchorDayFor(assigned.billingDay) : null;
+    const billingDay = anchorDay ? String(anchorDay) : "";
+
+    const reusable = await openSessionFor(customerId, price.id, billingDay);
     if (reusable?.url) {
       return { ok: true, url: reusable.url, sessionId: reusable.id, reused: true };
     }
@@ -330,11 +425,15 @@ export async function beginStripeCheckout(
             client_id: client.clientId,
             plan_key: planKey,
           },
+          // Charged on the day the operator chose. Stripe prorates the first
+          // payment to cover the days until then.
+          ...(anchorDay ? { billing_cycle_anchor_config: { day_of_month: anchorDay } } : {}),
         },
         metadata: {
           client_public_id: client.publicId,
           client_id: client.clientId,
           plan_key: planKey,
+          billing_day: billingDay,
         },
 
         // Saves the card for the recurring charge and makes the terms explicit
@@ -349,7 +448,7 @@ export async function beginStripeCheckout(
         // retries collapses to one session; once that session is consumed or
         // expires, `openSessionFor` above stops finding it and a genuinely new
         // attempt gets a new key because the previous one is no longer open.
-        idempotencyKey: `checkout:${client.clientId}:${price.id}`,
+        idempotencyKey: `checkout:${client.clientId}:${price.id}:${billingDay || "now"}`,
       },
     );
 

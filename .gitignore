@@ -80,6 +80,9 @@ gha-creds-*.json
 # derivatives here; production uses Netlify Blobs and this never exists.
 .media/
 
+# Local site thumbnails, for the same reason.
+.thumbnails/
+
 # ---- Self-hosted Umami host (infra/umami) ----
 # Real values live only on the VPS. This repo is public.
 infra/umami/.env

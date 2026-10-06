@@ -2,9 +2,10 @@
  * Check a Stripe account is ready for the portal, and fix what can be fixed.
  *
  * A new account — and every account's live mode — starts empty. Checkout
- * resolves a plan by price *lookup key*, so until the four care-plan prices
- * exist with exactly the keys in `lib/payments/stripe.ts`, every "Set up
- * automatic payment" answers "That plan has no price configured". This makes
+ * resolves a plan by price *lookup key*, so until the care-plan prices and the
+ * operator-only test plan exist with exactly the keys in
+ * `lib/payments/stripe.ts`, every "Set up automatic payment" answers "That plan
+ * has no price configured". This makes
  * them, subscribes the webhook endpoint to the events the receiver handles,
  * and checks the one thing only the dashboard can do: the customer portal.
  *
@@ -27,6 +28,8 @@ import {
   modeFromKey,
   requireStripe,
   STRIPE_API_VERSION,
+  TEST_PLAN,
+  type SellableKey,
 } from "@/lib/payments/stripe";
 
 const DEFAULT_PORTAL = "https://portal.mortensenweb.com";
@@ -46,7 +49,13 @@ async function ensurePrices(): Promise<void> {
   const stripe = requireStripe();
   console.log("\nPrices");
 
-  for (const plan of PLANS) {
+  // The published plans, plus the operator-only $1 test plan.
+  const sellable: Array<{ key: SellableKey; name: string; monthlyCents: number }> = [
+    ...PLANS,
+    TEST_PLAN,
+  ];
+
+  for (const plan of sellable) {
     const lookupKey = lookupKeyForPlan(plan.key)!;
     const found = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
     const price = found.data[0];

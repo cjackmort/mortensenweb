@@ -167,6 +167,7 @@ export default async function AdminOverview() {
                       url={c.site ? siteHomeUrl(c.site) : null}
                       name={c.site?.name ?? c.name}
                       mode={c.site?.previewMode}
+                      thumbnailUrl={c.site ? `/api/sites/${c.site.publicId}/thumbnail` : undefined}
                       fallbackInitial={(c.site?.name ?? c.name).charAt(0).toUpperCase()}
                     />
                   </div>

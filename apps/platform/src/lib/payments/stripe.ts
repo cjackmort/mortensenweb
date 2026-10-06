@@ -39,23 +39,41 @@ export const STRIPE_API_VERSION = "2026-08-26.dahlia" as const;
  * put a comp client through checkout, which is the exact mistake
  * `clients.comp_plan_id` exists to prevent.
  */
-const PRICE_LOOKUP_KEYS: Record<PlanKey, string> = {
+/**
+ * A $1 plan for trying payments end to end with a real card.
+ *
+ * Operator-only: it is not in `@mortensenweb/plans`, so it never reaches the
+ * public pricing page, and a client is only ever offered the plan an operator
+ * assigned them. It exists so the whole loop — checkout, webhook, receipt,
+ * billing page — can be exercised in live mode for a dollar instead of fifty.
+ */
+export const TEST_PLAN = {
+  key: "test-plan",
+  name: "Test plan",
+  monthlyCents: 100,
+} as const;
+
+/** Every plan Stripe can sell: the published care plans, plus the test plan. */
+export type SellableKey = PlanKey | typeof TEST_PLAN.key;
+
+const PRICE_LOOKUP_KEYS: Record<SellableKey, string> = {
   "care-lite": "care_lite_monthly_v1",
   "care-basic": "care_basic_monthly_v1",
   "care-plus": "care_plus_monthly_v1",
   "care-unlimited": "care_unlimited_monthly_v1",
+  "test-plan": "test_plan_monthly_v1",
 };
 
-export function lookupKeyForPlan(key: PlanKey): string | null {
+export function lookupKeyForPlan(key: SellableKey): string | null {
   return PRICE_LOOKUP_KEYS[key] ?? null;
 }
 
 /** Reverse direction, for reading a subscription back off Stripe. */
-export function planForLookupKey(lookupKey: string): PlanKey | null {
+export function planForLookupKey(lookupKey: string): SellableKey | null {
   const found = Object.entries(PRICE_LOOKUP_KEYS).find(
     ([, value]) => value === lookupKey,
   );
-  return (found?.[0] as PlanKey | undefined) ?? null;
+  return (found?.[0] as SellableKey | undefined) ?? null;
 }
 
 /** Every lookup key this build knows about, for the reconciliation job. */
@@ -179,7 +197,7 @@ export function modeMatches(objectLivemode: boolean): boolean {
  * to sell a plan at a price that was withdrawn.
  */
 export async function priceForPlan(
-  planKey: PlanKey,
+  planKey: SellableKey,
 ): Promise<Stripe.Price | null> {
   const lookupKey = lookupKeyForPlan(planKey);
   if (!lookupKey) return null;
@@ -203,7 +221,8 @@ export async function priceForPlan(
  * two is a configuration error worth surfacing loudly, not something to
  * paper over by preferring one side.
  */
-export function expectedCentsForPlan(planKey: PlanKey): number | null {
+export function expectedCentsForPlan(planKey: SellableKey): number | null {
+  if (planKey === TEST_PLAN.key) return TEST_PLAN.monthlyCents;
   return PLANS.find((p) => p.key === planKey)?.monthlyCents ?? null;
 }
 

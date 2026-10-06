@@ -78,13 +78,20 @@ export default async function ChangePasswordPage({
       redirect(`/change-password?error=${result.reason}`);
     }
 
+    // A client setting their first password goes on to choose a plan; the
+    // page sends them to their site instead when there is nothing to choose.
+    const next =
+      session.mustChangePassword && session.role === "client"
+        ? "/dashboard/choose-plan?welcome=1"
+        : "/";
+
     // The epoch advanced, so the current token is now stale by design.
     // Re-issue one using the password we just set.
     try {
       await signIn("credentials", {
         identifier: session.email,
         password: newPassword,
-        redirectTo: "/",
+        redirectTo: next,
       });
     } catch (error) {
       if (error instanceof AuthError) redirect("/login");

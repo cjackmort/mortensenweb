@@ -94,11 +94,18 @@ export function SitePreview({
   name,
   fallbackInitial,
   mode = "screenshot",
+  thumbnailUrl,
 }: {
   url: string | null;
   name: string;
   fallbackInitial: string;
   mode?: "screenshot" | "live";
+  /**
+   * The portal's own picture of the home page, taken daily by the thumbnail
+   * job (`lib/thumbnails.ts`). Drawn above the deploy's shot, which in
+   * practice no site publishes yet, and the initial.
+   */
+  thumbnailUrl?: string;
 }) {
   if (!url) {
     return <span className="site-preview-initial">{fallbackInitial}</span>;
@@ -135,7 +142,12 @@ export function SitePreview({
          */
         <span
           className="site-preview-shot"
-          style={{ backgroundImage: `url("${cssUrl(`${url.replace(/\/$/, "")}${TILE_PATH}`)}")` }}
+          style={{
+            backgroundImage: [thumbnailUrl, `${url.replace(/\/$/, "")}${TILE_PATH}`]
+              .filter(Boolean)
+              .map((src) => `url("${cssUrl(src!)}")`)
+              .join(", "),
+          }}
         />
       )}
       {/* Underneath, always: whatever is above either covers it or failed. */}

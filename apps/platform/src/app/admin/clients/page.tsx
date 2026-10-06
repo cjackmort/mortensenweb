@@ -114,6 +114,7 @@ export default async function AdminClientsPage() {
                       url={site ? siteHomeUrl(site) : null}
                       name={site?.name ?? c.name}
                       mode={site?.previewMode}
+                      thumbnailUrl={site ? `/api/sites/${site.publicId}/thumbnail` : undefined}
                       fallbackInitial={(site?.name ?? c.name).charAt(0).toUpperCase()}
                     />
                     <span className="client-tile-chevron" aria-hidden="true" />

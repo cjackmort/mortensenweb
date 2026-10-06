@@ -154,6 +154,7 @@ export async function listClientsWithPrimarySite(_ctx: AdminContext, db: Databas
   const siteRows = await db
     .select({
       organizationId: sites.organizationId,
+      publicId: sites.publicId,
       name: sites.name,
       status: sites.status,
       primaryDomain: sites.primaryDomain,

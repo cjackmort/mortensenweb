@@ -1,0 +1,58 @@
+# =============================================================================
+# Pictures of client home pages, for the admin Clients tiles.
+#
+# The tiles used to look for a picture each site's own deploy published, and
+# none of the sites do, so every tile showed a letter. This photographs each
+# site once a day from here instead and uploads it to the portal, so a tile
+# works whatever the site is built with or hosted on.
+#
+# Same secret as the scheduled tick: CRON_SECRET, matching the Netlify
+# environment. Daily, because a private repository pays for Actions by the
+# minute and a home page rarely changes faster than that. Run it by hand from
+# the Actions tab to refresh the pictures straight away.
+# =============================================================================
+
+name: Site thumbnails
+
+on:
+  schedule:
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Photograph client home pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: site-thumbnails
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: apps/platform/scripts/capture-thumbnails.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Installed here rather than as a portal dependency: only this job uses
+      # it, and a browser has no business in the portal's own install.
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright@1.62.0
+          npx playwright install --with-deps chromium
+
+      - name: Take and upload the pictures
+        working-directory: ${{ runner.temp }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PORTAL_URL: ${{ vars.PORTAL_URL || 'https://portal.mortensenweb.com' }}
+        run: node "$GITHUB_WORKSPACE/apps/platform/scripts/capture-thumbnails.mjs"
