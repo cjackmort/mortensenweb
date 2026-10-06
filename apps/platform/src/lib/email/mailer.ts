@@ -13,11 +13,18 @@ export interface EmailMessage {
   text: string;
   html: string;
   /**
-   * Overrides `RESEND_REPLY_TO` for this message. A new-lead email sets it to
-   * the customer, so the client answering from their inbox reaches the person
-   * who wrote in rather than us.
+   * Overrides `RESEND_REPLY_TO` for this message. A reply to a lead sets it
+   * to the client, so the customer's answer reaches the business rather than
+   * us.
    */
   replyTo?: string;
+  /**
+   * Overrides `RESEND_FROM_ADDRESS`. Must still be an address on a domain
+   * verified in Resend — only the display name is the business's.
+   */
+  from?: string;
+  /** A silent copy, so the sender has a record of what went out. */
+  bcc?: string;
 }
 
 export type SendResult =
@@ -29,7 +36,7 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 export async function sendEmail(message: EmailMessage): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_ADDRESS;
+  const from = message.from ?? process.env.RESEND_FROM_ADDRESS;
 
   if (!apiKey || !from) {
     console.info(
@@ -57,6 +64,7 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
       body: JSON.stringify({
         from,
         to: [message.to],
+        ...(message.bcc ? { bcc: [message.bcc] } : {}),
         subject: message.subject,
         text: message.text,
         html: message.html,

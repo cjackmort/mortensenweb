@@ -3,11 +3,11 @@ import { getDb } from "@/db/client";
 import { findSiteForForms, recordLead } from "@/db/repositories/admin/leads";
 import { parseSubmission, siteHookSecret, verifyNetlifySignature } from "@/lib/growth/netlify-forms";
 import type { NetlifySubmissionPayload } from "@/lib/netlify/api";
-import { notifyClientOfLead } from "@/lib/notify/lead";
 
 /**
  * Netlify Forms' `submission_created` webhook: one contact-form submission
- * from one client site, into that client's leads inbox.
+ * from one client site, into that client's leads inbox. It sends nothing —
+ * Netlify's own notification email is what tells the client.
  *
  * Public under `/api/webhooks` in `proxy.ts`; the signature is the
  * authentication. Each site's hook signs with a secret derived from the master
@@ -75,16 +75,14 @@ export async function POST(
     // delivery that will never have anywhere to go.
     if (!site) return NextResponse.json({ status: "ignored" }, { status: 200 });
 
+    // No email from here. Netlify's own form notification already tells the
+    // client someone wrote in; a second message from the portal about the same
+    // enquiry was noise. The portal's job is the inbox and the reply.
     const result = await recordLead(db, site, parsed.lead);
-    if (!result.created) return NextResponse.json({ status: "duplicate" }, { status: 200 });
-
-    const notified = await notifyClientOfLead(db, result.leadId);
-    if (notified.status === "failed") {
-      // Logged, not retried: the lead is safely in the inbox, and a 500 here
-      // would only make Netlify redeliver a submission we already hold.
-      console.error("[webhook:netlify-forms] lead email failed", { error: notified.error });
-    }
-    return NextResponse.json({ status: "recorded" }, { status: 200 });
+    return NextResponse.json(
+      { status: result.created ? "recorded" : "duplicate" },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("[webhook:netlify-forms] processing failed", {
       message: error instanceof Error ? error.message : "unknown",
