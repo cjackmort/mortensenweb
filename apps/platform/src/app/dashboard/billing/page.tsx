@@ -10,7 +10,7 @@ import {
   configuredVenmoHandle,
   formatCurrency,
 } from "@/lib/payments/venmo";
-import { isSquareConfigured } from "@/lib/payments/square";
+import { cardProvider } from "@/lib/payments/card-provider";
 import { getStripeBillingPanel } from "@/db/repositories/client/stripe-billing";
 import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
@@ -27,7 +27,11 @@ export const dynamic = "force-dynamic";
  * is about to disappear, because it isn't — so the copy says exactly what is
  * and isn't affected, at every state.
  */
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ payment?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
@@ -79,12 +83,22 @@ export default async function BillingPage() {
   // ordinary "amount due" flow takes over — showing both would offer someone
   // an "unlock" they already own.
   const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
-  const cardAvailable = isSquareConfigured();
+  const card = cardProvider();
   // Only when nothing has been raised yet. Once an invoice exists the "amount
   // due" panel owns paying, and showing both would offer two routes to the
   // same money — with two references, only one of which gets reconciled.
+  //
+  // Square only. With Stripe, starting the subscription *is* the first
+  // payment, and the automatic-payments panel above already offers it; a
+  // one-off "first month" beside it would let a client pay that month twice.
   const showUnlock =
-    locked && cardAvailable && !overview.current && overview.monthlyPriceCents !== null;
+    locked && card === "square" && !overview.current && overview.monthlyPriceCents !== null;
+
+  // Back from Stripe's payment page. Wording only: the invoice is settled by
+  // the webhook, and until it lands the invoice still reads as due — this says
+  // why, instead of leaving them to wonder whether to pay again.
+  const { payment } = await searchParams;
+  const justPaid = payment === "complete" && Boolean(overview.current);
 
   const handle = configuredVenmoHandle();
   const venmoUrl =
@@ -109,7 +123,15 @@ export default async function BillingPage() {
           )}
         </div>
 
-        <Standing overview={overview} />
+        {justPaid ? (
+          <p className="notice notice-success">
+            <strong>Thanks &mdash; your payment went through.</strong> It can
+            take a minute to show as paid here. There&rsquo;s no need to pay
+            again.
+          </p>
+        ) : (
+          <Standing overview={overview} />
+        )}
 
         {/* Card subscriptions. Hidden entirely when Stripe has no credentials
             in this environment, so the Square and Venmo paths below are
@@ -175,7 +197,7 @@ export default async function BillingPage() {
                 <PayPanel
                   requestPublicId={overview.current.publicId}
                   venmoUrl={venmoUrl}
-                  cardAvailable={cardAvailable}
+                  cardProvider={card}
                   reference={overview.current.reference}
                   amount={formatCurrency(
                     overview.current.amountCents,

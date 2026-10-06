@@ -1,10 +1,41 @@
-# Stripe subscriptions
+# Stripe payments
 
-How card subscriptions work in the portal, what has to be true before they can
-take real money, and how to undo it.
+How card payments work in the portal — monthly subscriptions and one-off
+invoices — what has to be true before they can take real money, and how to undo
+it.
 
-Companion to `square-setup.md`. Square is not being replaced — see
-[Existing providers](#existing-providers-and-migration).
+Stripe is the card processor whenever `STRIPE_SECRET_KEY` is set. Square code
+is kept and still runs in an environment that has Square credentials and no
+Stripe key — see [Existing providers](#existing-providers-and-migration).
+
+---
+
+## One-off payments
+
+Anything that is not a subscription renewal: an invoice an operator raised, and
+one extra change. Each is a `payment_requests` row, paid through a Stripe
+Checkout Session in `payment` mode.
+
+- **The browser picks the invoice, nothing else.** "Pay by card" posts the
+  invoice's public id. Amount, currency and customer come from the database,
+  and the invoice is looked up inside the signed-in client — another client's
+  id finds nothing.
+- **One checkout per invoice.** The session id is stored on the invoice. A
+  second click reuses the open session; a completed one refuses a second
+  payment until the webhook settles the first; only an expired one is
+  replaced.
+- **Settled by the webhook, through `confirmPaymentReceived`** — the same call
+  a Venmo confirmation makes, so an extra change is credited the same way. It
+  requires Stripe, re-read at processing time, to say the session is `paid`,
+  and the invoice's client to match the checkout's. A mismatch, or money for
+  an invoice cancelled meanwhile, lands in `webhook_deliveries` as
+  `needs_review`.
+- **First payment is the subscription.** With Stripe on, the Square "unlock"
+  panel is hidden: starting automatic payment is how a new client pays. A
+  one-off "first month" beside it would let them pay that month twice.
+- **Moving a client onto Stripe retires their hand-billed plan** (the
+  `subscriptions` row with no provider) once the Stripe subscription is
+  active, and the admin monthly-billing list stops offering to invoice them.
 
 ---
 
@@ -351,31 +382,40 @@ every charge lands as `NEEDS REVIEW`. Check it is set before enrolling anyone.
 
 ## Going live
 
-**None of this has been done. It all needs approval first.** Everything built
-so far runs against the sandbox account `Mortensen Web Co. sandbox`
-(`acct_1UAM3V5dv299nvox`).
+The account was activated for live payments on 2026-10-05. The code was
+built against the sandbox `Mortensen Web Co. sandbox` (`acct_1UAM3V5dv299nvox`);
+live mode starts with no prices, no webhook and no customer portal.
 
-1. **Create the products and prices in the live account** with the same four
-   lookup keys. They must match exactly or checkout finds no price.
-2. **Check Stripe's retry and email settings** in the live dashboard —
-   Billing → Automatic collection. Decide the retry schedule and, importantly,
-   decide whether *Stripe* or the *portal's dunning ladder* sends payment
-   reminders. Both will send if both are enabled, and clients will get
-   duplicate emails.
-3. **Register the live webhook endpoint** at the production URL with the event
-   list above. Copy its signing secret.
+1. **Prices and webhook — `npm run stripe:setup`.** Put the live secret key in
+   `apps/platform/.env.stripe` (ignored by Git), run it once to see the
+   report, then again with `-- --apply`. It creates the four prices under the
+   lookup keys above, and the webhook endpoint at the production URL pinned
+   to `STRIPE_API_VERSION` and subscribed to exactly
+   `HANDLED_STRIPE_EVENTS`. It prints the endpoint's signing secret once.
+   Delete `.env.stripe` afterwards.
+2. **Customer portal — dashboard only.** Settings → Billing → Customer portal
+   → Save. Until this exists, every "Manage billing" click fails in live
+   mode. Allow card updates, invoice history, and cancellation at period end.
+   The script reports whether it is done.
+3. **Failed-payment emails — turn Stripe's on.** Settings → Billing →
+   Subscriptions and emails: Smart Retries, and "Send emails when card
+   payments fail". The portal's dunning ladder (`lib/billing/dunning.ts`) is
+   not wired to send anything, so without this nobody tells a client their
+   card failed.
 4. **Set `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET`** in the
-   Netlify production environment.
-5. **Run migration 0020** against the production database — after checking the ordering rule in [Migration ordering](#migration-ordering--read-before-merging-anything).
+   Netlify production environment, then **trigger a deploy** — Netlify bakes
+   environment variables in at build time.
+5. ~~Run migration 0020~~ — applied; production's ledger high-water mark is
+   past it (0021 at `1789200000000`).
 6. **Decide Mitch's change allowance**, then migrate him in the order set out
    in [Migrating Mitch](#migrating-mitch--the-order-matters) — telling him to
    stop sending Venmo *before* he enrols, not after.
-7. **Verify with one real, small transaction** — enrol a client you control,
-   confirm the invoice settles, confirm the ledger row appears with the right
-   amount, then refund it.
+7. **Verify with real, small transactions** — on a client record you control:
+   raise a $1 invoice and pay it by card; start a subscription. Confirm both
+   ledger rows appear with the right amounts and the invoice reads paid, then
+   refund both in the dashboard.
 
-Until step 7 passes, automatic billing is not operational, whatever the code
-says.
+Until step 7 passes, card billing is not operational, whatever the code says.
 
 ---
 

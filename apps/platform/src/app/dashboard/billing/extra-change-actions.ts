@@ -10,7 +10,7 @@ import {
   configuredVenmoHandle,
   formatCurrency,
 } from "@/lib/payments/venmo";
-import { isSquareConfigured } from "@/lib/payments/square";
+import { cardProvider, type CardProvider } from "@/lib/payments/card-provider";
 
 /**
  * Starting an extra-change purchase.
@@ -20,10 +20,10 @@ import { isSquareConfigured } from "@/lib/payments/square";
  * page with an explanation, not on a broken one.
  *
  * Unlike the main checkout action, this one always succeeds in producing a
- * *request* even when Square isn't configured — `getOrCreateExtraChangeRequest`
- * doesn't touch Square at all. The card option only appears in the returned
- * result when Square happens to be configured; the invoice itself doesn't
- * care which rails exist.
+ * *request* even when no card processor is configured —
+ * `getOrCreateExtraChangeRequest` touches neither Stripe nor Square. The card
+ * option only appears in the returned result when one of them is configured;
+ * the invoice itself doesn't care which rails exist.
  */
 
 export type ExtraChangeStartResult =
@@ -33,7 +33,7 @@ export type ExtraChangeStartResult =
       reference: string;
       amount: string;
       venmoUrl: string | null;
-      cardAvailable: boolean;
+      cardProvider: CardProvider | null;
     }
   | { ok: false; message: string };
 
@@ -74,6 +74,6 @@ export async function beginExtraChangeAction(
     reference: outcome.reference,
     amount: formatCurrency(outcome.amountCents),
     venmoUrl,
-    cardAvailable: isSquareConfigured(),
+    cardProvider: cardProvider(),
   };
 }

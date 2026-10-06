@@ -31,7 +31,17 @@ function defaultDueDate(): string {
   return currentPeriod().end;
 }
 
+/** Nothing raised by hand is still outstanding for this client. */
+function settled(row: ClientBillingStatus): boolean {
+  return row.neverBilled || row.standing.state === "paid_up";
+}
+
 function StandingPill({ row }: { row: ClientBillingStatus }) {
+  // Stripe's own status (paid, failed, retrying) is on the client's page;
+  // this list only knows that the monthly bill is not raised here.
+  if (row.billedByStripe && settled(row)) {
+    return <span className="pill pill-info">Billed by Stripe</span>;
+  }
   if (row.neverBilled) {
     return <span className="pill pill-neutral">Not yet billed</span>;
   }
@@ -139,7 +149,9 @@ export function MonthlyBillingTable({ rows }: { rows: ClientBillingStatus[] }) {
                 <StandingPill row={row} />
               </td>
               <td data-label="Due / raise">
-                {row.canRaise ? (
+                {row.billedByStripe && settled(row) ? (
+                  <span className="muted">Charged to their card each month</span>
+                ) : row.canRaise ? (
                   row.monthlyPriceCents ? (
                     <RaiseInlineForm
                       clientPublicId={row.clientPublicId}

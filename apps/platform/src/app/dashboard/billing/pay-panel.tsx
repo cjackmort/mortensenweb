@@ -6,7 +6,13 @@ import {
   openedVenmoAction,
   type BillingActionResult,
 } from "./actions";
-import { startCheckoutAction, type CheckoutResult } from "./checkout-actions";
+import {
+  startCardPaymentAction,
+  type CardPaymentResult,
+} from "./checkout-actions";
+// Type only: the module itself reads server credentials and pulls in the
+// Stripe SDK, neither of which belongs in the browser bundle.
+import type { CardProvider } from "@/lib/payments/card-provider";
 
 /**
  * The pay flow.
@@ -24,19 +30,24 @@ import { startCheckoutAction, type CheckoutResult } from "./checkout-actions";
  * and a reminder going out.
  */
 
+const PROVIDER_NAME: Record<CardProvider, string> = {
+  stripe: "Stripe",
+  square: "Square",
+};
+
 export function PayPanel({
   requestPublicId,
   venmoUrl,
   reference,
   amount,
-  cardAvailable,
+  cardProvider,
 }: {
   requestPublicId: string;
   venmoUrl: string | null;
   reference: string;
   amount: string;
-  /** False when Square has no credentials in this environment. */
-  cardAvailable: boolean;
+  /** Null when no card processor has credentials in this environment. */
+  cardProvider: CardProvider | null;
 }) {
   const [openState, openAction] = useActionState<
     BillingActionResult | null,
@@ -47,11 +58,13 @@ export function PayPanel({
     FormData
   >(declarePaidAction, null);
   const [cardState, cardAction, cardPending] = useActionState<
-    CheckoutResult | null,
+    CardPaymentResult | null,
     FormData
-  >(startCheckoutAction, null);
+  >(startCardPaymentAction, null);
 
-  // Redirect from the client so a Square failure leaves them here with an
+  const cardAvailable = cardProvider !== null;
+
+  // Redirect from the client so a processor failure leaves them here with an
   // explanation rather than on a broken page.
   useEffect(() => {
     if (cardState?.ok) window.location.replace(cardState.url);
@@ -77,17 +90,18 @@ export function PayPanel({
         <p className="error">{cardState.message}</p>
       )}
 
-      {cardAvailable && (
+      {cardProvider && (
         <>
           <form action={cardAction}>
-            <input type="hidden" name="recurring" value="false" />
+            <input type="hidden" name="requestPublicId" value={requestPublicId} />
             <button type="submit" disabled={cardPending}>
               {cardPending ? "Starting…" : `Pay ${amount} by card`}
             </button>
           </form>
           <p className="field-hint" style={{ margin: "0.75rem 0 1.25rem" }}>
-            Handled by Square, and confirmed automatically &mdash; nothing else
-            to do afterwards. We never see your card details.
+            Handled by {PROVIDER_NAME[cardProvider]}, and confirmed
+            automatically &mdash; nothing else to do afterwards. We never see
+            your card details.
           </p>
         </>
       )}

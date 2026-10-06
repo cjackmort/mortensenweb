@@ -13,6 +13,7 @@ import { newPublicId } from "@/lib/ids";
 import { businessDate } from "@/lib/billing/period";
 import {
   collectedCents,
+  HANDLED_STRIPE_EVENTS,
   modeMatches,
   planForLookupKey,
   portalStatusFor,
@@ -20,6 +21,8 @@ import {
   subscriptionIdFromInvoice,
 } from "@/lib/payments/stripe";
 import { unlockClientFeatures } from "./entitlements";
+import { retireHandBilledPlans } from "./hand-billed-plans";
+import { settleOneOffCheckout } from "./stripe-one-off";
 
 /**
  * Turning Stripe events into portal state.
@@ -34,6 +37,12 @@ import { unlockClientFeatures } from "./entitlements";
  * an allowance at all. It is structural rather than defensive, which is why
  * there is no "have I already granted this month" check anywhere below —
  * there is nothing to check.
+ *
+ * The one exception is buying an extra change, which is a one-off checkout
+ * rather than an invoice. That goes through `confirmPaymentReceived` like a
+ * Venmo confirmation does, and is credited only by the call that moves the
+ * payment request to `paid` — so it is credited once, however many events
+ * describe it.
  *
  * **2. Subscription state is re-fetched, never trusted from the payload.**
  * Stripe does not guarantee delivery order, and a `customer.subscription.
@@ -54,27 +63,6 @@ import { unlockClientFeatures } from "./entitlements";
  * records `amount_paid`, which is what Stripe actually collected, so those
  * appear as the zero they are instead of inflating revenue.
  */
-
-/**
- * Events this receiver acts on. Anything else is acknowledged and dropped.
- *
- * An allowlist rather than a denylist, matching the GitHub and Square
- * receivers: enabling a new event type in the Stripe dashboard should not
- * silently start changing billing state in a build that has never seen it.
- */
-export const HANDLED_STRIPE_EVENTS = new Set([
-  "checkout.session.completed",
-  "checkout.session.async_payment_succeeded",
-  "checkout.session.async_payment_failed",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
-  "invoice.paid",
-  "invoice.payment_failed",
-  "invoice.payment_action_required",
-  "charge.refunded",
-  "charge.dispute.created",
-]);
 
 export type StripeOutcome =
   | { status: "processed"; note: string }
@@ -336,6 +324,14 @@ async function mirrorSubscription(
       });
   }
 
+  if (status === "active") {
+    await retireHandBilledPlans(db, {
+      clientId,
+      organizationId,
+      stripeSubscriptionId: subscription.id,
+    });
+  }
+
   await db.insert(auditLog).values({
     organizationId,
     action: "subscription.synced",
@@ -502,6 +498,17 @@ export async function processStripeEvent(
             status: "unmatched",
             note: `No client for checkout session ${session.id}.`,
           };
+        }
+
+        // A one-off payment against one of our invoices, not a subscription.
+        if (session.mode === "payment") {
+          const settled = await settleOneOffCheckout(db, {
+            sessionId: session.id,
+            eventType: event.type,
+            match,
+          });
+          await markDelivery(db, event.id, settled.deliveryStatus);
+          return settled.outcome;
         }
 
         // Linking only. A completed session is not proof of payment — with a

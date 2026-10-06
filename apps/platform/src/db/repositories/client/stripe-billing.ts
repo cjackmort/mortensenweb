@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, like, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { clients, payments, servicePlans, subscriptions } from "@/db/schema";
 import {
@@ -111,10 +111,21 @@ export async function getStripeBillingPanel(
     };
   }
 
-  // Only Stripe rows, and only ones that actually collected. A zero-collection
-  // settlement is recorded in the ledger for completeness but is not a payment
-  // this client made, and listing it under "payments" would be a lie in the
-  // client's favour that they would notice at the wrong moment.
+  // Subscription invoices only. A one-off card payment is a Stripe row too,
+  // but it is not an automatic payment, and counting it as a settled invoice
+  // would show a client whose first subscription charge failed as paid.
+  // `stripe_invoice:` is the key `recordInvoicePayment` gives every invoice.
+  const subscriptionInvoice = and(
+    eq(payments.clientId, row.clientId),
+    eq(payments.provider, "stripe"),
+    eq(payments.status, "recorded"),
+    like(payments.idempotencyKey, "stripe_invoice:%"),
+  );
+
+  // A zero-collection settlement is recorded in the ledger for completeness
+  // but is not a payment this client made, and listing it under "payments"
+  // would be a lie in the client's favour that they would notice at the wrong
+  // moment.
   const historyRows = await db
     .select({
       publicId: payments.publicId,
@@ -124,27 +135,14 @@ export async function getStripeBillingPanel(
       receiptUrl: payments.receiptUrl,
     })
     .from(payments)
-    .where(
-      and(
-        eq(payments.clientId, row.clientId),
-        eq(payments.provider, "stripe"),
-        eq(payments.status, "recorded"),
-      ),
-    )
+    .where(subscriptionInvoice)
     .orderBy(desc(payments.receivedOn))
     .limit(24);
 
   const settled = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(payments)
-    .where(
-      and(
-        eq(payments.clientId, row.clientId),
-        eq(payments.provider, "stripe"),
-        eq(payments.status, "recorded"),
-        gt(payments.amountCents, 0),
-      ),
-    );
+    .where(and(subscriptionInvoice, gt(payments.amountCents, 0)));
 
   const hasSettledInvoice = (settled[0]?.count ?? 0) > 0;
 

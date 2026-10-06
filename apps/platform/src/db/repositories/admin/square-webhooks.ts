@@ -13,7 +13,7 @@ import {
   referenceFromNote,
 } from "@/lib/payments/square";
 import { confirmPaymentReceived } from "./billing";
-import type { AdminContext } from "../context";
+import { systemActor } from "./system-actor";
 
 /**
  * Processing a Square notification.
@@ -97,23 +97,6 @@ export interface SquareDeliveryInput {
   signatureValid: boolean;
   /** Falls back to a body-derived id when the payload could not be parsed. */
   fallbackId: string;
-}
-
-/**
- * A system actor for payments nobody confirmed by hand.
- *
- * `confirmPaymentReceived` records who confirmed, and the schema requires a
- * named user for `paid`. A webhook has no user, so the operator account stands
- * in — with `metadata.source` on the audit row recording that it was automatic.
- * Attributing it to the person who happened to configure Square would be worse:
- * the ledger would claim they checked something they never saw.
- */
-async function systemActor(db: Database): Promise<AdminContext | null> {
-  const rows = await db.execute(
-    sql`select id from users where role = 'admin' and status = 'active' order by created_at limit 1`,
-  );
-  const id = (rows.rows[0] as { id?: string } | undefined)?.id;
-  return id ? ({ userId: id } as AdminContext) : null;
 }
 
 /**
