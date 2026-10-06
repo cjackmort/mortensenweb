@@ -24,6 +24,7 @@ import { unlockClientFeatures } from "./entitlements";
 import { billingDayFromAnchor } from "@/lib/billing/billing-day";
 import { retireHandBilledPlans } from "./hand-billed-plans";
 import { settleOneOffCheckout } from "./stripe-one-off";
+import { describeDiscounts, SUBSCRIPTION_EXPAND } from "@/lib/payments/promos";
 
 /**
  * Turning Stripe events into portal state.
@@ -279,8 +280,12 @@ async function mirrorSubscription(
   const status = portalStatusFor(subscription.status);
   const priceCents = item?.price?.unit_amount ?? 0;
   const now = new Date();
+  // Undefined when the promo could not be read: the stored one is left alone
+  // rather than wiped, because the client may well still have it.
+  const discount = await describeDiscounts(subscription, priceCents);
 
   const values = {
+    ...(discount ?? {}),
     provider: "stripe",
     providerSubscriptionId: subscription.id,
     providerStatus: subscription.status,
@@ -342,6 +347,7 @@ async function mirrorSubscription(
       stripeStatus: subscription.status,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
       planKey,
+      discount: discount?.discountLabel ?? null,
     },
   });
 
@@ -516,7 +522,7 @@ export async function processStripeEvent(
         // records the relationship and waits for an invoice to settle.
         const subId = customerIdOf(session.subscription);
         if (subId) {
-          const fresh = await stripe.subscriptions.retrieve(subId);
+          const fresh = await stripe.subscriptions.retrieve(subId, { expand: SUBSCRIPTION_EXPAND });
           await mirrorSubscription(
             db,
             match.clientId,
@@ -552,7 +558,7 @@ export async function processStripeEvent(
         // Re-fetch rather than trusting the payload — this is what makes
         // out-of-order delivery harmless. A deleted subscription still reads
         // back, carrying `status: "canceled"`.
-        const fresh = await stripe.subscriptions.retrieve(payload.id);
+        const fresh = await stripe.subscriptions.retrieve(payload.id, { expand: SUBSCRIPTION_EXPAND });
         const result = await mirrorSubscription(
           db,
           match.clientId,
@@ -603,7 +609,7 @@ export async function processStripeEvent(
         // than waiting for a separate subscription event.
         const subId = subscriptionIdFromInvoice(invoice);
         if (subId && !compRows[0]?.compPlanId) {
-          const fresh = await stripe.subscriptions.retrieve(subId);
+          const fresh = await stripe.subscriptions.retrieve(subId, { expand: SUBSCRIPTION_EXPAND });
           await mirrorSubscription(
             db,
             match.clientId,
@@ -667,7 +673,7 @@ export async function processStripeEvent(
         // handles the human side; hosting is never withdrawn for non-payment.
         const subId = subscriptionIdFromInvoice(invoice);
         if (subId) {
-          const fresh = await stripe.subscriptions.retrieve(subId);
+          const fresh = await stripe.subscriptions.retrieve(subId, { expand: SUBSCRIPTION_EXPAND });
           await mirrorSubscription(
             db,
             match.clientId,

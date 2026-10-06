@@ -711,3 +711,62 @@ describe("scheduled reconciliation", () => {
     }
   });
 });
+
+describe("promos", () => {
+  const PROMO_END = Math.floor(Date.parse("2026-12-01T00:00:00Z") / 1000);
+
+  function discounted(): Stripe.Subscription {
+    return subscriptionObject({
+      discounts: [
+        {
+          id: "di_1",
+          object: "discount",
+          end: PROMO_END,
+          promotion_code: { id: "promo_1", code: "SPRING50" },
+          source: {
+            type: "coupon",
+            coupon: { id: "co_1", percent_off: 50, amount_off: null, duration: "repeating", duration_in_months: 3 },
+          },
+        } as never,
+      ],
+    });
+  }
+
+  it("mirrors what the client actually pays while a promo runs", async () => {
+    stripeState.subscriptions.set(SUBSCRIPTION, discounted());
+
+    await processStripeEvent(db, event("customer.subscription.updated", discounted()));
+
+    const row = (await db.select().from(subscriptions))[0]!;
+    // The list price stays: it is what they return to.
+    expect(row.monthlyPriceCents).toBe(10000);
+    expect(row.discountedPriceCents).toBe(5000);
+    expect(row.discountLabel).toBe("SPRING50: 50% off for 3 months");
+    expect(row.discountEndsAt?.toISOString()).toBe("2026-12-01T00:00:00.000Z");
+  });
+
+  it("clears the promo once Stripe no longer has one", async () => {
+    stripeState.subscriptions.set(SUBSCRIPTION, discounted());
+    await processStripeEvent(db, event("customer.subscription.updated", discounted()));
+
+    stripeState.subscriptions.set(SUBSCRIPTION, subscriptionObject({ discounts: [] }));
+    await processStripeEvent(db, event("customer.subscription.updated", subscriptionObject()));
+
+    const row = (await db.select().from(subscriptions))[0]!;
+    expect(row.discountedPriceCents).toBeNull();
+    expect(row.discountLabel).toBeNull();
+  });
+
+  it("leaves a stored promo alone when the discount arrives unexpanded", async () => {
+    // Bare ids cannot be described. Writing nulls would tell a client who
+    // still has 50% off that they are paying full price.
+    stripeState.subscriptions.set(SUBSCRIPTION, discounted());
+    await processStripeEvent(db, event("customer.subscription.updated", discounted()));
+
+    stripeState.subscriptions.set(SUBSCRIPTION, subscriptionObject({ discounts: ["di_1"] }));
+    await processStripeEvent(db, event("customer.subscription.updated", subscriptionObject()));
+
+    const row = (await db.select().from(subscriptions))[0]!;
+    expect(row.discountedPriceCents).toBe(5000);
+  });
+});

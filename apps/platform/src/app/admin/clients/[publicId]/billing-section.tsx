@@ -5,6 +5,8 @@ import { formatCurrency } from "@/lib/payments/venmo";
 import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { PaymentLinkForm, PlanForm } from "./billing-plan-forms";
 import { CompPanel, type CompPlanOption } from "./comp-forms";
+import { PromoForm, type PromoChoice } from "./promo-forms";
+import { discountApplies } from "@/lib/payments/promos";
 
 const INVOICE_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -21,7 +23,7 @@ type Invoice = Awaited<ReturnType<typeof listClientPaymentRequests>>[number];
 /** How they pay, in a sentence the operator can read at a glance. */
 function howTheyPay(plan: BillingPlanView | null): string {
   if (!plan) return "No plan chosen yet. Pick one below and they'll be offered it at checkout.";
-  const price = `${formatCurrency(plan.monthlyPriceCents, plan.currency)} a month on the ${ordinal(plan.billingDay)}`;
+  const price = `${formatCurrency(plan.monthlyPriceCents, plan.currency)} a month on the ${ordinal(plan.billingDay)}${promoNote(plan)}`;
   const name = plan.planName ?? "A plan";
   if (plan.provider === "stripe") {
     const ending = plan.cancelAtPeriodEnd ? ", cancelling at the end of this period" : "";
@@ -29,6 +31,15 @@ function howTheyPay(plan: BillingPlanView | null): string {
   }
   if (plan.provider === "square") return `${name}, ${price}. Paying through Square.`;
   return `${name}, ${price}. Not paying by card yet.`;
+}
+
+/** ", $50 a month until Jan 6 (SPRING50: 50% off for 3 months)", or nothing. */
+function promoNote(plan: BillingPlanView): string {
+  if (!discountApplies(plan)) return "";
+  const until = plan.discountEndsAt
+    ? ` until ${plan.discountEndsAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+    : "";
+  return ` — ${formatCurrency(plan.discountedPriceCents!, plan.currency)} a month${until} with ${plan.discountLabel}`;
 }
 
 export function BillingSection({
@@ -40,6 +51,8 @@ export function BillingSection({
   invoices,
   compPlans,
   comp,
+  promos,
+  savedPromo,
 }: {
   clientPublicId: string;
   plan: BillingPlanView | null;
@@ -49,6 +62,10 @@ export function BillingSection({
   invoices: Invoice[];
   compPlans: CompPlanOption[];
   comp: { compPlanKey: string | null; compNote: string | null; paidPlanName: string | null } | null;
+  /** Active Stripe promo codes. */
+  promos: PromoChoice[];
+  /** The promo saved for their checkout, as "CODE: terms". */
+  savedPromo: string | null;
 }) {
   const onStripe = plan?.provider === "stripe";
 
@@ -79,6 +96,21 @@ export function BillingSection({
             <h2>Payment link</h2>
           </div>
           <PaymentLinkForm clientPublicId={clientPublicId} />
+        </section>
+      )}
+
+      {cardPayments && plan?.provider !== "square" && !comp?.compPlanKey && (
+        <section className="card">
+          <div className="card-head">
+            <h2>Promo</h2>
+          </div>
+          <PromoForm
+            clientPublicId={clientPublicId}
+            options={promos}
+            onStripe={onStripe}
+            saved={savedPromo}
+            current={plan && discountApplies(plan) ? plan.discountLabel : null}
+          />
         </section>
       )}
 

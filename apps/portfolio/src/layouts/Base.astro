@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import { SITE, NAV } from "../data/site";
+import PromoBar from "../components/PromoBar.astro";
 
 interface Props {
   title?: string;
@@ -82,6 +83,10 @@ const organization = {
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
+
+    {/* Above the sticky masthead, so it scrolls away rather than eating a
+        strip of every screen. Renders nothing unless a promo is set. */}
+    <PromoBar />
 
     <header class="masthead">
       <div class="wrap masthead__inner">

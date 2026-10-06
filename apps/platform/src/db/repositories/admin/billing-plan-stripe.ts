@@ -9,6 +9,7 @@ import {
   requireStripe,
   stripeConfigured,
 } from "@/lib/payments/stripe";
+import { describeDiscounts, SUBSCRIPTION_EXPAND } from "@/lib/payments/promos";
 
 /**
  * Changing the plan or payment day of a client Stripe is already charging.
@@ -46,8 +47,9 @@ export async function changeStripePlan(
 
   let planChanged: boolean;
   let said: string[];
+  let updated: Stripe.Subscription | null;
   try {
-    ({ planChanged, said } = await updateLiveSubscription(row.providerSubscriptionId, plan, billingDay));
+    ({ planChanged, said, updated } = await updateLiveSubscription(row.providerSubscriptionId, plan, billingDay));
   } catch (error) {
     console.error("[billing-plan] stripe update failed", {
       subscription: row.providerSubscriptionId,
@@ -57,11 +59,17 @@ export async function changeStripePlan(
     return { ok: false, message };
   }
 
+  // A promo is a percentage or an amount off the plan price, so a new plan
+  // moves the promo price too.
+  const discount =
+    planChanged && updated ? await describeDiscounts(updated, plan.monthlyCents) : undefined;
+
   await db
     .update(subscriptions)
     .set({
       billingDay,
       ...(planChanged ? { planId: plan.id, monthlyPriceCents: plan.monthlyCents } : {}),
+      ...(discount ?? {}),
     })
     .where(eq(subscriptions.id, row.id));
 
@@ -78,7 +86,7 @@ async function updateLiveSubscription(
   subscriptionId: string,
   plan: { key: string; name: string; lookupKey: string },
   billingDay: number,
-): Promise<{ planChanged: boolean; said: string[] }> {
+): Promise<{ planChanged: boolean; said: string[]; updated: Stripe.Subscription | null }> {
   const stripe = requireStripe();
   const live = await stripe.subscriptions.retrieve(subscriptionId);
   const item = live.items.data[0];
@@ -106,13 +114,16 @@ async function updateLiveSubscription(
     said.push(`next payment on ${longDate(anchor)}, then on that day each month`);
   }
 
+  let updated: Stripe.Subscription | null = null;
   if (params.items || params.trial_end) {
-    await stripe.subscriptions.update(live.id, params, {
-      idempotencyKey: `assign-plan:${live.id}:${plan.key}:${billingDay}:${periodEnd ?? "none"}`,
-    });
+    updated = await stripe.subscriptions.update(
+      live.id,
+      { ...params, expand: SUBSCRIPTION_EXPAND },
+      { idempotencyKey: `assign-plan:${live.id}:${plan.key}:${billingDay}:${periodEnd ?? "none"}` },
+    );
   }
 
-  return { planChanged: Boolean(params.items), said };
+  return { planChanged: Boolean(params.items), said, updated };
 }
 
 function longDate(seconds: number): string {
