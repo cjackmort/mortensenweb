@@ -9,11 +9,12 @@ import {
   listOverduePaymentRequests,
 } from "@/db/repositories/admin/billing";
 import {
-  expenseTotals,
+  currentMonth,
+  ledgerEntries,
+  ledgerSummary,
   listActiveSubscriptions,
-  listExpenses,
+  monthRange,
   sumPaymentsReceivedInMonth,
-  type LedgerCategory,
 } from "@/db/repositories/admin/finance";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { DEFAULT_DUNNING_CONFIG } from "@/lib/billing/dunning";
@@ -23,35 +24,9 @@ import {
 } from "@/db/repositories/admin/stripe-reconcile";
 import { stripeConfigured } from "@/lib/payments/stripe";
 import { MonthlyBillingTable } from "./monthly-billing";
-import { AddExpenseForm, DeleteExpenseButton } from "./finance-forms";
+import { LedgerSection } from "./ledger-section";
 
 export const dynamic = "force-dynamic";
-
-/**
- * A `date` column comes back as a bare "YYYY-MM-DD" with no time component.
- * `new Date(that string)` parses it as UTC midnight, so `toLocaleDateString`
- * in any timezone behind UTC prints the day before — the same trap
- * `currentPeriod()` exists to avoid on the billing forms. Reading the parts
- * straight out of the string sidesteps the parse entirely.
- */
-function formatDateOnly(isoDate: string): string {
-  const parts = isoDate.split("-").map(Number);
-  const [year = 1970, month = 1, day = 1] = parts;
-  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-const LEDGER_CATEGORY_LABEL: Record<LedgerCategory, string> = {
-  software: "Software",
-  hosting: "Hosting",
-  contractor: "Contractor",
-  marketing: "Marketing",
-  equipment: "Equipment",
-  fees: "Fees",
-  other: "Other",
-};
 
 /**
  * The money queue.
@@ -63,22 +38,33 @@ const LEDGER_CATEGORY_LABEL: Record<LedgerCategory, string> = {
  * Mixing them would eventually produce the one failure the plan calls out
  * explicitly: an overdue email sent to someone who already paid.
  */
-export default async function AdminPaymentsPage() {
+export default async function AdminPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
 
+  // The ledger month, from `?month=YYYY-MM`. Anything else, or a month that
+  // has not happened yet, is this month.
+  const thisMonth = currentMonth();
+  const requested = (await searchParams).month ?? "";
+  const ledgerMonth =
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && requested <= thisMonth ? requested : thisMonth;
+
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, expenseRows, ledgerTotals, stripeSync] =
+  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, summary, entries, stripeSync] =
     await Promise.all([
       listOverduePaymentRequests(ctx, db),
       listClientBillingStatus(ctx, db),
       listActiveSubscriptions(ctx, db),
       sumPaymentsReceivedInMonth(ctx, db),
-      listExpenses(ctx, db),
-      expenseTotals(ctx, db),
+      ledgerSummary(ctx, db, ledgerMonth),
+      ledgerEntries(ctx, db, monthRange(ledgerMonth)),
       stripeConfigured() ? stripeSyncStatus(db) : Promise.resolve(null),
     ]);
 
@@ -183,9 +169,8 @@ export default async function AdminPaymentsPage() {
             </div>
           )}
           <p className="muted" style={{ fontSize: "0.82rem", margin: "0.9rem 0 0" }}>
-            No processor is connected yet, so every plan here is charged and
-            collected by hand. Once Stripe is attached, charged-via will show
-            it instead of &ldquo;manual&rdquo; for whichever clients move over.
+            &ldquo;Manual&rdquo; is a plan you collect by hand, by Venmo or cash.
+            A client paying by card shows the processor that charges them.
           </p>
         </section>
 
@@ -246,82 +231,12 @@ export default async function AdminPaymentsPage() {
           exists, this page is the queue and chasing is manual.
         </p>
 
-        <section className="card">
-          <div className="card-head">
-            <h2>Ledger</h2>
-            <span className="muted">
-              {formatCurrency(ledgerTotals.monthCents)} this month
-            </span>
-          </div>
-          <p className="muted" style={{ marginTop: 0 }}>
-            What the agency itself has paid for — software, hosting,
-            contractors, equipment. Kept separate from client payments above,
-            so this total is what you hand an accountant at tax time, not
-            mixed with money that was never yours to begin with.
-          </p>
-
-          <div className="grid grid-2" style={{ marginBottom: "1.25rem" }}>
-            <div className="stat">
-              <p className="stat-label">This month</p>
-              <p className="stat-value">{formatCurrency(ledgerTotals.monthCents)}</p>
-              <p className="stat-note">expenses recorded</p>
-            </div>
-            <div className="stat">
-              <p className="stat-label">{ledgerTotals.taxYear} so far</p>
-              <p className="stat-value">{formatCurrency(ledgerTotals.yearCents)}</p>
-              <p className="stat-note">year to date</p>
-            </div>
-          </div>
-
-          <div className="action-block" style={{ marginTop: 0 }}>
-            <AddExpenseForm />
-          </div>
-
-          {expenseRows.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>
-              Nothing recorded yet.
-            </p>
-          ) : (
-            <div className="table-wrap">
-              <table className="stack">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenseRows.map((e) => (
-                    <tr key={e.publicId}>
-                      <td data-label="Date">{formatDateOnly(e.occurredOn)}</td>
-                      <td data-label="Description">
-                        {e.description}
-                        {e.isRecurring && (
-                          <>
-                            {" "}
-                            <span className="badge">monthly</span>
-                          </>
-                        )}
-                      </td>
-                      <td data-label="Category">
-                        <span className="pill pill-neutral">
-                          {LEDGER_CATEGORY_LABEL[e.category]}
-                        </span>
-                      </td>
-                      <td data-label="Amount">{formatCurrency(e.amountCents)}</td>
-                      <td data-label="">
-                        <DeleteExpenseButton publicId={e.publicId} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+        <LedgerSection
+          yearMonth={ledgerMonth}
+          thisMonth={thisMonth}
+          summary={summary}
+          entries={entries}
+        />
       </main>
     </>
   );

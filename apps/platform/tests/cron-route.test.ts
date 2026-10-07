@@ -39,6 +39,7 @@ const jobs = {
   reconcileStorageReservations: job("reconcileStorageReservations"),
   runScheduledReconcile: job("runScheduledReconcile"),
   runScheduledLeadImport: job("runScheduledLeadImport"),
+  runScheduledLedger: job("runScheduledLedger"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -101,6 +102,9 @@ vi.mock("@/db/repositories/admin/stripe-reconcile", () => ({
 vi.mock("@/db/repositories/admin/leads", () => ({
   runScheduledLeadImport: (...a: unknown[]) => jobs.runScheduledLeadImport(...a),
 }));
+vi.mock("@/db/repositories/admin/ledger-automation", () => ({
+  runScheduledLedger: (...a: unknown[]) => jobs.runScheduledLedger(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -117,7 +121,8 @@ const LOOP_KEYS = [
 const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"];
 const STRIPE_KEYS = ["stripeReconciled"];
 const LEAD_KEYS = ["leadsImported"];
-const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS];
+const LEDGER_KEYS = ["ledgerAutomated"];
+const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS, ...LEDGER_KEYS];
 
 function request(
   secret: string | null = SECRET,

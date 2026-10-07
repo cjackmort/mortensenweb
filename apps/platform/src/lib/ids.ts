@@ -44,6 +44,25 @@ export function newPublicId(): string {
 }
 
 /**
+ * A public identifier that is the same every time for the same `key`.
+ *
+ * For rows the platform writes on its own, where "has this already been
+ * written?" must have one answer however many times the job runs: a Stripe
+ * fee for one payment, one month of a recurring expense. Deriving the id
+ * from what the row stands for lets the unique index every table already has
+ * on `public_id` do the deduplication, with no extra column and no lookup
+ * that a concurrent run could race past.
+ *
+ * Indistinguishable in shape from `newPublicId`. It reveals only the key it
+ * hashes, and the keys used are not secret: a payment's own reference, an
+ * expense's own public id and a month.
+ */
+export async function derivedPublicId(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return encodeCrockford(new Uint8Array(digest).slice(0, ID_BYTES));
+}
+
+/**
  * Prefixed identifier, e.g. `req_3F7K...`. The prefix is a readability aid in
  * logs and support conversations; it carries no authority and is never parsed
  * to decide access.

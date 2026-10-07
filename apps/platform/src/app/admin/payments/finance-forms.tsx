@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import {
   addExpenseAction,
   deleteExpenseAction,
+  stopRecurringExpenseAction,
   type LedgerResult,
 } from "./finance-actions";
 
@@ -84,7 +85,7 @@ export function AddExpenseForm() {
 
       <label htmlFor="isRecurring" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.75rem" }}>
         <input id="isRecurring" name="isRecurring" type="checkbox" style={{ width: "auto" }} />
-        Recurs monthly (tag only — this doesn&rsquo;t re-add itself next month)
+        Repeats monthly (added again on the same day each month until you stop it)
       </label>
     </form>
   );
@@ -106,6 +107,27 @@ export function DeleteExpenseButton({ publicId }: { publicId: string }) {
         style={{ width: "auto", minHeight: "auto", padding: "0.15rem 0.5rem", fontSize: "0.78rem" }}
       >
         Remove
+      </button>
+    </form>
+  );
+}
+
+export function StopRecurringButton({ publicId }: { publicId: string }) {
+  const [, formAction, pending] = useActionState<LedgerResult | null, FormData>(
+    stopRecurringExpenseAction,
+    null,
+  );
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="publicId" value={publicId} />
+      <button
+        type="submit"
+        className="secondary"
+        disabled={pending}
+        style={{ width: "auto", minHeight: "auto", padding: "0.15rem 0.5rem", fontSize: "0.78rem" }}
+      >
+        Stop repeating
       </button>
     </form>
   );
