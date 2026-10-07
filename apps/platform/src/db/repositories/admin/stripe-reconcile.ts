@@ -596,9 +596,11 @@ export interface StripeSyncStatus {
   error: string | null;
   needsReview: ReconcileFinding[];
   repaired: ReconcileFinding[];
-  /** Payments in the last 30 days recorded by the job, not by a webhook. */
+  /** Payments recorded by the job, not a webhook, since the last processed delivery (30 days at most). */
   recoveredRecently: number;
 }
+
+const RECOVERY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export async function stripeSyncStatus(db: Database): Promise<StripeSyncStatus> {
   const latest = await db
@@ -608,6 +610,27 @@ export async function stripeSyncStatus(db: Database): Promise<StripeSyncStatus> 
     .orderBy(desc(auditLog.createdAt))
     .limit(1);
 
+  // A delivery Stripe got a 2xx for after the last recovery proves the
+  // webhook path works again, so earlier recoveries stop counting.
+  const lastDelivery = await db
+    .select({ receivedAt: webhookDeliveries.receivedAt })
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.provider, "stripe"),
+        eq(webhookDeliveries.signatureValid, true),
+        eq(webhookDeliveries.status, "processed"),
+      ),
+    )
+    .orderBy(desc(webhookDeliveries.receivedAt))
+    .limit(1);
+
+  const windowStart = new Date(Date.now() - RECOVERY_WINDOW_MS);
+  const since =
+    lastDelivery[0] && lastDelivery[0].receivedAt > windowStart
+      ? lastDelivery[0].receivedAt
+      : windowStart;
+
   const recovered = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(auditLog)
@@ -615,7 +638,7 @@ export async function stripeSyncStatus(db: Database): Promise<StripeSyncStatus> 
       and(
         eq(auditLog.action, "payment.recorded"),
         sql`${auditLog.metadata}->>'source' = 'stripe_reconcile'`,
-        gte(auditLog.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+        gte(auditLog.createdAt, since),
       ),
     );
 
