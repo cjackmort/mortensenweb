@@ -127,8 +127,11 @@ export function StripePanel({
   }
 
   return (
-    <section className="panel" aria-labelledby="stripe-heading">
-      <div className="masthead">
+    // A `card`, like every other pane on this page. It was a `panel`, which
+    // has no padding of its own and expects its content inside panel-head and
+    // panel-body — so every line here sat against the box's left edge.
+    <section className="card" aria-labelledby="stripe-heading">
+      <div className="card-head">
         <h2 id="stripe-heading">Automatic payments</h2>
         <span className={`pill pill-${TONE[state]}`}>{label}</span>
       </div>

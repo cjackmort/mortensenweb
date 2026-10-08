@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TimeSeriesChart } from "@/components/charts";
+import { TimeSeriesChartSvg as TimeSeriesChart } from "@/components/charts";
 import type { SeriesPoint } from "@/lib/analytics/umami";
 
 /**
@@ -103,5 +103,45 @@ describe("two charts on one page do not share a gradient", () => {
     );
     expect(markup).toContain('id="chart-area-fade-pageviews"');
     expect(markup).toContain("url(#chart-area-fade-pageviews)");
+  });
+});
+
+/**
+ * The dates along the bottom, at the widths the chart is actually shown.
+ *
+ * Drawn at a fixed 720 and scaled down into the dashboard's half-width
+ * columns, a phone or a client tile, the dates shrank to about 7px and
+ * crowded the right-hand end. The chart now draws at its real width, so the
+ * test is about spacing in real pixels.
+ */
+describe("the date labels", () => {
+  function datePositions(width: number, count = 30): number[] {
+    const markup = renderToStaticMarkup(
+      createElement(TimeSeriesChart, { series: days(count), width }),
+    );
+    const viewBox = /viewBox="0 0 (\d+) (\d+)"/.exec(markup)!;
+    const bottom = Number(viewBox[2]) - 8;
+    return [...markup.matchAll(/<text x="([\d.]+)" y="([\d.]+)"[^>]*class="chart-tick"/g)]
+      .filter((m) => Number(m[2]) === bottom)
+      .map((m) => Number(m[1]));
+  }
+
+  it("draws at the width it is given, so text is not scaled down", () => {
+    const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { series: days(30), width: 360 }));
+    expect(markup).toContain('viewBox="0 0 360 180"');
+  });
+
+  for (const width of [300, 360, 450, 720, 1100]) {
+    it(`keeps every date at least 75px from the next at ${width}px`, () => {
+      const xs = datePositions(width);
+      expect(xs.length).toBeGreaterThanOrEqual(2);
+      for (let i = 1; i < xs.length; i += 1) {
+        expect(xs[i]! - xs[i - 1]!, `labels ${i - 1} and ${i}`).toBeGreaterThanOrEqual(75);
+      }
+    });
+  }
+
+  it("shows fewer dates on a narrow chart than a wide one", () => {
+    expect(datePositions(320).length).toBeLessThan(datePositions(900).length);
   });
 });

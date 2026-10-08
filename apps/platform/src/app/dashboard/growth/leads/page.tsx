@@ -30,11 +30,11 @@ const VIEWS: { value: LeadView; label: string }[] = [
 ];
 
 const EMPTY: Record<LeadView, string> = {
-  open: "No open enquiries. When someone fills in the contact form on your website, it appears here and we email you straight away.",
+  open: "No open enquiries. When someone fills in the contact form on your website, it appears here, and you still get the usual email about it.",
   won: "Nothing marked as won yet. Open an enquiry and mark it won when it turns into a job.",
   lost: "Nothing marked as lost.",
   archived: "Nothing archived.",
-  all: "No enquiries yet. When someone fills in the contact form on your website, it appears here and we email you straight away.",
+  all: "No enquiries yet. When someone fills in the contact form on your website, it appears here, and you still get the usual email about it.",
   new: "Nothing new.",
   contacted: "Nothing marked as contacted.",
 };
