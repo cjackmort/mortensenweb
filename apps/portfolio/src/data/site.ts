@@ -10,19 +10,47 @@ export const SITE = {
   url: "https://mortensenweb.com",
   portalUrl: "https://portal.mortensenweb.com",
   email: "mortensenwebco@gmail.com",
-  tagline: "Websites for small businesses, built and looked after.",
+  /** Matches the Google Business Profile exactly: name, place and phone have to agree everywhere. */
+  phone: "(801) 865-9235",
+  phoneHref: "tel:+18018659235",
+  founder: "Jack Mortensen",
+  founded: "2026",
+  /**
+   * Where the business is, for people and for search. The town, not the
+   * street: it is run from home, and the street address stays off the site.
+   */
+  locality: "Riverton",
+  region: "Utah",
+  regionCode: "UT",
+  areaServed: "the Salt Lake Valley — and small businesses anywhere, since everything happens online",
+  tagline: "Websites for small businesses, built, looked after, and working to bring in customers.",
+  /**
+   * The canonical description, used as the default meta description and in
+   * the structured data. Paste the same words into directory listings: an
+   * entity described the same way everywhere is one AI answers can cite.
+   */
+  /** The meta description: the same facts, inside the ~160 characters a result shows. */
+  metaDescription:
+    "Web design in Riverton, Utah for small businesses: websites from $100, unlimited changes, and a leads inbox for every enquiry. Plans from $25 a month.",
   description:
-    "Mortensen Web Co. builds and maintains websites for small businesses. A site designed around what you actually sell, then kept current — you request a change, we make it, you approve it, it goes live.",
+    "Mortensen Web Co. is a web design company in Riverton, Utah that builds, hosts and looks after websites for small businesses — with unlimited changes, a leads inbox for every enquiry, and Growth tools that bring in more customers. Sites from $100; plans from $25 a month.",
   // Umami Cloud website id for this site. Public by nature (it is in the
   // page); the API key that reads the figures never leaves the portal.
   umamiWebsiteId: "e71828c7-4b0e-4e06-8049-bd108a3b6fab",
 } as const;
 
+/**
+ * The main menu. `phone: false` keeps an item out of the phone menu strip,
+ * which fits five links across a 360px screen and no more — About is in the
+ * footer there instead.
+ */
 export const NAV = [
-  { href: "/work/", label: "Work" },
-  { href: "/services/", label: "Services" },
-  { href: "/pricing/", label: "Pricing" },
-  { href: "/contact/", label: "Contact" },
+  { href: "/work/", label: "Work", phone: true },
+  { href: "/services/", label: "Services", phone: true },
+  { href: "/growth/", label: "Growth", phone: true },
+  { href: "/pricing/", label: "Pricing", phone: true },
+  { href: "/about/", label: "About", phone: false },
+  { href: "/contact/", label: "Contact", phone: true },
 ] as const;
 
 /**

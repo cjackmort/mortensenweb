@@ -14,8 +14,10 @@ interface Props {
   noindex?: boolean;
 }
 
-const { title, description = SITE.description, path, schema = [], noindex = false } = Astro.props;
-const fullTitle = title ? `${title} — ${SITE.name}` : `${SITE.name} — ${SITE.tagline}`;
+const { title, description = SITE.metaDescription, path, schema = [], noindex = false } = Astro.props;
+// The home page leads with what and where, inside Google's ~60 characters;
+// the tagline it used to append ran to 106 and was cut off mid-sentence.
+const fullTitle = title ? `${title} — ${SITE.name}` : `${SITE.name} — Small business websites, ${SITE.locality}, ${SITE.regionCode}`;
 const canonical = new URL(path ?? Astro.url.pathname, SITE.url).toString();
 const current = Astro.url.pathname;
 
@@ -29,13 +31,40 @@ const organization = {
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "Organization",
+      // A local business as well as an organization: "web designer near me"
+      // and "web design in Riverton, Utah" are answered from LocalBusiness
+      // data. Town and region only — the street address is deliberately
+      // absent, because the business is run from home.
+      "@type": ["Organization", "ProfessionalService"],
       "@id": `${SITE.url}/#organization`,
       name: SITE.name,
       url: SITE.url,
       email: SITE.email,
+      telephone: SITE.phone,
       description: SITE.description,
       logo: `${SITE.url}/icon.svg`,
+      image: `${SITE.url}/og.png`,
+      foundingDate: SITE.founded,
+      founder: { "@type": "Person", "@id": `${SITE.url}/about/#founder`, name: SITE.founder },
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: SITE.locality,
+        addressRegion: SITE.regionCode,
+        addressCountry: "US",
+      },
+      areaServed: [
+        { "@type": "City", name: `${SITE.locality}, ${SITE.region}` },
+        { "@type": "AdministrativeArea", name: "Salt Lake County, Utah" },
+        { "@type": "Country", name: "United States" },
+      ],
+      priceRange: "$",
+      knowsAbout: [
+        "Small business websites",
+        "Website hosting and maintenance",
+        "Local SEO",
+        "Lead management",
+        "Google Business Profile",
+      ],
     },
     {
       "@type": "WebSite",
@@ -114,9 +143,9 @@ const organization = {
         </nav>
       </div>
       <nav class="wrap subnav" aria-label="Pages">
-        <a href="/" aria-current={current === "/" ? "page" : undefined}>Home</a>
+        {/* No "Home": the logo above goes home, and the strip only fits five. */}
         {
-          NAV.map((link) => (
+          NAV.filter((link) => link.phone).map((link) => (
             <a href={link.href} aria-current={current.startsWith(link.href) ? "page" : undefined}>
               {link.label}
             </a>
@@ -137,6 +166,9 @@ const organization = {
             <p class="measure" style="margin-top: 0.75rem; color: var(--ink-2); font-size: var(--text-sm); max-width: 32ch;">
               {SITE.tagline}
             </p>
+            <p style="margin-top: 0.75rem; color: var(--ink-2); font-size: var(--text-sm);">
+              Based in {SITE.locality}, {SITE.region}.
+            </p>
           </div>
           <div>
             <p class="footer__h">Company</p>
@@ -155,6 +187,7 @@ const organization = {
           <div>
             <p class="footer__h">Contact</p>
             <ul>
+              <li><a href={SITE.phoneHref} data-umami-event="called">{SITE.phone}</a></li>
               <li><a href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></li>
               <li><a href="/contact/">Start a project</a></li>
             </ul>

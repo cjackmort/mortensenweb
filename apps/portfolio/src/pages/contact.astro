@@ -11,8 +11,8 @@ import { BUILDS, PLANS, dollars } from "@mortensenweb/plans";
 ---
 
 <Base
-  title="Contact"
-  description="Tell us about your business and what you need from a website. We reply to every enquiry."
+  title="Contact — web design in Riverton, Utah"
+  description="Contact Mortensen Web Co. in Riverton, Utah about a website for your small business. Call (801) 865-9235 or send an enquiry — we reply the same working day."
   path="/contact/"
 >
   <section class="section">
@@ -32,8 +32,12 @@ import { BUILDS, PLANS, dollars } from "@mortensenweb/plans";
 
       <div class="section-head section-head--top" style="border-top: 0; margin-bottom: 0; padding-top: 0">
         <div>
-          <p class="eyebrow" style="margin-bottom: .75rem">Or just email</p>
-          <p><a class="link link--standalone" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></p>
+          <p class="eyebrow" style="margin-bottom: .75rem">Or call or email</p>
+          <p><a class="link link--standalone" href={SITE.phoneHref} data-umami-event="called">{SITE.phone}</a></p>
+          <p style="margin-top: .5rem"><a class="link link--standalone" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></p>
+          <p class="hint" style="margin-top: 1rem; color: var(--muted); font-size: var(--text-sm); max-width: 28ch">
+            {SITE.founder}, {SITE.locality}, {SITE.region}.
+          </p>
           <p class="hint" style="margin-top: 1.5rem; color: var(--muted); font-size: var(--text-sm); max-width: 28ch">
             We usually reply the same working day.
           </p>
