@@ -7,7 +7,7 @@ import { adminContextFrom } from "@/db/repositories/context";
 import { listClients } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import { StatRow } from "@/components/analytics-summary";
-import { TimeSeriesChart } from "@/components/charts";
+import { TimeSeriesChart } from "@/components/time-series-chart";
 import { demoAnalytics } from "@/lib/analytics/demo";
 import { demoReason } from "@/lib/analytics/resolve";
 import {

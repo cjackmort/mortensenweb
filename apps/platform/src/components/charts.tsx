@@ -18,7 +18,7 @@ import type { Breakdown, SeriesPoint } from "@/lib/analytics/umami";
  * automatic flip of the other.
  */
 
-function niceCeiling(value: number): number {
+export function niceCeiling(value: number): number {
   if (value <= 5) return 5;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   return Math.ceil(value / magnitude) * magnitude;
@@ -31,7 +31,7 @@ function niceCeiling(value: number): number {
  * length rather than assumed. The raw string is returned unchanged if it still
  * will not parse — a visible oddity beats a crash mid-render.
  */
-function formatDay(iso: string): string {
+export function formatDay(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00Z` : iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -67,17 +67,29 @@ function formatDay(iso: string): string {
  */
 export type ChartMetric = "both" | "visits" | "pageviews";
 
-export function TimeSeriesChart({
+/**
+ * The chart itself, drawn for a known width. Use `TimeSeriesChart` from
+ * `time-series-chart.tsx`, which measures the space and passes it in.
+ */
+export function TimeSeriesChartSvg({
   series,
   labelled = true,
   metric = "both",
   gradientId = "chart-area-fade",
+  width = 720,
 }: {
   series: SeriesPoint[];
   labelled?: boolean;
   /** Which series to draw. One at a time gets its own scale. */
   metric?: ChartMetric;
   gradientId?: string;
+  /**
+   * The width it is shown at, in CSS pixels. The SVG is drawn at exactly
+   * this width so one unit is one pixel: drawn at a fixed 720 and squeezed
+   * into a half-width column or a phone, the 11px dates shrank to about 7px
+   * and crowded the right-hand end.
+   */
+  width?: number;
 }) {
   if (series.length === 0) return null;
 
@@ -99,8 +111,8 @@ export function TimeSeriesChart({
    */
   if (!showVisits && !showPageviews) return null;
 
-  const W = 720;
-  const H = 220;
+  const W = Math.max(240, Math.round(width));
+  const H = W < 480 ? 180 : 220;
   const pad = { top: 16, right: 16, bottom: 28, left: 40 };
   const plotW = W - pad.left - pad.right;
   const plotH = H - pad.top - pad.bottom;
@@ -156,9 +168,21 @@ export function TimeSeriesChart({
     .join(" and ");
 
   const ticks = [0, max / 2, max];
-  // At most six date labels, so they never collide on a narrow screen.
-  const step = Math.max(1, Math.ceil(series.length / 6));
+  // As many date labels as fit — about one per 80px, never fewer than two
+  // or more than six — so they never collide however narrow the chart is.
+  const labelSlots = Math.min(6, Math.max(2, Math.floor(plotW / 80)));
+  const step = Math.max(1, Math.ceil(series.length / labelSlots));
   const last = series[series.length - 1]!;
+  /*
+   * The final day is always labelled, because it is the one people look for.
+   * The regular label before it is dropped unless a full step separates them:
+   * the final label is right-aligned, so it reaches back towards its
+   * neighbour, and day 25 and day 29 of a 30-day range used to print almost
+   * on top of each other at the chart's right edge.
+   */
+  const lastIndex = series.length - 1;
+  const showDate = (i: number) =>
+    i === lastIndex || (i % step === 0 && lastIndex - i >= step);
 
   return (
     <figure className="chart">
@@ -193,7 +217,7 @@ export function TimeSeriesChart({
         ))}
 
         {series.map((p, i) =>
-          i % step === 0 || i === series.length - 1 ? (
+          showDate(i) ? (
             <text
               key={p.date}
               x={x(i)}

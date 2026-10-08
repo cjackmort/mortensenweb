@@ -151,14 +151,31 @@ async function markDelivery(
  * Returns null rather than guessing. An unmatched event is recorded for an
  * operator to look at; attaching money to the wrong tenant would unlock an
  * account that did not pay and is far worse than a queue entry.
+ *
+ * That includes the two routes disagreeing: metadata naming one client while
+ * the customer is stored against another. Either could be the stale one, and
+ * picking is a guess about whose money this is.
+ *
+ * Exported for the reconciliation job, which repairs a missed event using the
+ * same evidence the receiver would have used — no more, no less.
  */
-async function matchClient(
+export async function matchClient(
   db: Database,
   input: {
     metadata?: Stripe.Metadata | null;
     customerId?: string | null;
   },
 ): Promise<{ clientId: string; organizationId: string } | null> {
+  const byCustomer = input.customerId
+    ? (
+        await db
+          .select({ clientId: clients.id, organizationId: clients.organizationId })
+          .from(clients)
+          .where(eq(clients.stripeCustomerId, input.customerId))
+          .limit(1)
+      )[0]
+    : undefined;
+
   const fromMetadata = input.metadata?.client_id;
   if (fromMetadata) {
     const rows = await db
@@ -166,16 +183,14 @@ async function matchClient(
       .from(clients)
       .where(eq(clients.id, fromMetadata))
       .limit(1);
-    if (rows[0]) return rows[0];
+    if (rows[0]) {
+      if (byCustomer && byCustomer.clientId !== rows[0].clientId) return null;
+      return rows[0];
+    }
   }
 
   if (input.customerId) {
-    const rows = await db
-      .select({ clientId: clients.id, organizationId: clients.organizationId })
-      .from(clients)
-      .where(eq(clients.stripeCustomerId, input.customerId))
-      .limit(1);
-    if (rows[0]) return rows[0];
+    if (byCustomer) return byCustomer;
 
     try {
       const customer = await requireStripe().customers.retrieve(
@@ -220,7 +235,26 @@ async function matchClient(
   return null;
 }
 
-function customerIdOf(value: unknown): string | null {
+/**
+ * The metadata that names the tenant on an invoice.
+ *
+ * A subscription's invoices carry no metadata of their own: the `client_id`
+ * checkout wrote is copied to `parent.subscription_details.metadata`, not to
+ * `invoice.metadata`. Reading only the latter made every subscription invoice
+ * depend on the stored customer id, which is exactly the link that is missing
+ * on a client's first payment.
+ */
+export function invoiceMetadata(invoice: Stripe.Invoice): Stripe.Metadata | null {
+  if (invoice.metadata?.client_id) return invoice.metadata;
+  const parent = (
+    invoice as Stripe.Invoice & {
+      parent?: { subscription_details?: { metadata?: Stripe.Metadata | null } | null } | null;
+    }
+  ).parent;
+  return parent?.subscription_details?.metadata ?? invoice.metadata ?? null;
+}
+
+export function customerIdOf(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === "string") return value;
   if (typeof value === "object" && "id" in (value as Record<string, unknown>)) {
@@ -239,8 +273,11 @@ function customerIdOf(value: unknown): string | null {
  * decision that this client does not pay; letting a payment event rewrite
  * their plan or status would undo it silently, and the person who set it would
  * have no way of knowing.
+ *
+ * Exported for the reconciliation job: one mirror, so a repaired subscription
+ * is written exactly as a delivered event would have written it.
  */
-async function mirrorSubscription(
+export async function mirrorSubscription(
   db: Database,
   clientId: string,
   organizationId: string,
@@ -334,6 +371,10 @@ async function mirrorSubscription(
       clientId,
       organizationId,
       stripeSubscriptionId: subscription.id,
+      stripeStartedAt: new Date(subscription.start_date * 1000),
+      // What Stripe actually charges each month, promo included: that is the
+      // figure a hand-raised invoice for the same month would have asked for.
+      stripeMonthlyCents: discount?.discountedPriceCents ?? priceCents,
     });
   }
 
@@ -372,6 +413,7 @@ async function recordInvoicePayment(
   clientId: string,
   organizationId: string,
   invoice: Stripe.Invoice,
+  source: "stripe_webhook" | "stripe_reconcile",
 ): Promise<"recorded" | "already" | "no_cash"> {
   const cents = collectedCents(invoice);
   const idempotencyKey = `stripe_invoice:${invoice.id}`;
@@ -446,7 +488,7 @@ async function recordInvoicePayment(
     entityType: "payment",
     entityId: invoice.id ?? "",
     metadata: {
-      source: "stripe_webhook",
+      source,
       amountPaidCents: cents,
       invoiceTotalCents: invoice.total ?? 0,
       collectedCash: cents > 0,
@@ -454,6 +496,84 @@ async function recordInvoicePayment(
   });
 
   return cents > 0 ? "recorded" : "no_cash";
+}
+
+/**
+ * Everything a settled invoice means, in one place.
+ *
+ * The receiver calls this for `invoice.paid`, and the reconciliation job calls
+ * it for a settled invoice whose event never arrived. One function rather than
+ * two copies, because the two drifting apart is how a missed webhook would get
+ * repaired into a different state than a delivered one produces: money
+ * recorded but features left locked, or the reverse.
+ *
+ * Every step is idempotent — the ledger row is keyed on the invoice, the
+ * mirror writes current Stripe state, the unlock is first-write-wins — so the
+ * receiver and the job both reaching the same invoice changes nothing twice.
+ */
+export async function applyPaidInvoice(
+  db: Database,
+  match: { clientId: string; organizationId: string },
+  invoice: Stripe.Invoice,
+  source: "stripe_webhook" | "stripe_reconcile",
+): Promise<"recorded" | "already" | "no_cash"> {
+  const compRows = await db
+    .select({ compPlanId: clients.compPlanId })
+    .from(clients)
+    .where(eq(clients.id, match.clientId))
+    .limit(1);
+  const comped = Boolean(compRows[0]?.compPlanId);
+
+  // The subscription first, so the ledger row below can point at it. On a
+  // client's first payment the mirror may not exist yet — its own event can
+  // arrive after this one, or never — and a payment recorded before it would
+  // stay unlinked from its subscription for good.
+  //
+  // This also refreshes the paid-through date, so the billing page reflects a
+  // renewal immediately rather than waiting for a separate subscription event.
+  const subId = subscriptionIdFromInvoice(invoice);
+  if (subId && !comped) {
+    const fresh = await requireStripe().subscriptions.retrieve(subId, {
+      expand: SUBSCRIPTION_EXPAND,
+    });
+    await mirrorSubscription(db, match.clientId, match.organizationId, fresh);
+  }
+
+  const outcome = await recordInvoicePayment(
+    db,
+    match.clientId,
+    match.organizationId,
+    invoice,
+    source,
+  );
+
+  // Money arriving lifts any dunning pause and turns the features on.
+  // Idempotent and first-write-wins, so a renewal does not reset the original
+  // unlock date. Skipped for a comp client, whose entitlements are the
+  // operator's to decide.
+  if (!comped && collectedCents(invoice) > 0) {
+    await db
+      .update(clients)
+      .set({
+        managementState: "managed",
+        managementPausedAt: null,
+        managementPausedReason: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(clients.id, match.clientId),
+          sql`${clients.managementState} <> 'managed'`,
+        ),
+      );
+
+    await unlockClientFeatures(db, match.clientId, {
+      actorUserId: null,
+      reason: "stripe_invoice_paid",
+    });
+  }
+
+  return outcome;
 }
 
 /**
@@ -579,7 +699,7 @@ export async function processStripeEvent(
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
         const match = await matchClient(db, {
-          metadata: invoice.metadata,
+          metadata: invoiceMetadata(invoice),
           customerId: customerIdOf(invoice.customer),
         });
 
@@ -591,58 +711,7 @@ export async function processStripeEvent(
           };
         }
 
-        const compRows = await db
-          .select({ compPlanId: clients.compPlanId })
-          .from(clients)
-          .where(eq(clients.id, match.clientId))
-          .limit(1);
-
-        const outcome = await recordInvoicePayment(
-          db,
-          match.clientId,
-          match.organizationId,
-          invoice,
-        );
-
-        // Refresh the paid-through date from the subscription this invoice
-        // settles, so the billing page reflects the renewal immediately rather
-        // than waiting for a separate subscription event.
-        const subId = subscriptionIdFromInvoice(invoice);
-        if (subId && !compRows[0]?.compPlanId) {
-          const fresh = await stripe.subscriptions.retrieve(subId, { expand: SUBSCRIPTION_EXPAND });
-          await mirrorSubscription(
-            db,
-            match.clientId,
-            match.organizationId,
-            fresh,
-          );
-        }
-
-        // Money arriving lifts any dunning pause and turns the features on.
-        // Idempotent and first-write-wins, so a renewal does not reset the
-        // original unlock date. Skipped for a comp client, whose entitlements
-        // are the operator's to decide.
-        if (!compRows[0]?.compPlanId && collectedCents(invoice) > 0) {
-          await db
-            .update(clients)
-            .set({
-              managementState: "managed",
-              managementPausedAt: null,
-              managementPausedReason: null,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(clients.id, match.clientId),
-                sql`${clients.managementState} <> 'managed'`,
-              ),
-            );
-
-          await unlockClientFeatures(db, match.clientId, {
-            actorUserId: null,
-            reason: "stripe_invoice_paid",
-          });
-        }
+        const outcome = await applyPaidInvoice(db, match, invoice, "stripe_webhook");
 
         await markDelivery(db, event.id, "processed");
         return {
@@ -655,7 +724,7 @@ export async function processStripeEvent(
       case "invoice.payment_action_required": {
         const invoice = event.data.object as Stripe.Invoice;
         const match = await matchClient(db, {
-          metadata: invoice.metadata,
+          metadata: invoiceMetadata(invoice),
           customerId: customerIdOf(invoice.customer),
         });
 

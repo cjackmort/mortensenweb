@@ -663,10 +663,11 @@ export const expenses = pgTable(
     currency: text("currency").notNull().default("USD"),
     occurredOn: date("occurred_on").notNull(),
     /**
-     * A tag for display and filtering, not a scheduler — it does not create
-     * next month's row automatically. Automating that is a real feature
-     * (what happens to the tally when a subscription is cancelled?) and
-     * nothing has asked for it yet.
+     * The row an operator marked as repeating monthly. The ledger job adds
+     * one row per month after it, dated on the same day, until this is
+     * cleared, which is what "stop repeating" does. The rows it adds are not
+     * themselves recurring, so a series has exactly one row that controls it
+     * (`ledger-automation.ts`).
      */
     isRecurring: boolean("is_recurring").notNull().default(false),
     note: text("note"),

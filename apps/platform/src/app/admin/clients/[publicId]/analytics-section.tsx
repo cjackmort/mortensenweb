@@ -1,5 +1,5 @@
 import { StatRow } from "@/components/analytics-summary";
-import { TimeSeriesChart } from "@/components/charts";
+import { TimeSeriesChart } from "@/components/time-series-chart";
 import { demoAnalytics } from "@/lib/analytics/demo";
 import { demoReason } from "@/lib/analytics/resolve";
 import { fetchAnalytics, isUmamiConfigured, type AnalyticsState } from "@/lib/analytics/umami";

@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import type Stripe from "stripe";
 
 import type { Database } from "@/db/client";
 import {
@@ -14,6 +15,14 @@ import {
   requireStripe,
   stripeConfigured,
 } from "@/lib/payments/stripe";
+import { SUBSCRIPTION_EXPAND } from "@/lib/payments/promos";
+import { formatCurrency } from "@/lib/payments/venmo";
+import {
+  applyPaidInvoice,
+  invoiceMetadata,
+  matchClient,
+  mirrorSubscription,
+} from "./stripe-webhooks";
 
 /**
  * Checking Stripe against ourselves.
@@ -27,15 +36,29 @@ import {
  * ## What it will and will not repair
  *
  * It repairs facts that are unambiguous and safe to restate: a subscription
- * whose status drifted, a paid-through date behind Stripe's, a settled invoice
- * with no ledger row.
+ * whose status drifted, a paid-through date behind Stripe's, and, the one
+ * that matters most, a subscription or a settled invoice whose event never
+ * arrived. Those last two are repaired by calling the receiver's own
+ * functions with the receiver's own tenant match (`matchClient`), so a
+ * repaired payment is exactly what a delivered `invoice.paid` would have
+ * produced, and the job trusts no evidence the receiver would not.
+ *
+ * That last part used to be flag-only, with a note to replay the event from
+ * the Stripe dashboard. Nobody reads that note in time: when the signing
+ * secret on Netlify did not match the endpoint, every delivery answered 401,
+ * the first real payment never reached the portal, and this job recorded
+ * "missing_payment" in an audit row that nothing displayed. A net that only
+ * reports is not a net.
  *
  * It flags rather than repairs anything where being wrong causes harm: a
- * Stripe customer no local client claims, a local subscription Stripe has
- * never heard of, an amount that disagrees. Those go to an operator, because
- * the automated repair for each of them is a guess about whose money this is.
+ * Stripe customer no local client claims (or two clients both do), a local
+ * subscription Stripe has never heard of, an amount that disagrees. Those go
+ * to an operator, because the automated repair for each of them is a guess
+ * about whose money this is.
  *
- * It never touches a complimentary client, and it never removes access.
+ * It never changes a complimentary client's plan, and it never removes
+ * access. A comp client whom Stripe is still charging is flagged: one of the
+ * two is a mistake, and only the operator knows which.
  *
  * ## Bounded
  *
@@ -52,6 +75,8 @@ export interface ReconcileFinding {
   kind:
     | "status_drift"
     | "period_drift"
+    | "missing_subscription"
+    | "comp_billed"
     | "missing_payment"
     | "unclaimed_customer"
     | "orphan_subscription"
@@ -61,6 +86,28 @@ export interface ReconcileFinding {
   clientId: string | null;
   reference: string;
   detail: string;
+}
+
+/** Stripe statuses under which the card will be charged again. */
+const LIVE_STATUSES: ReadonlySet<string> = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+]);
+
+function compBilled(clientId: string, sub: Stripe.Subscription): ReconcileFinding {
+  const price = sub.items.data[0]?.price;
+  const amount = price?.unit_amount
+    ? `${formatCurrency(price.unit_amount, (price.currency ?? "usd").toUpperCase())} a month`
+    : "every period";
+  return {
+    kind: "comp_billed",
+    repaired: false,
+    clientId,
+    reference: sub.id,
+    detail: `This client is on a complimentary plan, but Stripe subscription ${sub.id} is ${sub.status} and will keep charging their card ${amount}. Cancel it in Stripe, or withdraw the comp.`,
+  };
 }
 
 export interface ReconcileResult {
@@ -133,31 +180,56 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
         .limit(1);
 
       const row = local[0];
+      const charging = LIVE_STATUSES.has(sub.status);
 
       if (!row) {
-        // Stripe has a subscription we have no record of. Not repaired:
-        // creating a local subscription from this would mean choosing a tenant,
-        // and choosing wrong grants a stranger someone else's account.
-        const owner = await db
-          .select({ id: clients.id })
-          .from(clients)
-          .where(eq(clients.stripeCustomerId, customerId))
-          .limit(1);
+        // Stripe has a subscription we have no record of: its events were
+        // missed. Mirrored only when the receiver itself would have matched it
+        // to a tenant; otherwise flagged, because choosing a tenant here would
+        // grant a stranger someone else's account.
+        const match = await matchClient(db, { metadata: sub.metadata, customerId });
 
-        findings.push({
-          kind: "unclaimed_customer",
-          repaired: false,
-          clientId: owner[0]?.id ?? null,
-          reference: sub.id,
-          detail: owner[0]
-            ? `Stripe subscription ${sub.id} exists for a known client but has no local row.`
-            : `Stripe subscription ${sub.id} belongs to customer ${customerId}, which no client claims.`,
+        if (!match) {
+          findings.push({
+            kind: "unclaimed_customer",
+            repaired: false,
+            clientId: null,
+            reference: sub.id,
+            detail: `Stripe subscription ${sub.id} belongs to customer ${customerId}, which no client claims (or two clients do).`,
+          });
+          continue;
+        }
+
+        const fresh = await stripe.subscriptions.retrieve(sub.id, {
+          expand: SUBSCRIPTION_EXPAND,
         });
+        const mirrored = await mirrorSubscription(
+          db,
+          match.clientId,
+          match.organizationId,
+          fresh,
+        );
+
+        if (mirrored === "mirrored") {
+          findings.push({
+            kind: "missing_subscription",
+            repaired: true,
+            clientId: match.clientId,
+            reference: sub.id,
+            detail: `Stripe subscription ${sub.id} (${fresh.status}) had never reached the portal; mirrored it.`,
+          });
+        } else if (charging) {
+          findings.push(compBilled(match.clientId, sub));
+        }
         continue;
       }
 
-      // A comp client's settings are the operator's. Never reconciled over.
-      if (row.compPlanId) continue;
+      // A comp client's settings are the operator's. Never reconciled over,
+      // but a card still being charged is something they need to know about.
+      if (row.compPlanId) {
+        if (charging) findings.push(compBilled(row.clientId, sub));
+        continue;
+      }
 
       const item = sub.items.data[0];
       const periodEndSeconds =
@@ -253,26 +325,33 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
           ? invoice.customer
           : (invoice.customer?.id ?? null);
 
-      const owner = customerId
-        ? await db
-            .select({ id: clients.id })
-            .from(clients)
-            .where(eq(clients.stripeCustomerId, customerId))
-            .limit(1)
-        : [];
-
       // A settled invoice with no ledger row is the signature of a missed
-      // webhook. Flagged rather than inserted here: the insert path lives in
-      // the receiver, where the entitlement consequences are handled together
-      // with it, and duplicating that logic in two places is how they drift.
+      // webhook. Recorded through the receiver's own `applyPaidInvoice`, so
+      // the ledger row, the subscription mirror and the unlock all happen
+      // together, exactly as a delivered event would have done them.
+      const match = await matchClient(db, {
+        metadata: invoiceMetadata(invoice),
+        customerId,
+      });
+
+      if (!match) {
+        findings.push({
+          kind: "missing_payment",
+          repaired: false,
+          clientId: null,
+          reference: invoice.id,
+          detail: `Invoice ${invoice.id} settled for customer ${customerId ?? "unknown"}, which no client claims (or two clients do).`,
+        });
+        continue;
+      }
+
+      await applyPaidInvoice(db, match, invoice, "stripe_reconcile");
       findings.push({
         kind: "missing_payment",
-        repaired: false,
-        clientId: owner[0]?.id ?? null,
+        repaired: true,
+        clientId: match.clientId,
         reference: invoice.id,
-        detail: owner[0]
-          ? `Invoice ${invoice.id} settled at Stripe but has no ledger row. Replay the event from the Stripe dashboard.`
-          : `Invoice ${invoice.id} settled for customer ${customerId ?? "unknown"}, which no client claims.`,
+        detail: `Invoice ${invoice.id} (${formatCurrency(collectedCents(invoice), (invoice.currency ?? "usd").toUpperCase())}) was settled at Stripe, but its webhook never arrived. Recorded it.`,
       });
     }
 
@@ -494,5 +573,88 @@ export async function adminBillingSummary(
     complimentaryClients: comp[0]?.count ?? 0,
     failedPayments: failed[0]?.count ?? 0,
     unmatchedDeliveries: unmatched[0]?.count ?? 0,
+  };
+}
+
+/**
+ * What the operator needs to know about the Stripe sync, for the payments page.
+ *
+ * Before this, the reconciliation job's findings lived only in `audit_log`, and
+ * nothing displayed them. The first real payment never reached the portal, the
+ * job noticed within the hour, and the only person who could act on it had no
+ * way of finding out.
+ *
+ * `recoveredRecently` is the signal that outlives one run. A run that repairs
+ * a missed payment finds nothing next hour, so the latest run alone would show
+ * the problem for an hour at most; a count of payments that arrived only
+ * through the net keeps showing that webhooks are not getting through until
+ * they are.
+ */
+export interface StripeSyncStatus {
+  lastRunAt: Date | null;
+  ok: boolean;
+  error: string | null;
+  needsReview: ReconcileFinding[];
+  repaired: ReconcileFinding[];
+  /** Payments recorded by the job, not a webhook, since the last processed delivery (30 days at most). */
+  recoveredRecently: number;
+}
+
+const RECOVERY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function stripeSyncStatus(db: Database): Promise<StripeSyncStatus> {
+  const latest = await db
+    .select({ createdAt: auditLog.createdAt, metadata: auditLog.metadata })
+    .from(auditLog)
+    .where(eq(auditLog.action, "stripe.reconciled"))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+
+  // A delivery Stripe got a 2xx for after the last recovery proves the
+  // webhook path works again, so earlier recoveries stop counting.
+  const lastDelivery = await db
+    .select({ receivedAt: webhookDeliveries.receivedAt })
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.provider, "stripe"),
+        eq(webhookDeliveries.signatureValid, true),
+        eq(webhookDeliveries.status, "processed"),
+      ),
+    )
+    .orderBy(desc(webhookDeliveries.receivedAt))
+    .limit(1);
+
+  const windowStart = new Date(Date.now() - RECOVERY_WINDOW_MS);
+  const since =
+    lastDelivery[0] && lastDelivery[0].receivedAt > windowStart
+      ? lastDelivery[0].receivedAt
+      : windowStart;
+
+  const recovered = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.action, "payment.recorded"),
+        sql`${auditLog.metadata}->>'source' = 'stripe_reconcile'`,
+        gte(auditLog.createdAt, since),
+      ),
+    );
+
+  const meta = (latest[0]?.metadata ?? {}) as {
+    ok?: boolean;
+    error?: string | null;
+    findings?: ReconcileFinding[];
+  };
+  const findings = Array.isArray(meta.findings) ? meta.findings : [];
+
+  return {
+    lastRunAt: latest[0]?.createdAt ?? null,
+    ok: latest[0] ? meta.ok === true : true,
+    error: meta.error ?? null,
+    needsReview: findings.filter((f) => !f.repaired),
+    repaired: findings.filter((f) => f.repaired),
+    recoveredRecently: Number(recovered[0]?.count ?? 0),
   };
 }

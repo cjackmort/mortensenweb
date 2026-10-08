@@ -7,6 +7,7 @@ import { adminContextFrom, NotFoundError } from "@/db/repositories/context";
 import {
   addExpense,
   deleteExpense,
+  stopRecurringExpense,
   type LedgerCategory,
 } from "@/db/repositories/admin/finance";
 
@@ -88,4 +89,20 @@ export async function deleteExpenseAction(
 
   revalidatePath("/admin/payments");
   return { ok: true, message: "Removed." };
+}
+
+export async function stopRecurringExpenseAction(
+  _previous: LedgerResult | null,
+  formData: FormData,
+): Promise<LedgerResult> {
+  const ctx = await requireAdmin();
+  const db = await getDb();
+
+  const publicId = String(formData.get("publicId") ?? "");
+  const stopped = await stopRecurringExpense(ctx, db, publicId);
+
+  revalidatePath("/admin/payments");
+  return stopped
+    ? { ok: true, message: "Stopped. No more months will be added." }
+    : { ok: false, message: "That expense was not repeating." };
 }
