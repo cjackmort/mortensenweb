@@ -5,18 +5,9 @@ import Lockup from "../components/Lockup.astro";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
 import PlanCard from "../components/PlanCard.astro";
-import {
-  PLANS,
-  dollars,
-  BUILD_PRICE_CENTS,
-  BUILD_WITH_CARE_CENTS,
-  BUILD_DISCOUNT_CENTS,
-  BUILD_COMMITMENT_MONTHS,
-  OVERAGE_CENTS,
-} from "@mortensenweb/plans";
+import { PLANS, dollars, BUILDS, CHEAPEST_BUILD, OVERAGE_CENTS } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
 
-const soldPlans = PLANS.filter((p) => p.key !== "care-unlimited");
 
 const faq = [
   {
@@ -27,16 +18,15 @@ const faq = [
     q: "What if the change is not what I wanted?",
     a: "Just tell us on the preview. We keep working on it until you are happy, and it still counts as the one change.",
   },
-  // Both answers changed on 2026-09-05, when the build stopped being "quoted"
-  // and got a published price. Left as they were they would have contradicted
-  // the number now sitting further up the same page.
+  // Both answers changed on 2026-10-06, when the build became three
+  // standalone prices with no commitment behind any of them.
   {
     q: "Do I have to sign a contract?",
-    a: `Only if you take the discounted build. The ${dollars(BUILD_WITH_CARE_CENTS)} price assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months — leave early and we invoice the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata, nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} up front and you are not committed to anything. Either way, your domain stays yours.`,
+    a: "No. Plans are month to month and the build has no strings attached. Your domain stays yours either way.",
   },
   {
     q: "What does the build cost?",
-    a: `${dollars(BUILD_PRICE_CENTS)} for the site on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it. You get the same site either way, up to five pages, and after that the monthly plan is your only recurring cost.`,
+    a: `It depends on where your business is: ${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name.toLowerCase()}`).join(", ")}. A plan is optional — without one, the site is handed over to you at launch with no monthly cost.`,
   },
 ];
 
@@ -120,8 +110,9 @@ const schema = [
           <p>
             Need something changed? Ask in the portal, in your own words. We
             make the change and show you a preview, and it only goes live when
-            you say so. Every plan includes a monthly allowance; anything past
-            that is a flat {dollars(OVERAGE_CENTS)}.
+            you say so. Lite includes one change a month and a flat
+            {" "}{dollars(OVERAGE_CENTS)} for each beyond it; every other plan
+            includes unlimited changes.
           </p>
         </li>
       </ul>
@@ -308,19 +299,18 @@ const schema = [
         <div>
           <h2>Priced so you can plan for it.</h2>
           <p class="lede" style="margin-top: 1rem">
-            The site is {dollars(BUILD_PRICE_CENTS)}, or
-            {" "}{dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with
-            it — that's {dollars(BUILD_DISCOUNT_CENTS)} off for staying
-            {" "}{BUILD_COMMITMENT_MONTHS} months. After launch, one monthly
-            plan covers your hosting, security, analytics and changes.
+            Sites from {dollars(CHEAPEST_BUILD.priceCents)}, priced by where
+            your business is. After launch, one monthly plan covers your
+            hosting, security, analytics and changes — and from Care up, the
+            tools that bring in customers.
           </p>
         </div>
       </div>
       <div class="plans">
-        {soldPlans.map((plan) => <PlanCard plan={plan} compact />)}
+        {PLANS.map((plan) => <PlanCard plan={plan} compact />)}
       </div>
       <p class="eyebrow" style="margin-top: 1rem">
-        Unlimited changes: {dollars(PLANS[3]!.monthlyCents)}/month · <a class="link" href="/pricing/">see both build prices and compare every plan</a>
+        <a class="link" href="/pricing/">See all three build prices and compare every plan</a>
       </p>
     </div>
   </section>

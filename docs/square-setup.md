@@ -106,7 +106,7 @@ comes first.
 
 1. Square **Dashboard** (`squareup.com/dashboard`, *not* the Developer Console)
    → **Items & services** → **Items** → create an item named as the client
-   should see it — `Care — Basic` — priced to match the `service_plans` row.
+   should see it — `Care` — priced to match the `service_plans` row.
 2. **Items & services** → **Subscription plans** → **Create plan**. Name it for
    yourself, **Assign items** → the item from step 1, then **Add frequency
    option** → Monthly.
@@ -130,7 +130,7 @@ variation with its cadence, price, and the `UPDATE` to run:
 ```sql
 UPDATE service_plans
    SET square_plan_variation_id = '<variation id>'
- WHERE key = 'care-basic';
+ WHERE key = 'care';
 ```
 
 Run it in Neon's SQL editor.

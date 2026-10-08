@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import {
-  BUILD_COMMITMENT_MONTHS,
-  BUILD_PRICE_CENTS,
-  BUILD_WITH_CARE_CENTS,
+  BUILDS,
+  GROWTH_FEATURES,
   OVERAGE_CENTS,
   PLANS,
+  upgradeBeatsAddOns,
+  type PlanKey,
 } from "@mortensenweb/plans";
 import { GET } from "@/app/api/plans/route";
 import { proxy } from "@/proxy";
@@ -31,14 +32,11 @@ describe("GET /api/plans", () => {
     expect(body.plans).toEqual(PLANS);
   });
 
-  it("returns the overage and build prices the pricing page quotes", async () => {
+  it("returns the overage, Growth features and builds the pricing page quotes", async () => {
     const body = await GET().json();
     expect(body.overageCents).toBe(OVERAGE_CENTS);
-    expect(body.build).toEqual({
-      priceCents: BUILD_PRICE_CENTS,
-      withCareCents: BUILD_WITH_CARE_CENTS,
-      commitmentMonths: BUILD_COMMITMENT_MONTHS,
-    });
+    expect(body.growthFeatures).toEqual(GROWTH_FEATURES);
+    expect(body.builds).toEqual(BUILDS);
   });
 
   it("never lists the complimentary plan", async () => {
@@ -57,5 +55,78 @@ describe("the proxy", () => {
   it("still sends a lookalike path to sign-in", () => {
     const response = proxy(new NextRequest(`${PORTAL}/api/plans-admin`));
     expect(response.headers.get("location")).toBe(`${PORTAL}/login`);
+  });
+});
+
+/**
+ * The ladder the 2026-10-06 prices were set to. A price edit that breaks one
+ * of these quietly turns "upgrade" into the worse deal, or sells something
+ * that is not built — so they are held here rather than left to the copy.
+ */
+describe("the price ladder", () => {
+  const keys: PlanKey[] = ["lite", "care", "growth", "pro"];
+
+  it("climbs: each plan costs more and includes everything below it", () => {
+    for (let i = 1; i < keys.length; i += 1) {
+      const lower = PLANS.find((p) => p.key === keys[i - 1])!;
+      const higher = PLANS.find((p) => p.key === keys[i])!;
+      expect(higher.monthlyCents).toBeGreaterThan(lower.monthlyCents);
+      for (const feature of lower.growthFeatures) {
+        expect(higher.growthFeatures, `${higher.key} keeps ${feature}`).toContain(feature);
+      }
+    }
+  });
+
+  it("makes upgrading cheaper than buying the next plan's features as add-ons, from Care up", () => {
+    for (const [current, target] of [
+      ["care", "growth"],
+      ["care", "pro"],
+      ["growth", "pro"],
+    ] as Array<[PlanKey, PlanKey]>) {
+      const { saves } = upgradeBeatsAddOns(current, target);
+      expect(saves, `${current} -> ${target}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps Lite's add-on routes within $10 of the plan that also brings unlimited changes", () => {
+    // From Lite, add-ons can come in just under the next plan — $25 + $15 for
+    // the inbox against Care's $50, or $95 against Growth's $100. Allowed,
+    // because the plan also brings unlimited changes, which are never sold as
+    // an add-on; this holds the gap small enough that the upgrade stays the
+    // obvious buy.
+    for (const target of ["care", "growth", "pro"] as PlanKey[]) {
+      const { saves } = upgradeBeatsAddOns("lite", target);
+      expect(saves, `lite -> ${target}`).toBeGreaterThanOrEqual(-1000);
+    }
+  });
+
+  it("puts every Growth feature together at more than $100 a month", () => {
+    const total = GROWTH_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
+    expect(total).toBeGreaterThan(10000);
+  });
+
+  it("reserves unlimited changes for Care and above, never an add-on", () => {
+    expect(PLANS.find((p) => p.key === "lite")!.includedChangesPerMonth).toBe(1);
+    for (const key of ["care", "growth", "pro"]) {
+      expect(PLANS.find((p) => p.key === key)!.includedChangesPerMonth).toBeNull();
+    }
+  });
+
+  it("never lists an unbuilt feature on a plan without saying it is coming", () => {
+    for (const feature of GROWTH_FEATURES.filter((f) => !f.available)) {
+      for (const plan of PLANS) {
+        for (const line of plan.features.filter((l) => l.startsWith(feature.name))) {
+          expect(line, `${plan.key}: ${line}`).toMatch(/coming soon/);
+        }
+      }
+    }
+  });
+
+  it("prices the three builds at $100, $500 and $1,000", () => {
+    expect(BUILDS.map((b) => [b.key, b.priceCents])).toEqual([
+      ["launch", 10000],
+      ["revamp", 50000],
+      ["established", 100000],
+    ]);
   });
 });

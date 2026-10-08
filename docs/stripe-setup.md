@@ -84,13 +84,28 @@ that package exists to stop it happening again.
 Canonical. This table is the only approved mapping; checkout resolves a plan
 key through it and ignores anything the browser sends.
 
+Since 2026-10-06:
+
 | Plan key | Price | Included changes | Stripe lookup key |
 |---|---|---|---|
-| `care-lite` | $50 / month | 1 | `care_lite_monthly_v1` |
-| `care-basic` | $100 / month | 5 | `care_basic_monthly_v1` |
-| `care-plus` | $200 / month | 15 | `care_plus_monthly_v1` |
-| `care-unlimited` | $300 / month | unlimited | `care_unlimited_monthly_v1` |
+| `lite` | $25 / month | 1 | `lite_monthly_v2` |
+| `care` | $50 / month | unlimited | `care_monthly_v2` |
+| `growth` | $100 / month | unlimited | `growth_monthly_v2` |
+| `pro` | $150 / month | unlimited | `pro_monthly_v2` |
 | `comp-unlimited` | — | unlimited | **none, deliberately** |
+
+**The retired v1 prices still work, read-only.** Subscribers on the old plans
+were moved up at the price they already pay (`0026_plans_2026_10.sql`): old
+Lite to Care, Basic to Growth, Plus and Unlimited to Pro. A subscription still
+billing at a v1 price is read as its new plan (`LEGACY_LOOKUP_KEYS` in
+`lib/payments/stripe.ts`), and nothing new is ever sold at one. Do not archive
+the v1 prices while anyone is still billed on them. A Plus or Unlimited
+subscriber now pays more than Pro's $150 — move them down from their client
+page when convenient.
+
+**Creating the v2 prices:** `npm run stripe:setup --workspace apps/platform`
+reports what is missing; add `-- --apply` to create it. Run it once with the
+sandbox key and once with the live key in `.env.stripe`.
 
 `comp-unlimited` has no price and must never be given one. A complimentary plan
 with a price attached is a plan a complimentary client can be put through
@@ -99,10 +114,10 @@ checkout on.
 **Lookup keys, not price ids.** A price id differs between the sandbox and the
 live account, so a hardcoded one makes the same commit wrong in one of the two
 environments. The lookup key is a string we choose and set identically in both.
-The `_v1` suffix exists because Stripe prices are immutable: changing a price
+The `_v1`/`_v2` suffix exists because Stripe prices are immutable: changing a price
 means creating a new one and moving the lookup key.
 
-Sandbox price ids as created (for reference only — nothing reads these):
+Sandbox v1 price ids as created (for reference only — nothing reads these):
 
 ```
 care_lite_monthly_v1       price_1UDVgj5dv299nvoxylcjjfb3   prod_VDxbITWj8y37Zq
@@ -237,7 +252,7 @@ to pay.
 | Paid so far | $250 build + $50 first retainer |
 | Stripe customer | none — the workbook's "Stripe Customer Email" cell is empty |
 
-**Decided: he goes on `care-lite`.** Operator's call, 2026-09-08. No bespoke
+**Decided: he goes on `care-lite`** (since 2026-10-06, `care` — same $50, unlimited changes). Operator's call, 2026-09-08. No bespoke
 `friends-family` plan or price is created.
 
 Worth knowing that $50 only *coincides* with the care-lite price. `client.json`

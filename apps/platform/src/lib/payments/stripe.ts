@@ -56,12 +56,33 @@ export const TEST_PLAN = {
 /** Every plan Stripe can sell: the published care plans, plus the test plan. */
 export type SellableKey = PlanKey | typeof TEST_PLAN.key;
 
+/**
+ * v2 since the 2026-10-06 plans. A Stripe price cannot change its amount, so
+ * a new price is a new lookup key; the v1 keys below were the old plans.
+ */
 const PRICE_LOOKUP_KEYS: Record<SellableKey, string> = {
-  "care-lite": "care_lite_monthly_v1",
-  "care-basic": "care_basic_monthly_v1",
-  "care-plus": "care_plus_monthly_v1",
-  "care-unlimited": "care_unlimited_monthly_v1",
+  lite: "lite_monthly_v2",
+  care: "care_monthly_v2",
+  growth: "growth_monthly_v2",
+  pro: "pro_monthly_v2",
   "test-plan": "test_plan_monthly_v1",
+};
+
+/**
+ * The retired prices, and the plan each subscriber on one now has.
+ *
+ * Read-only, on purpose: `planForLookupKey` resolves these so a subscription
+ * still billing at its original price is mirrored onto the plan its client was
+ * moved to (`0026_plans_2026_10.sql`), but `lookupKeyForPlan` never returns
+ * one, so nothing new can be sold at a retired price. The subscription keeps
+ * paying what it always paid — Stripe's price is the amount, and the portal
+ * records it as `monthly_price_cents` rather than the plan's list price.
+ */
+const LEGACY_LOOKUP_KEYS: Record<string, SellableKey> = {
+  care_lite_monthly_v1: "care",
+  care_basic_monthly_v1: "growth",
+  care_plus_monthly_v1: "pro",
+  care_unlimited_monthly_v1: "pro",
 };
 
 export function lookupKeyForPlan(key: SellableKey): string | null {
@@ -73,12 +94,12 @@ export function planForLookupKey(lookupKey: string): SellableKey | null {
   const found = Object.entries(PRICE_LOOKUP_KEYS).find(
     ([, value]) => value === lookupKey,
   );
-  return (found?.[0] as SellableKey | undefined) ?? null;
+  return (found?.[0] as SellableKey | undefined) ?? LEGACY_LOOKUP_KEYS[lookupKey] ?? null;
 }
 
 /** Every lookup key this build knows about, for the reconciliation job. */
 export function allLookupKeys(): string[] {
-  return Object.values(PRICE_LOOKUP_KEYS);
+  return [...Object.values(PRICE_LOOKUP_KEYS), ...Object.keys(LEGACY_LOOKUP_KEYS)];
 }
 
 /**

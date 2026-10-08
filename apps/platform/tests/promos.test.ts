@@ -72,7 +72,7 @@ vi.mock("@/lib/payments/stripe", async () => {
   );
   return {
     ...actual,
-    priceForPlan: async () => ({ id: "price_basic", lookup_key: "care_basic_monthly_v1", unit_amount: 10000 }),
+    priceForPlan: async () => ({ id: "price_basic", lookup_key: "care_monthly_v2", unit_amount: 10000 }),
     requireStripe: () =>
       ({
         customers: {
@@ -167,7 +167,7 @@ async function seedTenant(name: string): Promise<Tenant> {
 }
 
 async function putOnStripe(clientId: string) {
-  const plan = (await db.select().from(servicePlans).where(eq(servicePlans.key, "care-basic")))[0]!;
+  const plan = (await db.select().from(servicePlans).where(eq(servicePlans.key, "care")))[0]!;
   await db.insert(subscriptions).values({
     publicId: newPublicId(),
     clientId,
@@ -185,7 +185,7 @@ const URLS = {
   cancelUrl: "https://portal.test/dashboard/billing?checkout=cancelled",
 };
 
-const checkout = () => beginStripeCheckout(db, acme.ctx, { ...URLS, planKey: "care-basic" });
+const checkout = () => beginStripeCheckout(db, acme.ctx, { ...URLS, planKey: "care" });
 
 beforeAll(async () => {
   const harness = await createTestDb();

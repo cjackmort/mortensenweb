@@ -6,38 +6,46 @@ import {
   OVERAGE_CENTS,
   dollars,
   CHEAPEST_PLAN,
-  BUILD_PRICE_CENTS,
-  BUILD_WITH_CARE_CENTS,
-  BUILD_DISCOUNT_CENTS,
-  BUILD_COMMITMENT_MONTHS,
+  BUILDS,
+  CHEAPEST_BUILD,
+  GROWTH_FEATURES,
+  type GrowthFeatureKey,
+  type Plan,
 } from "@mortensenweb/plans";
 
 const faq = [
   ["What counts as a change?", "One request in the portal — a new photo, a price, a paragraph, a seasonal notice. If a request is really several unrelated things, we will say so and count it fairly rather than surprise you."],
-  ["What if I need more than my plan includes?", `Any change beyond the allowance is a flat ${dollars(OVERAGE_CENTS)}, on every plan. If that keeps happening, the next plan up is usually cheaper — and you can move at any time.`],
-  // Both answers below changed on 2026-09-05. The discounted build introduced
-  // the first commitment this business has ever asked for, and the old copy
-  // ("no minimum term", "the build is quoted") now reads as a contradiction of
-  // the price above it.
-  ["Is there a minimum term?", `Only if you take the discounted build. ${dollars(BUILD_WITH_CARE_CENTS)} assumes you stay on a care plan for ${BUILD_COMMITMENT_MONTHS} months; leave before then and we invoice the unused part of the ${dollars(BUILD_DISCOUNT_CENTS)} pro-rata, and nothing else. Pay ${dollars(BUILD_PRICE_CENTS)} for the build and there is no commitment at all. After the first year every plan is month to month.`],
-  ["What does the build cost?", `${dollars(BUILD_PRICE_CENTS)} on its own, or ${dollars(BUILD_WITH_CARE_CENTS)} if you start a care plan with it — the same site either way, up to five pages. Anything unusual we quote before you commit, and the build is invoiced half to start and half at launch.`],
-  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising and social media are outside what we do, and an online store is something we connect rather than host — see Services."],
+  ["What does unlimited mean?", `Care, Growth and Pro have no monthly limit on changes. We work on one request at a time, so ask for the next whenever the last one is live. On Lite, a change beyond the one included is a flat ${dollars(OVERAGE_CENTS)}.`],
+  // Both answers below changed on 2026-10-06, when the build stopped being one
+  // price with a discount behind a twelve-month commitment and became three
+  // standalone prices. Left as they were they would have quoted a commitment
+  // that no longer exists.
+  ["Is there a minimum term?", "No. Every plan is month to month, and the build has no strings attached — you can take a plan, change plans or stop whenever you like. The domain and the site stay yours."],
+  ["What does the build cost?", `It depends on where the business is: ${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name.toLowerCase()}`).join(", ")}. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost. Anything unusual we quote before you commit.`],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising is outside what we do, and an online store is something we connect rather than host — see Services."],
 ];
+
+/** Whether a plan includes a Growth feature, for the comparison table. */
+const has = (p: Plan, key: GrowthFeatureKey) => {
+  if (!p.growthFeatures.includes(key)) return "—";
+  return GROWTH_FEATURES.find((f) => f.key === key)!.available ? "✓" : "Soon";
+};
 
 /** Rows of the comparison table, so the markup below stays one loop per plan. */
 const columns = [
-  { head: "Per month", cell: (p: (typeof PLANS)[number]) => dollars(p.monthlyCents), money: true },
-  { head: "Changes / month", cell: (p: (typeof PLANS)[number]) => String(p.includedChangesPerMonth ?? "Unlimited"), money: false },
-  { head: "Extra change", cell: (p: (typeof PLANS)[number]) => (p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"), money: false },
-  { head: "Hosting · SSL · security", cell: () => "✓", money: false },
-  { head: "Analytics", cell: (p: (typeof PLANS)[number]) => (p.includesAnalytics ? "✓" : "—"), money: false },
-  { head: "Preview before live", cell: () => "✓", money: false },
+  { head: "Per month", cell: (p: Plan) => dollars(p.monthlyCents), money: true },
+  { head: "Changes / month", cell: (p: Plan) => String(p.includedChangesPerMonth ?? "Unlimited"), money: false },
+  { head: "Extra change", cell: (p: Plan) => (p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"), money: false },
+  { head: "Hosting · SSL · analytics", cell: () => "✓", money: false },
+  { head: "Leads inbox", cell: (p: Plan) => has(p, "leads"), money: false },
+  { head: "Reviews · QR campaigns", cell: (p: Plan) => has(p, "reviews"), money: false },
+  { head: "Google profile · showcase · win-back", cell: (p: Plan) => has(p, "google-profile"), money: false },
 ];
 ---
 
 <Base
   title="Pricing"
-  description={`${dollars(BUILD_PRICE_CENTS)} for the site, or ${dollars(BUILD_WITH_CARE_CENTS)} with a care plan. Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month — hosting, SSL, security updates, analytics, and an allowance of content changes at a flat ${dollars(OVERAGE_CENTS)} each beyond it.`}
+  description={`Websites from ${dollars(CHEAPEST_BUILD.priceCents)}, priced by where your business is. Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month: hosting, security, analytics and changes, with unlimited changes and Growth tools from ${dollars(PLANS[1]!.monthlyCents)}.`}
   path="/pricing/"
   schema={[
     {
@@ -51,66 +59,34 @@ const columns = [
       <div class="section-head">
         <div><p class="eyebrow">01 · The build</p></div>
         <div>
-          <h1 style="font-size: var(--text-2xl)">Two ways to pay for the site.</h1>
+          <h1 style="font-size: var(--text-2xl)">Priced by where your business is.</h1>
           <p class="lede" style="margin-top: 1rem">
-            Same site either way — up to five pages, your words and
-            photographs, mobile first, launched on your domain. The difference
-            is whether you commit to a care plan.
+            A business just starting out needs less than one with years of
+            customers and search rankings to protect. Every build is mobile
+            first, written with you, and launched on your domain — and none of
+            them requires a plan.
           </p>
         </div>
       </div>
 
-      <div class="builds">
-        <div class="build">
-          <p class="eyebrow">Just the site</p>
-          <p class="build__price">{dollars(BUILD_PRICE_CENTS)}<small>one-time</small></p>
-          <p class="build__fine">For a business that wants the site and nothing ongoing.</p>
-          <ul class="build__list">
-            <li>The finished site, launched on your domain</li>
-            <li>Up to five pages, written with you</li>
-            <li>Two rounds of revisions before launch</li>
-            <li>30 days of fixes after launch</li>
-            <li>Hosting set up on your own Netlify account — yours to keep</li>
-            <li>No portal, no analytics, no monthly cost</li>
-          </ul>
-          <p class="build__fine">
-            Want changes later? Join any care plan at any time and the portal
-            switches on.
-          </p>
-        </div>
-
-        <div class="build build--featured">
-          <span class="build__badge">Most chosen</span>
-          <p class="eyebrow">Site + Care</p>
-          <p class="build__price">
-            <s>{dollars(BUILD_PRICE_CENTS)}</s>{dollars(BUILD_WITH_CARE_CENTS)}<small>one-time</small>
-          </p>
-          <p class="build__fine">
-            {dollars(BUILD_DISCOUNT_CENTS)} off the build when you stay on a care
-            plan for the first {BUILD_COMMITMENT_MONTHS} months. Any plan
-            qualifies, {CHEAPEST_PLAN.short} included.
-          </p>
-          <ul class="build__list">
-            <li>Everything in “Just the site”</li>
-            <li>Portal and visitor analytics from launch day</li>
-            <li>Your monthly change allowance starts at launch</li>
-            <li>Hosting, SSL, security updates handled by us</li>
-            <li>Cancel early and the unused part of the {dollars(BUILD_DISCOUNT_CENTS)} is invoiced pro-rata — nothing else</li>
-          </ul>
-          <p class="build__fine">
-            After {BUILD_COMMITMENT_MONTHS} months the plan is month-to-month.
-            Stop whenever you like; the domain and the site stay yours.
-          </p>
-        </div>
+      <div class="builds builds--three">
+        {BUILDS.map((build, index) => (
+          <div class:list={["build", { "build--featured": index === 1 }]}>
+            <p class="eyebrow">{build.name}</p>
+            <p class="build__price">{dollars(build.priceCents)}<small>one-time</small></p>
+            <p class="build__fine">{build.who}</p>
+            <ul class="build__list">
+              {build.includes.map((line) => <li>{line}</li>)}
+            </ul>
+          </div>
+        ))}
       </div>
 
       <p class="build__note">
-        Why the discount is this size: over a year, the cheapest plan
-        ({dollars(CHEAPEST_PLAN.monthlyCents)} × {BUILD_COMMITMENT_MONTHS} = {dollars(CHEAPEST_PLAN.monthlyCents * BUILD_COMMITMENT_MONTHS)})
-        plus {dollars(BUILD_WITH_CARE_CENTS)} lands within
-        {" "}{dollars(BUILD_PRICE_CENTS - (CHEAPEST_PLAN.monthlyCents * BUILD_COMMITMENT_MONTHS + BUILD_WITH_CARE_CENTS))} of
-        the full build price — so a client who stays pays about the same, spread
-        over the year, and gets hosting, analytics and twelve changes for it.
+        No plan? The site is still yours: we hand it over at launch on your own
+        hosting account, with no monthly cost. Want changes later? Start any
+        plan and the portal switches on. The build is invoiced half to start
+        and half at launch.
       </p>
     </div>
   </section>
@@ -120,11 +96,11 @@ const columns = [
       <div class="section-head reveal">
         <div><p class="eyebrow">02 · Care plans</p></div>
         <div>
-          <h2>Monthly. No minimum term after the first year.</h2>
+          <h2>Monthly, with no minimum term.</h2>
           <p class="lede" style="margin-top: 1rem">
             Every plan includes hosting, SSL, security updates and visitor
-            analytics. They differ in how many changes are included each
-            month. A change beyond that is a flat {dollars(OVERAGE_CENTS)}.
+            analytics. Lite includes one change a month; from Care up, changes
+            are unlimited and the plans add tools that bring in customers.
           </p>
         </div>
       </div>
@@ -148,10 +124,10 @@ const columns = [
         class="table-wrap reveal"
         tabindex="0"
         role="region"
-        aria-label="Care plan comparison table, scrolls sideways"
+        aria-label="Plan comparison table, scrolls sideways"
       >
         <table class="compare">
-          <caption class="sr-only">Care plan comparison by monthly price, included changes, and extras.</caption>
+          <caption class="sr-only">Plan comparison by monthly price, included changes, and Growth tools. Soon means the tool is being built and is included when it arrives.</caption>
           <thead>
             <tr>
               <th scope="col">Plan</th>
