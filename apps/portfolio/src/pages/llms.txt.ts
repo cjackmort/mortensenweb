@@ -21,7 +21,7 @@ export const GET: APIRoute = () =>
       `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request, a leads inbox and Growth tools — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; paid advertising and posting to social media are not included`,
       `- [Growth](${SITE.url}/growth/): Growth tools that bring a small business more customers — what each does, which plan includes it, and its price on its own`,
       `- [Pricing](${SITE.url}/pricing/): the three build prices, the plans and a comparison table`,
-      `- [About](${SITE.url}/about/): who runs Mortensen Web Co., where, and how the work is done`,
+      `- [About](${SITE.url}/about/): ${SITE.founder}, the founder — a mechanical engineering senior at the University of Utah focused on aerospace and defense`,
       `- [Contact](${SITE.url}/contact/): enquiry form and phone; every enquiry is answered, usually the same working day`,
       "",
       "## The build (US dollars, one-time, no plan required)",
