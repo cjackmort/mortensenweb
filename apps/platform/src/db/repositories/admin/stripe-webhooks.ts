@@ -1,8 +1,9 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import {
   auditLog,
+  clientAddOns,
   clients,
   payments,
   servicePlans,
@@ -12,10 +13,12 @@ import {
 import { newPublicId } from "@/lib/ids";
 import { businessDate } from "@/lib/billing/period";
 import {
+  addOnItemsOf,
   collectedCents,
   HANDLED_STRIPE_EVENTS,
   modeMatches,
   planForLookupKey,
+  planItemOf,
   portalStatusFor,
   requireStripe,
   subscriptionIdFromInvoice,
@@ -291,7 +294,7 @@ export async function mirrorSubscription(
 
   if (compRows[0]?.compPlanId) return "skipped_comp";
 
-  const item = subscription.items.data[0];
+  const item = planItemOf(subscription);
   const lookupKey = item?.price?.lookup_key ?? null;
   const planKey = lookupKey ? planForLookupKey(lookupKey) : null;
 
@@ -329,7 +332,7 @@ export async function mirrorSubscription(
     status,
     planId,
     monthlyPriceCents: priceCents,
-    currency: (subscription.items.data[0]?.price?.currency ?? "usd").toUpperCase(),
+    currency: (item?.price?.currency ?? "usd").toUpperCase(),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     currentPeriodEnd: periodEndSeconds ? new Date(periodEndSeconds * 1000) : null,
     recurringEnabledAt: now,
@@ -377,6 +380,8 @@ export async function mirrorSubscription(
       stripeMonthlyCents: discount?.discountedPriceCents ?? priceCents,
     });
   }
+
+  await syncStripeAddOns(db, clientId, subscription);
 
   await db.insert(auditLog).values({
     organizationId,
@@ -839,4 +844,59 @@ export async function processStripeEvent(
       );
     throw error;
   }
+}
+
+/**
+ * Mirror the subscription's add-on lines into `client_add_ons`.
+ *
+ * Stripe is the record for an add-on bought by card: a line present on a live
+ * subscription is an add-on the client has, and a line that has gone — or a
+ * subscription that has ended — is one they no longer have. Rows the operator
+ * granted by hand are left alone; this only manages its own.
+ */
+export async function syncStripeAddOns(
+  db: Database,
+  clientId: string,
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const live = ["active", "trialing", "past_due"].includes(subscription.status);
+  const present = live ? addOnItemsOf(subscription) : [];
+  const now = new Date();
+
+  for (const { item, feature } of present) {
+    const [existing] = await db
+      .select({ id: clientAddOns.id, source: clientAddOns.source, item: clientAddOns.stripeSubscriptionItemId })
+      .from(clientAddOns)
+      .where(and(eq(clientAddOns.clientId, clientId), eq(clientAddOns.featureKey, feature), isNull(clientAddOns.endedAt)))
+      .limit(1);
+    if (existing) {
+      if (existing.source === "stripe" && existing.item !== item.id) {
+        await db.update(clientAddOns).set({ stripeSubscriptionItemId: item.id, updatedAt: now }).where(eq(clientAddOns.id, existing.id));
+      }
+      continue;
+    }
+    await db
+      .insert(clientAddOns)
+      .values({
+        clientId,
+        featureKey: feature,
+        source: "stripe",
+        stripeSubscriptionItemId: item.id,
+        monthlyPriceCents: item.price?.unit_amount ?? null,
+      })
+      .onConflictDoNothing();
+  }
+
+  const keep = present.map(({ item }) => item.id);
+  await db
+    .update(clientAddOns)
+    .set({ endedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(clientAddOns.clientId, clientId),
+        eq(clientAddOns.source, "stripe"),
+        isNull(clientAddOns.endedAt),
+        ...(keep.length ? [notInArray(clientAddOns.stripeSubscriptionItemId, keep)] : []),
+      ),
+    );
 }

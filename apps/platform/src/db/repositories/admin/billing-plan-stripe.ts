@@ -5,6 +5,7 @@ import { subscriptions } from "@/db/schema";
 import { shiftedAnchor } from "@/lib/billing/billing-day";
 import {
   planForLookupKey,
+  planItemOf,
   priceForPlan,
   requireStripe,
   stripeConfigured,
@@ -89,7 +90,7 @@ async function updateLiveSubscription(
 ): Promise<{ planChanged: boolean; said: string[]; updated: Stripe.Subscription | null }> {
   const stripe = requireStripe();
   const live = await stripe.subscriptions.retrieve(subscriptionId);
-  const item = live.items.data[0];
+  const item = planItemOf(live);
   if (!item) throw new RefusedChange("Their Stripe subscription has no plan on it. Check it in Stripe.");
 
   const params: Stripe.SubscriptionUpdateParams = { proration_behavior: "none" };

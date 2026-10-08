@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -11,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations, users } from "./identity";
 import { sites } from "./sites";
+import { clients } from "./clients";
 import { leadStatusEnum } from "./enums";
 
 /**
@@ -138,5 +140,45 @@ export const leadReplies = pgTable(
       "lead_replies_status_known",
       sql`${t.status} IN ('sent', 'failed', 'not_sent')`,
     ),
+  ],
+);
+
+/**
+ * A Growth feature a client has on top of their plan.
+ *
+ * Two sources, kept apart because they end differently: `stripe` is a line
+ * on their subscription, mirrored from Stripe and ended by removing that line;
+ * `operator` is one granted by hand — a hand-billed client, a favour — and
+ * ended by the operator. What a client's *plan* includes is not stored here at
+ * all: that comes from `@mortensenweb/plans`, so changing a plan cannot leave
+ * stale rows behind.
+ *
+ * Ended rows are kept (`ended_at`) as the history of what was bought when.
+ * At most one live row per client and feature, enforced by a partial index.
+ */
+export const clientAddOns = pgTable(
+  "client_add_ons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** A `GrowthFeatureKey` from `@mortensenweb/plans`. */
+    featureKey: text("feature_key").notNull(),
+    source: text("source").notNull(),
+    stripeSubscriptionItemId: text("stripe_subscription_item_id"),
+    /** What it costs them each month, as charged; null for an operator grant. */
+    monthlyPriceCents: integer("monthly_price_cents"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("client_add_ons_live_key")
+      .on(t.clientId, t.featureKey)
+      .where(sql`${t.endedAt} IS NULL`),
+    index("client_add_ons_stripe_item_idx").on(t.stripeSubscriptionItemId),
+    check("client_add_ons_source_known", sql`${t.source} IN ('stripe', 'operator')`),
   ],
 );

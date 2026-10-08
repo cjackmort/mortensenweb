@@ -7,6 +7,7 @@ import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { deleteLead, isLeadStatus, setLeadStatus } from "@/db/repositories/client/leads";
 import { sendLeadReply } from "@/db/repositories/client/lead-replies";
+import { requireGrowthFeature } from "@/db/repositories/client/growth";
 
 /**
  * Lead mutations. Both re-derive the tenant from the session: a server action
@@ -85,6 +86,12 @@ export async function sendLeadReplyAction(
 
   const publicId = String(formData.get("lead") ?? "");
   const body = String(formData.get("body") ?? "");
+
+  // The page is gated, and so is the one action here that reaches the
+  // outside world: a reply is an email sent in the business's name.
+  if (!(await requireGrowthFeature(session.db, session.ctx, "leads"))) {
+    return { ok: false, message: "Your plan does not include the leads inbox. See Growth to add it." };
+  }
 
   let result;
   try {

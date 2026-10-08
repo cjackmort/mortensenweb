@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import {
   collectedCents,
+  planItemOf,
   portalStatusFor,
   requireStripe,
   stripeConfigured,
@@ -97,7 +98,7 @@ const LIVE_STATUSES: ReadonlySet<string> = new Set([
 ]);
 
 function compBilled(clientId: string, sub: Stripe.Subscription): ReconcileFinding {
-  const price = sub.items.data[0]?.price;
+  const price = planItemOf(sub)?.price;
   const amount = price?.unit_amount
     ? `${formatCurrency(price.unit_amount, (price.currency ?? "usd").toUpperCase())} a month`
     : "every period";
@@ -231,7 +232,7 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
         continue;
       }
 
-      const item = sub.items.data[0];
+      const item = planItemOf(sub);
       const periodEndSeconds =
         (item as unknown as { current_period_end?: number })
           ?.current_period_end ??

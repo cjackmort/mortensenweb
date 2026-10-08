@@ -6,6 +6,8 @@ import { ConfirmReceivedForm, RaiseRequestForm } from "./billing-forms";
 import { PaymentLinkForm, PlanForm } from "./billing-plan-forms";
 import { CompPanel, type CompPlanOption } from "./comp-forms";
 import { PromoForm, type PromoChoice } from "./promo-forms";
+import { GrowthAddOnButton } from "./growth-forms";
+import type { ClientGrowthView } from "@/db/repositories/admin/growth";
 import { discountApplies } from "@/lib/payments/promos";
 
 const INVOICE_PILL: Record<string, string> = {
@@ -53,6 +55,7 @@ export function BillingSection({
   comp,
   promos,
   savedPromo,
+  growth,
 }: {
   clientPublicId: string;
   plan: BillingPlanView | null;
@@ -66,6 +69,7 @@ export function BillingSection({
   promos: PromoChoice[];
   /** The promo saved for their checkout, as "CODE: terms". */
   savedPromo: string | null;
+  growth: ClientGrowthView;
 }) {
   const onStripe = plan?.provider === "stripe";
 
@@ -88,6 +92,60 @@ export function BillingSection({
             onStripe={onStripe}
           />
         )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Growth tools</h2>
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          What their plan includes, plus add-ons. Grant one by hand for a client you invoice yourself; one
+          bought by card is managed by Stripe and the client&rsquo;s Plan tab.
+        </p>
+        <div className="table-wrap">
+          <table className="stack">
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Has it</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {growth.access.map((a) => {
+                const operatorGrant = growth.addOns.some(
+                  (row) => row.featureKey === a.feature.key && row.source === "operator",
+                );
+                return (
+                  <tr key={a.feature.key}>
+                    <td data-label="Tool">
+                      {a.feature.name}
+                      {!a.feature.available && <span className="muted"> · coming soon</span>}
+                    </td>
+                    <td data-label="Has it">
+                      {a.via === "comp"
+                        ? "Yes — complimentary"
+                        : a.via === "plan"
+                          ? "Yes — in their plan"
+                          : a.via === "add-on"
+                            ? operatorGrant
+                              ? "Yes — granted by you"
+                              : "Yes — add-on by card"
+                            : "No"}
+                    </td>
+                    <td data-label="">
+                      {a.via === null ? (
+                        <GrowthAddOnButton clientPublicId={clientPublicId} feature={a.feature.key} grant label="Grant" />
+                      ) : operatorGrant ? (
+                        <GrowthAddOnButton clientPublicId={clientPublicId} feature={a.feature.key} grant={false} label="Remove" />
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {cardPayments && !onStripe && plan?.provider !== "square" && (

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
+import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { isLeadView, listLeads, type LeadView } from "@/db/repositories/client/leads";
 import { formatDateTime } from "@/lib/time";
 import { LeadStatusPill } from "./status-pill";
@@ -62,6 +63,9 @@ export default async function LeadsPage({
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
+  // Not in their plan: the Growth tab explains how to get it, and says how
+  // many enquiries are already waiting — they are kept either way.
+  if (!(await requireGrowthFeature(db, ctx, "leads"))) redirect("/dashboard/growth?locked=leads#leads");
   const { leads, hasMore } = await listLeads(db, ctx, { view, page });
 
   const href = (v: LeadView, p = 1) =>

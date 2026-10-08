@@ -25,6 +25,27 @@ billing change and waits until the add-on exists to sell. A locked feature is
 shown on the Growth tab with one line on what it does and a "Ask about Growth"
 button, never as a dead link.
 
+## Access, add-ons and the Plan tab — built
+
+Which features a client has is decided in one place, `lib/growth/access.ts`:
+a comp gets everything; otherwise their plan (from `@mortensenweb/plans`,
+never stored per client) plus any `client_add_ons` rows. Add-ons are either
+lines on the client's Stripe subscription (`addon_<feature>_monthly_v1`,
+mirrored by the webhook) or granted by the operator from the client's Billing
+section. Only built features (`available: true`) are ever sold.
+
+- **Growth tab** (`/dashboard/growth`): every feature; owned ones open,
+  others show a blurred preview with "Add for $X/month" (card payers) and
+  "Get it with <plan>". A locked inbox shows how many enquiries are waiting.
+- **Plan tab** (`/dashboard/plan`): current plan and what it includes,
+  switch plan, add or remove add-ons, cancel at period end and undo. All
+  priced from the next payment. Self-serve only for card payers; invoiced
+  clients are pointed at a request.
+- **Leads inbox** is gated: Care and above, or the $15 add-on.
+
+When a feature ships: build it, set `available: true`, run `stripe:setup
+--apply` (sandbox and live) to create its add-on price.
+
 ## The order, and why
 
 1. **Leads inbox** — the client asked for it, and every later feature reports

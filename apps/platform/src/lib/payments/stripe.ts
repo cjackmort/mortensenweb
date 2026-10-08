@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { PLANS, type PlanKey } from "@mortensenweb/plans";
+import { GROWTH_FEATURES, PLANS, type GrowthFeatureKey, type PlanKey } from "@mortensenweb/plans";
 
 /**
  * The Stripe client, and the one place that decides which price a plan buys.
@@ -95,6 +95,66 @@ export function planForLookupKey(lookupKey: string): SellableKey | null {
     ([, value]) => value === lookupKey,
   );
   return (found?.[0] as SellableKey | undefined) ?? LEGACY_LOOKUP_KEYS[lookupKey] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Growth add-ons
+// ---------------------------------------------------------------------------
+
+/**
+ * A Growth feature bought on its own, as a second line on the client's
+ * existing subscription: `addon_<feature>_monthly_v1`. Same lookup-key rule as
+ * the plans, and the same price as `addOnCents` in `@mortensenweb/plans`.
+ */
+export function lookupKeyForAddOn(feature: GrowthFeatureKey): string {
+  return `addon_${feature.replace(/-/g, "_")}_monthly_v1`;
+}
+
+export function addOnForLookupKey(lookupKey: string): GrowthFeatureKey | null {
+  return GROWTH_FEATURES.find((f) => lookupKeyForAddOn(f.key) === lookupKey)?.key ?? null;
+}
+
+/** The add-ons Stripe can sell: only features that exist. */
+export function sellableAddOns(): Array<{ key: GrowthFeatureKey; name: string; monthlyCents: number }> {
+  return GROWTH_FEATURES.filter((f) => f.available).map((f) => ({
+    key: f.key,
+    name: `${f.name} (add-on)`,
+    monthlyCents: f.addOnCents,
+  }));
+}
+
+/**
+ * The line on a subscription that is the plan.
+ *
+ * Every reader used to take `items.data[0]`, which held while a subscription
+ * had one line. With add-ons it can have several, in no promised order, and
+ * reading an add-on as the plan would mirror a $15 "plan" nobody chose. The
+ * plan is the line whose price is a plan; the first line is only the fallback
+ * for a subscription whose price predates lookup keys altogether.
+ */
+export function planItemOf(subscription: Stripe.Subscription): Stripe.SubscriptionItem | undefined {
+  const items = subscription.items?.data ?? [];
+  return (
+    items.find((i) => i.price?.lookup_key && planForLookupKey(i.price.lookup_key)) ??
+    items.find((i) => !(i.price?.lookup_key && addOnForLookupKey(i.price.lookup_key))) ??
+    items[0]
+  );
+}
+
+/** The add-on lines on a subscription, with the feature each one buys. */
+export function addOnItemsOf(
+  subscription: Stripe.Subscription,
+): Array<{ item: Stripe.SubscriptionItem; feature: GrowthFeatureKey }> {
+  return (subscription.items?.data ?? []).flatMap((item) => {
+    const feature = item.price?.lookup_key ? addOnForLookupKey(item.price.lookup_key) : null;
+    return feature ? [{ item, feature }] : [];
+  });
+}
+
+export async function priceForAddOn(feature: GrowthFeatureKey): Promise<Stripe.Price | null> {
+  const stripe = requireStripe();
+  const found = await stripe.prices.list({ lookup_keys: [lookupKeyForAddOn(feature)], active: true, limit: 1 });
+  return found.data[0] ?? null;
 }
 
 /** Every lookup key this build knows about, for the reconciliation job. */
