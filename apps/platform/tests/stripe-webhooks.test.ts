@@ -75,7 +75,7 @@ vi.mock("@/lib/payments/stripe", async () => {
 const { processStripeEvent } = await import(
   "@/db/repositories/admin/stripe-webhooks"
 );
-const { runScheduledReconcile } = await import(
+const { runScheduledReconcile, stripeSyncStatus } = await import(
   "@/db/repositories/admin/stripe-reconcile"
 );
 
@@ -1017,5 +1017,22 @@ describe("the hand-raised invoice Stripe now charges for", () => {
     await processStripeEvent(db, event("customer.subscription.created", subscriptionObject()));
 
     expect(await statusOf(open.id)).toBe("open");
+  });
+});
+
+describe("the sync status on the payments page", () => {
+  it("counts a recovered payment until a webhook is next delivered", async () => {
+    stripeState.paidInvoices = [invoiceObject()];
+    await runScheduledReconcile(db);
+    expect((await stripeSyncStatus(db)).recoveredRecently).toBe(1);
+
+    // Stripe getting a 2xx again is proof the webhook path works.
+    await processStripeEvent(db, event("invoice.paid", invoiceObject({ id: "in_test_2" })));
+    expect((await stripeSyncStatus(db)).recoveredRecently).toBe(0);
+  });
+
+  it("reports no run yet as no run, not as healthy", async () => {
+    const status = await stripeSyncStatus(db);
+    expect(status.lastRunAt).toBeNull();
   });
 });
