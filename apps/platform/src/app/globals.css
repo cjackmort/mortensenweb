@@ -3935,3 +3935,177 @@ form + .field-hint {
 .lead-reply-hint {
   margin-top: 0.5rem;
 }
+
+/* ------------------------------------------------------- growth & plan */
+
+.notice-warning {
+  border-left-color: var(--warning);
+  background: var(--warning-wash);
+}
+
+.growth-heading {
+  margin: 2rem 0 1rem;
+  font: 500 0.72rem / 1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.growth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: var(--stack);
+}
+
+.growth-grid > .card {
+  margin-bottom: 0;
+}
+
+.growth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.growth-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.growth-card p {
+  margin: 0 0 0.75rem;
+}
+
+.growth-benefit {
+  font-weight: 600;
+}
+
+.growth-soon {
+  margin-top: auto;
+  font-size: 0.9rem;
+}
+
+.growth-actions {
+  margin-top: auto;
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+
+.growth-saving {
+  margin: 0;
+}
+
+/* A locked card leads with a blurred suggestion of the tool. Decorative
+   bars, not a screenshot: there is nothing behind the blur to un-blur. */
+.growth-preview {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  filter: blur(2.5px);
+  user-select: none;
+}
+
+.growth-preview span {
+  display: block;
+  height: 0.7rem;
+  background: var(--border-strong);
+}
+
+.growth-preview span:nth-child(1) { width: 70%; }
+.growth-preview span:nth-child(2) { width: 90%; }
+.growth-preview span:nth-child(3) { width: 45%; background: var(--accent-fill); opacity: 0.6; }
+
+.plan-action {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.plan-action .notice,
+.plan-action .error {
+  margin: 0;
+}
+
+.plan-price {
+  font: 400 clamp(2rem, 1.6rem + 1.2vw, 2.6rem) / 1 var(--display);
+  margin: 0 0 0.75rem;
+}
+
+.plan-price small {
+  font: 400 1rem / 1 var(--sans);
+  color: var(--muted);
+}
+
+.plan-cancelling p {
+  margin: 0 0 0.75rem;
+}
+
+.plan-includes {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+}
+
+.plan-addons {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.plan-addons li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.plan-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.plan-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.plan-option--current {
+  border-color: var(--accent-fill);
+  box-shadow: inset 0 0 0 1px var(--accent-fill);
+}
+
+.plan-option p {
+  margin: 0;
+}
+
+.plan-option-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.plan-option-price {
+  font: 400 1.6rem / 1 var(--display);
+}
+
+.plan-option-price small {
+  font: 400 0.85rem / 1 var(--sans);
+  color: var(--muted);
+}
+
+.plan-option-desc {
+  color: var(--muted);
+  font-size: 0.92rem;
+  flex: 1;
+}

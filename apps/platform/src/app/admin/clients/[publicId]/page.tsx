@@ -33,6 +33,7 @@ import { isOpen } from "@/lib/requests/status";
 import { ActivateForm, ReissueForm } from "./credential-forms";
 import { ProfilePanel } from "./profile-forms";
 import { BillingSection } from "./billing-section";
+import { getClientGrowth } from "@/db/repositories/admin/growth";
 import { WebsiteSection } from "./website-section";
 import { AnalyticsSection } from "./analytics-section";
 import { BriefsSection, RequestsSection } from "./work-sections";
@@ -348,12 +349,13 @@ async function Billing(props: {
 }) {
   const db = await getDb();
   const cardPayments = stripeConfigured();
-  const [plans, compPlans, comp, promos, savedPromo] = await Promise.all([
+  const [plans, compPlans, comp, promos, savedPromo, growth] = await Promise.all([
     listAssignablePlans(db),
     listActivePlans(db),
     getClientComp(props.ctx, db, props.clientPublicId),
     cardPayments ? listPromoOptions() : Promise.resolve([]),
     getClientPromo(props.ctx, db, props.clientPublicId),
+    getClientGrowth(props.ctx, db, props.clientPublicId),
   ]);
 
   // Today's date as the suggestion, so a client set up today pays today.
@@ -383,6 +385,7 @@ async function Billing(props: {
         firstTimeOnly: promo.firstTimeOnly,
       }))}
       savedPromo={savedPromo?.promoCode ? `${savedPromo.promoCode}: ${savedPromo.promoTerms ?? ""}` : null}
+      growth={growth}
     />
   );
 }

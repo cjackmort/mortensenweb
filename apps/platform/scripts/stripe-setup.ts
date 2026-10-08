@@ -24,8 +24,10 @@
 import { PLANS } from "@mortensenweb/plans";
 import {
   HANDLED_STRIPE_EVENTS,
+  lookupKeyForAddOn,
   lookupKeyForPlan,
   modeFromKey,
+  sellableAddOns,
   requireStripe,
   STRIPE_API_VERSION,
   TEST_PLAN,
@@ -49,14 +51,25 @@ async function ensurePrices(): Promise<void> {
   const stripe = requireStripe();
   console.log("\nPrices");
 
-  // The published plans, plus the operator-only $1 test plan.
-  const sellable: Array<{ key: SellableKey; name: string; monthlyCents: number }> = [
-    ...PLANS,
-    TEST_PLAN,
+  // The published plans, the operator-only $1 test plan, and a price for
+  // each Growth add-on that is built — an unbuilt one is never sold.
+  const sellable: Array<{ lookupKey: string; name: string; monthlyCents: number; metadata: Record<string, string> }> = [
+    ...[...PLANS, TEST_PLAN].map((p) => ({
+      lookupKey: lookupKeyForPlan(p.key as SellableKey)!,
+      name: p.name,
+      monthlyCents: p.monthlyCents,
+      metadata: { plan_key: p.key },
+    })),
+    ...sellableAddOns().map((a) => ({
+      lookupKey: lookupKeyForAddOn(a.key),
+      name: a.name,
+      monthlyCents: a.monthlyCents,
+      metadata: { growth_feature: a.key },
+    })),
   ];
 
   for (const plan of sellable) {
-    const lookupKey = lookupKeyForPlan(plan.key)!;
+    const lookupKey = plan.lookupKey;
     const found = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
     const price = found.data[0];
 
@@ -89,8 +102,8 @@ async function ensurePrices(): Promise<void> {
         recurring: { interval: "month" },
         lookup_key: lookupKey,
         nickname: plan.name,
-        product_data: { name: plan.name, metadata: { plan_key: plan.key } },
-        metadata: { plan_key: plan.key },
+        product_data: { name: plan.name, metadata: plan.metadata },
+        metadata: plan.metadata,
       },
       { idempotencyKey: `stripe-setup:price:${lookupKey}` },
     );

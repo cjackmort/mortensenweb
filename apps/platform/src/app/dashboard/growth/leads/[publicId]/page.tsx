@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
+import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { openLead } from "@/db/repositories/client/leads";
 import { formatDateTime } from "@/lib/time";
 import { DeleteLeadForm, LeadStatusForm } from "../lead-controls";
@@ -41,6 +42,9 @@ export default async function LeadPage({
   const { publicId } = await params;
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
+  // Not in their plan: the Growth tab explains how to get it, and says how
+  // many enquiries are already waiting — they are kept either way.
+  if (!(await requireGrowthFeature(db, ctx, "leads"))) redirect("/dashboard/growth?locked=leads#leads");
 
   let lead;
   try {
