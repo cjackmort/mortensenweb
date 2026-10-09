@@ -5,9 +5,10 @@ import { newPublicId } from "@/lib/ids";
 import { parseSubmission, siteHookSecret, type ParsedLead } from "@/lib/growth/netlify-forms";
 import {
   connectFormsWebhook,
+  enableFormDetection,
+  getSite,
   isNetlifyConfigured,
   listFormSubmissions,
-  NetlifyApiError,
 } from "@/lib/netlify/api";
 import type { AdminContext } from "../context";
 
@@ -154,16 +155,26 @@ export function formsWebhookUrl(sitePublicId: string): string | null {
 }
 
 export type ConnectOutcome =
-  | { ok: true; imported: number }
+  | {
+      ok: true;
+      imported: number;
+      /** Form detection was off and has just been switched on; it applies from the next deploy. */
+      redeployNeeded: boolean;
+    }
   | { ok: false; message: string };
 
+function netlifyFailure(error: unknown): string {
+  return error instanceof Error ? error.message : "Netlify could not be reached.";
+}
+
 /**
- * Connect a site's contact forms to the leads inbox: register the hook, then
- * import what is already there.
+ * Connect a site's contact forms to the leads inbox: make sure Netlify is
+ * collecting them, register the hook, then import what is already there.
  *
- * In that order so nothing falls between them. A submission arriving after
- * the hook exists is delivered by it; one that arrived before is in the
- * import; one arriving during both is in both, and the upsert keeps one.
+ * The hook and the import go in that order so nothing falls between them. A
+ * submission arriving after the hook exists is delivered by it; one that
+ * arrived before is in the import; one arriving during both is in both, and
+ * the upsert keeps one.
  */
 export async function connectSiteForms(
   _ctx: AdminContext,
@@ -190,6 +201,42 @@ export async function connectSiteForms(
     return { ok: false, message: "AUTH_URL must be the portal's https:// address." };
   }
 
+  // With form detection off, a form posts successfully and Netlify keeps
+  // nothing, so the hook would register, report success and never fire. Sites
+  // created through Netlify's API start that way.
+  let hosted;
+  try {
+    hosted = await getSite(site.netlifySiteId);
+  } catch (error) {
+    return { ok: false, message: netlifyFailure(error) };
+  }
+  if (!hosted) {
+    return { ok: false, message: "Netlify has no site with this site's id any more." };
+  }
+
+  let redeployNeeded = false;
+  if (hosted.processing_settings?.ignore_html_forms === true) {
+    let refusal: string | null = null;
+    try {
+      const updated = await enableFormDetection(site.netlifySiteId, hosted.processing_settings);
+      if (updated.processing_settings?.ignore_html_forms === true) {
+        refusal = "Netlify did not accept the change.";
+      }
+    } catch (error) {
+      refusal = netlifyFailure(error);
+    }
+    if (refusal) {
+      return {
+        ok: false,
+        message:
+          `Form detection is off for this site on Netlify, so its forms would collect nothing, ` +
+          `and switching it on failed: ${refusal} Turn on form detection under Project ` +
+          `configuration → Forms in Netlify, redeploy the site, then connect again.`,
+      };
+    }
+    redeployNeeded = true;
+  }
+
   let hookId: string;
   try {
     ({ hookId } = await connectFormsWebhook({
@@ -198,13 +245,7 @@ export async function connectSiteForms(
       signatureSecret: await siteHookSecret(master, site.publicId),
     }));
   } catch (error) {
-    return {
-      ok: false,
-      message:
-        error instanceof NetlifyApiError || error instanceof Error
-          ? error.message
-          : "Netlify could not be reached.",
-    };
+    return { ok: false, message: netlifyFailure(error) };
   }
 
   await db
@@ -215,7 +256,7 @@ export async function connectSiteForms(
   const imported = await importSiteSubmissions(db, site);
   // The hook is the part that matters. A failed import leaves an inbox that
   // fills from now on, and the next sweep retries the history.
-  return { ok: true, imported: imported.ok ? imported.imported : 0 };
+  return { ok: true, imported: imported.ok ? imported.imported : 0, redeployNeeded };
 }
 
 /** Sites whose forms are connected — the sweep's list to repair. */
