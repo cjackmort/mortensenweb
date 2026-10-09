@@ -4,7 +4,7 @@ import { auditLog, clients, repositoryConnections, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { isGithubConfigured } from "@/lib/github/app";
 import { getRepo } from "@/lib/github/rest";
-import { findSiteByRepo, isNetlifyConfigured } from "@/lib/netlify/api";
+import { findSiteByRepo, getSite, isNetlifyConfigured } from "@/lib/netlify/api";
 import type { AdminContext } from "../context";
 
 /**
@@ -261,6 +261,23 @@ export async function connectExistingRepo(
       // Detection failing is not a reason to refuse the connection — it just
       // means the operator fills the field in by hand.
       console.error("[connect] could not look up the Netlify site", error);
+    }
+  }
+
+  // A typed name still needs its id. A repository that deploys itself from the
+  // template workflow is not linked in Netlify, so the detection above finds
+  // nothing and the operator supplies the name — and without the id, the leads
+  // inbox refuses to connect ("Set up hosting for this site first") for a site
+  // that is hosted and serving. Netlify accepts the default subdomain wherever
+  // it accepts an id, so the name is enough to ask for it.
+  if (input.netlifySiteName && isNetlifyConfigured()) {
+    try {
+      const named = await getSite(`${input.netlifySiteName.trim()}.netlify.app`);
+      if (named) detectedSiteId = named.id;
+    } catch (error) {
+      // Same as detection: not a reason to refuse the connection. The id is
+      // also backfilled from the first deploy a shipped change finds.
+      console.error("[connect] could not look up the named Netlify site", error);
     }
   }
 
