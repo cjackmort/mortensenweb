@@ -16,9 +16,13 @@ import type { StorageDriver, StoredObject } from "./index";
 const LOCAL_ROOT = process.env.ATTACHMENT_DIR ?? "./.attachments";
 const MEDIA_LOCAL_ROOT = process.env.MEDIA_DIR ?? "./.media";
 const THUMBNAIL_LOCAL_ROOT = process.env.THUMBNAIL_DIR ?? "./.thumbnails";
+const EVENT_LOGO_LOCAL_ROOT = process.env.EVENT_LOGO_DIR ?? "./.event-logos";
 
 /** One home-page picture per site: `t/<site public id>.jpg`, overwritten daily. */
 const THUMBNAIL_KEY_PATTERN = /^t\/[0-9A-HJKMNP-TV-Z]{26}\.jpg$/;
+
+/** One logo per approved booking: `e/<booking public id>.<ext>`. */
+const EVENT_LOGO_KEY_PATTERN = /^e\/[0-9A-HJKMNP-TV-Z]{26}\.(jpg|png|gif|webp)$/;
 
 /** Keys we generate: two hex segments and an extension. Nothing else is valid. */
 const KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f]{32}\.[a-z0-9]{1,5}$/;
@@ -368,11 +372,43 @@ export function thumbnailKey(sitePublicId: string): string {
   return `t/${sitePublicId}.jpg`;
 }
 
+let cachedEventLogos: StorageDriver | undefined;
+
+/**
+ * Logos of performers a client has booked, shown on the client's events page.
+ *
+ * Its own store, like thumbnails: the key shape differs, and these are served
+ * to the public, which nothing in `attachments` or `media` ever is. Keeping
+ * them apart means a mistake in the public logo route cannot be pointed at a
+ * client's private upload.
+ */
+export function eventLogoDriver(): StorageDriver {
+  if (cachedEventLogos) return cachedEventLogos;
+
+  if (onNetlify()) {
+    cachedEventLogos = new NetlifyBlobsDriver("event-logos", EVENT_LOGO_KEY_PATTERN);
+    return cachedEventLogos;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("No production storage driver is configured for event logos.");
+  }
+
+  cachedEventLogos = new LocalDiskDriver(EVENT_LOGO_LOCAL_ROOT, EVENT_LOGO_KEY_PATTERN);
+  return cachedEventLogos;
+}
+
+/** Where a booking's logo lives. Derived from the booking, never from the upload's name. */
+export function eventLogoKey(bookingPublicId: string, extension: string): string {
+  return `e/${bookingPublicId}.${extension}`;
+}
+
 /** Testing hook: drop every cached driver. */
 export function resetStorageDrivers(): void {
   cached = undefined;
   cachedMedia = undefined;
   cachedThumbnails = undefined;
+  cachedEventLogos = undefined;
 }
 
 // ---------------------------------------------------------------------------
