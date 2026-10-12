@@ -299,7 +299,10 @@ describe("the 'you're booked' email", () => {
     expect(eventsPageUrl({ primaryDomain: null, productionUrl: "https://x.netlify.app" })).toBe(
       "https://x.netlify.app/events",
     );
-    expect(eventsPageUrl({ primaryDomain: "not a domain", productionUrl: null })).toBeNull();
+    expect(eventsPageUrl({ primaryDomain: null, productionUrl: null, netlifySiteName: "venue-after-hours" })).toBe(
+      "https://venue-after-hours.netlify.app/events",
+    );
+    expect(eventsPageUrl({ primaryDomain: "not a domain", productionUrl: null, netlifySiteName: "../evil" })).toBeNull();
   });
 });
 

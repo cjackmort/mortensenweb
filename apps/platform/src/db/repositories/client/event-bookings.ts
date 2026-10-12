@@ -64,6 +64,7 @@ interface BookingLead {
   siteId: string;
   primaryDomain: string | null;
   productionUrl: string | null;
+  netlifySiteName: string | null;
 }
 
 async function findBookingLead(
@@ -83,6 +84,7 @@ async function findBookingLead(
       siteId: leads.siteId,
       primaryDomain: sites.primaryDomain,
       productionUrl: sites.productionUrl,
+      netlifySiteName: sites.netlifySiteName,
     })
     .from(leads)
     .innerJoin(sites, eq(sites.id, leads.siteId))

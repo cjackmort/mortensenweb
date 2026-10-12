@@ -280,10 +280,15 @@ export async function fetchUploadedImage(
 // The "you're booked" email
 // ---------------------------------------------------------------------------
 
-/** `https://venue.example/events`, from the site's own address — never from the submission. */
+/**
+ * `https://venue.example/events`, from the site's own address — never from
+ * the submission. The custom domain once there is one, else the live URL,
+ * else the Netlify address the site is served at before launch.
+ */
 export function eventsPageUrl(site: {
   primaryDomain: string | null;
   productionUrl: string | null;
+  netlifySiteName?: string | null;
 }): string | null {
   const domain = site.primaryDomain?.trim().toLowerCase();
   if (domain && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return `https://${domain}${EVENTS_PAGE_PATH}`;
@@ -294,6 +299,11 @@ export function eventsPageUrl(site: {
     } catch {
       // Not a URL; no link is better than a broken one.
     }
+  }
+  const name = site.netlifySiteName?.trim().toLowerCase();
+  // Netlify site names are DNS labels.
+  if (name && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name)) {
+    return `https://${name}.netlify.app${EVENTS_PAGE_PATH}`;
   }
   return null;
 }
