@@ -179,9 +179,9 @@ describe("reading a submission", () => {
     });
     if (!parsed.ok) throw new Error("did not parse");
     expect(parsed.lead.fields).toEqual([
-      { label: "Which service?", value: "Drain cleaning" },
-      { label: "First name", value: "Sam" },
-      { label: "Last name", value: "Okafor" },
+      { label: "Which service?", value: "Drain cleaning", key: "service" },
+      { label: "First name", value: "Sam", key: "first_name" },
+      { label: "Last name", value: "Okafor", key: "last_name" },
     ]);
     expect(parsed.lead.name).toBe("Sam Okafor");
   });

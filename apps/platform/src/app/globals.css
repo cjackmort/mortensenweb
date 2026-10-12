@@ -3936,6 +3936,109 @@ form + .field-hint {
   margin-top: 0.5rem;
 }
 
+/* -------------------------------------------------- booking requests */
+
+/* The request first, the decision under it. Accent rule on the left so the
+   panel reads as "this needs you" among the plain panels below. */
+.booking-panel {
+  border-left: 3px solid var(--accent-fill);
+}
+
+.booking-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.25rem 1.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.booking-request .detail-grid {
+  flex: 1 1 18rem;
+}
+
+/* A performer's logo can be any shape and any colour, including white on
+   transparent: a neutral ground and a hairline keep it visible. */
+.booking-logo {
+  width: 8.5rem;
+  height: 8.5rem;
+  object-fit: contain;
+  padding: 0.5rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+}
+
+.booking-logo-missing {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--muted);
+}
+
+.booking-links {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.booking-decided {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+
+.booking-status {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.booking-status .pill {
+  margin-right: 0.35rem;
+}
+
+.booking-when {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0 1rem;
+  max-width: 30rem;
+}
+
+.booking-approve > button {
+  margin-right: 0.5rem;
+}
+
+.booking-decline {
+  margin-top: -0.25rem;
+}
+
+/* Approve and Decline under a request in the inbox list. Outside the row's
+   link — a button inside a link is two tap targets fighting over one tap. */
+.booking-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 var(--pane-pad) 1rem;
+  margin-top: -0.35rem;
+}
+
+.booking-quick form {
+  margin: 0;
+}
+
+.booking-quick .error,
+.booking-quick-done {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+.booking-quick-done {
+  color: var(--success);
+}
+
 /* ------------------------------------------------------- growth & plan */
 
 .notice-warning {

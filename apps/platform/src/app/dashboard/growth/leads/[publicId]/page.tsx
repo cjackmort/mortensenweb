@@ -5,11 +5,111 @@ import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { openLead } from "@/db/repositories/client/leads";
-import { formatDateTime } from "@/lib/time";
+import { businessTimeZone, formatDateTime, formatDateWithYear } from "@/lib/time";
 import { DeleteLeadForm, LeadStatusForm } from "../lead-controls";
 import { RefreshOnRead } from "../refresh-on-read";
 import { LeadReplyForm } from "../reply-form";
 import { listLeadReplies, replyIdentity } from "@/db/repositories/client/lead-replies";
+import { findBookingState, type BookingState } from "@/db/repositories/client/event-bookings";
+import {
+  BOOKING_FIELDS,
+  formatEventDate,
+  formatStartTime,
+  isBookingForm,
+  readBookingRequest,
+  todayIn,
+  type BookingRequest,
+} from "@/lib/growth/bookings";
+import { BookingDecision, BookingLogoPreview, type BookingView } from "../booking-controls";
+
+const TICKETS: Record<NonNullable<BookingRequest["sellingTickets"]>, string> = {
+  yes: "Yes",
+  no: "No",
+  unsure: "Not sure yet",
+};
+
+function showsOn(state: BookingState): string | null {
+  if (!state.eventDate) return null;
+  const day = formatEventDate(state.eventDate);
+  return state.startTime ? `${day} · ${formatStartTime(state.startTime)}` : day;
+}
+
+/**
+ * The booking half of a booking request: what they asked for, their logo,
+ * and the decision. Shown above everything else on the page, because it is
+ * the reason the page was opened.
+ */
+function BookingPanel({
+  publicId,
+  request,
+  booking,
+  readOnly,
+}: {
+  publicId: string;
+  request: BookingRequest;
+  booking: BookingState | null;
+  readOnly: boolean;
+}) {
+  const today = todayIn(businessTimeZone());
+  const view: BookingView | null = booking
+    ? {
+        decision: booking.decision,
+        eventDate: booking.eventDate,
+        startTime: booking.startTime,
+        emailStatus: booking.emailStatus,
+        hasLogo: booking.hasLogo,
+        removed: booking.removed,
+        decidedOn: formatDateWithYear(booking.decidedAt),
+        showsOn: showsOn(booking),
+      }
+    : null;
+
+  return (
+    <section className="panel booking-panel">
+      <div className="panel-head">
+        <h2>Booking request</h2>
+      </div>
+      <div className="panel-body">
+        <div className="booking-request">
+          {(request.logoName || booking?.hasLogo) && (
+            <BookingLogoPreview
+              src={`/dashboard/growth/leads/${publicId}/logo`}
+              alt={`${request.actName ?? "Their"} logo`}
+            />
+          )}
+          <dl className="detail-grid">
+            <dt>Act</dt>
+            <dd>{request.actName ?? "Not given"}</dd>
+            <dt>Genre</dt>
+            <dd>{request.genre ?? "Not given"}</dd>
+            <dt>Asked for</dt>
+            <dd>{request.requestedDate ? formatEventDate(request.requestedDate) : "No date given"}</dd>
+            <dt>Expected crowd</dt>
+            <dd>{request.expectedAttendance ?? "Not sure yet"}</dd>
+            <dt>Selling tickets</dt>
+            <dd>{request.sellingTickets ? TICKETS[request.sellingTickets] : "Not given"}</dd>
+            {request.links && (
+              <>
+                <dt>Their music</dt>
+                <dd className="booking-links">{request.links}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+        <BookingDecision
+          publicId={publicId}
+          requestedDate={request.requestedDate}
+          today={today}
+          booking={view}
+          readOnly={readOnly}
+        />
+      </div>
+    </section>
+  );
+}
+
+/** Field names the booking panel already shows. */
+const BOOKING_KEYS = new Set<string>(Object.values(BOOKING_FIELDS));
 
 /**
  * One enquiry: who, how to reach them, what they said, and where it stands.
@@ -54,19 +154,26 @@ export default async function LeadPage({
     throw error;
   }
 
-  const [replies, identity] = await Promise.all([
+  const isBooking = isBookingForm(lead.formName);
+  const [replies, identity, booking] = await Promise.all([
     listLeadReplies(db, ctx, publicId),
     replyIdentity(db, ctx),
+    isBooking ? findBookingState(db, ctx, publicId) : Promise.resolve(null),
   ]);
 
   // The rest of what they filled in. Name, email, phone and message are
   // already shown above as the heading, the buttons and the message itself;
   // listing them again pushes the one field that is new — "Which service?" —
-  // below the fold on a phone.
+  // below the fold on a phone. A booking request's own fields are in the
+  // booking panel.
   const shown = new Set([lead.name, lead.email, lead.phone, lead.message].filter(Boolean));
-  const otherFields = lead.fields.filter((field) => !shown.has(field.value));
+  const otherFields = lead.fields.filter(
+    (field) => !shown.has(field.value) && !(isBooking && field.key && BOOKING_KEYS.has(field.key)),
+  );
 
   const telHref = lead.phone ? `tel:${lead.phone.replace(/[^\d+]/g, "")}` : null;
+  const request = isBooking ? readBookingRequest(lead.fields) : null;
+  const who = lead.name ?? lead.email ?? lead.phone;
 
   return (
     <main className="shell">
@@ -76,11 +183,21 @@ export default async function LeadPage({
       </p>
 
       <div className="masthead">
-        <h1>{lead.name ?? lead.email ?? lead.phone ?? "Enquiry"}</h1>
+        <h1>{request?.actName ?? who ?? "Enquiry"}</h1>
         <span>
+          {request?.actName && who ? `From ${who} · ` : ""}
           {formatDateTime(lead.receivedAt)} · {lead.siteName}
         </span>
       </div>
+
+      {request && (
+        <BookingPanel
+          publicId={lead.publicId}
+          request={request}
+          booking={booking}
+          readOnly={ctx.impersonating}
+        />
+      )}
 
       <section className="panel">
         <div className="panel-body">

@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -139,6 +141,85 @@ export const leadReplies = pgTable(
     check(
       "lead_replies_status_known",
       sql`${t.status} IN ('sent', 'failed', 'not_sent')`,
+    ),
+  ],
+);
+
+/**
+ * A client's decision on a performer's booking request, and — once approved —
+ * one entry on that site's upcoming events.
+ *
+ * A booking request arrives as an ordinary lead from the site's booking form
+ * (see `lib/growth/bookings.ts`); this row is what the client decided about
+ * it. One per lead, so approving twice cannot list a band twice or email them
+ * twice. Declines are rows too, so the inbox can say "you declined this" and
+ * the client can still change their mind.
+ *
+ * The act's name, genre, date and logo are copied here at approval rather than
+ * read through the lead: the lead is the customer's private message and can be
+ * deleted, while this is what the client chose to publish.
+ *
+ * `email_status` is what happened to the "you're booked" email, recorded
+ * either way — a client must be able to see that a band was *not* told.
+ */
+export const eventBookings = pgTable(
+  "event_bookings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicId: text("public_id").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
+
+    /** `approved` or `declined`. */
+    decision: text("decision").notNull(),
+    actName: text("act_name").notNull(),
+    genre: text("genre"),
+    /** The day they play, as the business means it — a calendar date, not an instant. */
+    eventDate: date("event_date", { mode: "string" }),
+    /** `HH:MM`, 24-hour, in the business's timezone. Optional. */
+    startTime: text("start_time"),
+    isTicketed: boolean("is_ticketed").notNull().default(false),
+    /** In the `event-logos` store, copied from the form upload at approval. */
+    logoKey: text("logo_key"),
+    /** Sniffed from the bytes when stored, never taken from the upload's claim. */
+    logoContentType: text("logo_content_type"),
+    /** Where "you're booked" went. Erased with the lead. */
+    contactEmail: text("contact_email"),
+
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+    /** `sent`, `failed`, or `not_sent` (no address, or no mail provider here). */
+    emailStatus: text("email_status"),
+    emailError: text("email_error"),
+    /** Taken off the site by the client after approving. */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("event_bookings_public_id_key").on(t.publicId),
+    uniqueIndex("event_bookings_lead_key")
+      .on(t.leadId)
+      .where(sql`${t.leadId} IS NOT NULL`),
+    index("event_bookings_site_date_idx").on(t.siteId, t.eventDate),
+    check("event_bookings_decision_known", sql`${t.decision} IN ('approved', 'declined')`),
+    check(
+      "event_bookings_approved_has_date",
+      sql`${t.decision} <> 'approved' OR ${t.eventDate} IS NOT NULL`,
+    ),
+    check(
+      "event_bookings_start_time_shape",
+      sql`${t.startTime} IS NULL OR ${t.startTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      "event_bookings_email_status_known",
+      sql`${t.emailStatus} IS NULL OR ${t.emailStatus} IN ('sent', 'failed', 'not_sent')`,
     ),
   ],
 );

@@ -4,9 +4,31 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
-import { isLeadView, listLeads, type LeadView } from "@/db/repositories/client/leads";
-import { formatDateTime } from "@/lib/time";
+import { isLeadView, listLeads, type LeadSummary, type LeadView } from "@/db/repositories/client/leads";
+import { bookingStatesFor, type BookingState } from "@/db/repositories/client/event-bookings";
+import { formatEventDate, isBookingForm, readBookingRequest, todayIn } from "@/lib/growth/bookings";
+import { businessTimeZone, formatDateTime } from "@/lib/time";
+import { BookingQuickActions } from "./booking-controls";
 import { LeadStatusPill } from "./status-pill";
+
+/** One line for a booking request in the list: who, what, and when they asked for. */
+function bookingPreview(lead: LeadSummary): string {
+  const request = readBookingRequest(lead.fields);
+  return [
+    request.actName,
+    request.genre,
+    request.requestedDate ? `wants ${formatEventDate(request.requestedDate)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function BookingPill({ state }: { state: BookingState | undefined }) {
+  if (!state) return <span className="pill pill-accent">Booking request</span>;
+  if (state.decision === "declined") return <span className="pill pill-neutral">Declined</span>;
+  if (state.removed) return <span className="pill pill-neutral">Off the site</span>;
+  return <span className="pill pill-success">Booked</span>;
+}
 
 /**
  * The leads inbox: every message from the client's contact form, newest first.
@@ -67,6 +89,9 @@ export default async function LeadsPage({
   // many enquiries are already waiting — they are kept either way.
   if (!(await requireGrowthFeature(db, ctx, "leads"))) redirect("/dashboard/growth?locked=leads#leads");
   const { leads, hasMore } = await listLeads(db, ctx, { view, page });
+  const bookingIds = leads.filter((lead) => isBookingForm(lead.formName)).map((lead) => lead.publicId);
+  const bookings = await bookingStatesFor(db, ctx, bookingIds);
+  const today = todayIn(businessTimeZone());
 
   const href = (v: LeadView, p = 1) =>
     `/dashboard/growth/leads${v === "open" && p === 1 ? "" : `?view=${v}${p > 1 ? `&page=${p}` : ""}`}`;
@@ -106,31 +131,45 @@ export default async function LeadsPage({
           </div>
         ) : (
           <ul className="lead-list">
-            {leads.map((lead) => (
-              <li key={lead.publicId}>
-                <Link
-                  className={`lead-row${lead.unread ? " lead-unread" : ""}`}
-                  href={`/dashboard/growth/leads/${lead.publicId}`}
-                >
-                  <span className="lead-row-head">
-                    <span className="lead-row-name">
-                      {lead.unread && <span className="sr-only">Unread: </span>}
-                      {lead.name ?? lead.email ?? lead.phone ?? "Someone"}
+            {leads.map((lead) => {
+              const isBooking = isBookingForm(lead.formName);
+              const booking = bookings.get(lead.publicId);
+              const preview = isBooking ? bookingPreview(lead) || lead.preview : lead.preview;
+              return (
+                <li key={lead.publicId}>
+                  <Link
+                    className={`lead-row${lead.unread ? " lead-unread" : ""}`}
+                    href={`/dashboard/growth/leads/${lead.publicId}`}
+                  >
+                    <span className="lead-row-head">
+                      <span className="lead-row-name">
+                        {lead.unread && <span className="sr-only">Unread: </span>}
+                        {lead.name ?? lead.email ?? lead.phone ?? "Someone"}
+                      </span>
+                      <span className="lead-row-when">{formatDateTime(lead.receivedAt)}</span>
                     </span>
-                    <span className="lead-row-when">{formatDateTime(lead.receivedAt)}</span>
-                  </span>
-                  {lead.preview && <span className="lead-row-preview">{lead.preview}</span>}
-                  <span className="lead-row-meta">
-                    {lead.unread ? (
-                      <span className="pill pill-accent">New</span>
-                    ) : (
-                      <LeadStatusPill status={lead.status} />
-                    )}
-                    {[lead.phone, lead.email].filter(Boolean).join(" · ")}
-                  </span>
-                </Link>
-              </li>
-            ))}
+                    {preview && <span className="lead-row-preview">{preview}</span>}
+                    <span className="lead-row-meta">
+                      {lead.unread && <span className="pill pill-accent">New</span>}
+                      {isBooking ? (
+                        <BookingPill state={booking} />
+                      ) : (
+                        !lead.unread && <LeadStatusPill status={lead.status} />
+                      )}
+                      {[lead.phone, lead.email].filter(Boolean).join(" · ")}
+                    </span>
+                  </Link>
+                  {isBooking && !booking && (
+                    <BookingQuickActions
+                      publicId={lead.publicId}
+                      requestedDate={readBookingRequest(lead.fields).requestedDate}
+                      today={today}
+                      readOnly={ctx.impersonating}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
 

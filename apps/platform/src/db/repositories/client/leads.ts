@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { leads, sites } from "@/db/schema";
+import { eventBookings, leads, sites } from "@/db/schema";
 import type { LeadField } from "@/lib/growth/netlify-forms";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 
@@ -39,6 +39,9 @@ export interface LeadSummary {
   receivedAt: Date;
   unread: boolean;
   siteName: string;
+  /** Which form on the site sent it. A booking form's leads get approve and decline. */
+  formName: string | null;
+  fields: LeadField[];
 }
 
 const PAGE_SIZE = 50;
@@ -72,6 +75,8 @@ export async function listLeads(
       receivedAt: leads.receivedAt,
       readAt: leads.readAt,
       siteName: sites.name,
+      formName: leads.formName,
+      fields: leads.fields,
     })
     .from(leads)
     .innerJoin(sites, eq(sites.id, leads.siteId))
@@ -99,6 +104,8 @@ export async function listLeads(
       receivedAt: row.receivedAt,
       unread: row.readAt === null,
       siteName: row.siteName,
+      formName: row.formName,
+      fields: Array.isArray(row.fields) ? (row.fields as LeadField[]) : [],
     })),
   };
 }
@@ -253,5 +260,17 @@ export async function deleteLead(
       ),
     )
     .returning({ id: leads.id });
-  if (deleted.length === 0) throw new NotFoundError();
+  const leadId = deleted[0]?.id;
+  if (!leadId) throw new NotFoundError();
+
+  // A booking request goes with it. An approved show stays on the site — the
+  // client published it — but loses the performer's address; a declined one
+  // was never anything but the person's request, so it goes entirely.
+  await db
+    .delete(eventBookings)
+    .where(and(eq(eventBookings.leadId, leadId), eq(eventBookings.decision, "declined")));
+  await db
+    .update(eventBookings)
+    .set({ contactEmail: null, updatedAt: now })
+    .where(eq(eventBookings.leadId, leadId));
 }
