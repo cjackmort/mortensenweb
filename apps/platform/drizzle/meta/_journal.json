@@ -211,6 +211,13 @@
       "when": 1789900000000,
       "tag": "0028_event_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0032_winback_emails",
+      "breakpoints": true
     }
   ]
 }
