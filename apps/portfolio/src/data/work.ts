@@ -83,6 +83,25 @@ export const WORK: Work[] = [
     autoTile: true,
     year: 2026,
   },
+  // A demo, not a client engagement: built from Ava's public Instagram before
+  // she had agreed to anything. Below the live client work for the same reason
+  // the in-house entry is last.
+  {
+    slug: "tipsy-talons",
+    name: "Tipsy Talons",
+    sector: "Nail studio",
+    description:
+      "A demo site for a nail studio in Bluffdale, Utah, laid out like a magazine cover: collections, the price list and a booking request form.",
+    domain: "tipsy-talons.netlify.app",
+    href: "https://tipsy-talons.netlify.app",
+    status: "concept",
+    tags: ["Magazine layout", "Booking requests", "Price list"],
+    image: "/work/tipsy-talons.webp",
+    imageAlt:
+      "The Tipsy Talons home page: the name in large black serif and blackletter type over a portrait of the nail artist surrounded by hands with painted nails.",
+    autoTile: true,
+    year: 2026,
+  },
   // Ours, and last on purpose. It goes in as `internal` because it is not a
   // client engagement, and it sits below the client work because this page
   // exists to show what we do for other people.
@@ -105,6 +124,6 @@ export const WORK: Work[] = [
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {
   live: "Live",
-  concept: "Concept",
+  concept: "Demo",
   internal: "In-house",
 };
