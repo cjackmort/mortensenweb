@@ -55,14 +55,3 @@ export function sessionCookieName(): string {
 export function secureSessionCookieName(): string {
   return `__Secure-${BASE}${devSuffix()}`;
 }
-
-/**
- * Every name a session might arrive under, for the proxy's presence check.
- *
- * Both the plain and secure forms, because the proxy only asks "is there a
- * session cookie at all" before deciding whether to redirect to sign-in — it
- * is a convenience, not the authorization boundary.
- */
-export function sessionCookieNames(): string[] {
-  return [sessionCookieName(), secureSessionCookieName()];
-}
