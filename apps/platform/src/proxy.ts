@@ -26,7 +26,7 @@ import { sessionCookieNames } from "@/lib/auth/cookie-name";
  */
 const SESSION_COOKIES = sessionCookieNames();
 
-const PUBLIC_PATHS = [
+export const PUBLIC_PATHS = [
   "/login",
   "/get-started",
   // Both halves of the reset flow are reached by someone who cannot sign in,
