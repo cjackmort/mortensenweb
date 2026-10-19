@@ -52,9 +52,17 @@ const CSP = [
  * added here is a route a proxy may cache and serve to the wrong client. Note
  * `dashboard` rather than `client`: the client surface lives at /dashboard, and
  * naming a route group that does not exist protects nothing.
+ *
+ * `/login`, `/get-started` and `/forgot-password` are deliberately absent.
+ * They are prerendered at build time and identical for every visitor — no
+ * cookie, no query string and no database read reaches their HTML — so the
+ * CDN may serve them, and that is what makes them load in tens of
+ * milliseconds rather than waiting on a function. Their forms post to server
+ * actions, and a POST is never cached. `/reset-password` stays listed: its
+ * URL carries the reset token and its HTML depends on it.
  */
 const SENSITIVE_ROUTES =
-  "admin|dashboard|change-password|reset-password|forgot-password|get-started|login|api";
+  "admin|dashboard|change-password|reset-password|api";
 
 const NO_STORE = [
   { key: "Cache-Control", value: "no-store, must-revalidate" },
