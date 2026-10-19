@@ -98,7 +98,9 @@ receivers, signed attachment links and `/api/cron` all authenticate themselves
 and none can hold a session. An unlisted route is redirected to `/login` and
 answered 307 — so the scheduler ran every five minutes for a day, recorded a
 response, reported success, and never once reached the endpoint. Every job it
-runs was silently absent.
+runs was silently absent. Add it to the exclusions in the proxy's `matcher` as
+well: on Netlify the proxy is an edge function that cold-starts in 1–2 s, and
+a public path left in the matcher pays that for nothing.
 
 **`secrets` is not available in a workflow `if:` condition.** It is a parse
 error, not a falsy no-op: the run fails in zero seconds with no job starting,

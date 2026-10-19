@@ -64,4 +64,29 @@ describe("the proxy's matcher", () => {
       expect(proxyRedirects(path), `${path} is skipped but would redirect`).toBe(false);
     }
   });
+
+  it("still runs for every authenticated surface", () => {
+    for (const path of AUTHENTICATED) {
+      expect(invokesProxy(path), path).toBe(true);
+      expect(proxyRedirects(path), `${path} without a session`).toBe(true);
+    }
+  });
+
+  it("still runs for lookalikes of public paths", () => {
+    for (const path of LOOKALIKES) {
+      expect(invokesProxy(path), path).toBe(true);
+    }
+  });
+
+  it("is not invoked for the sign-in and reset screens", () => {
+    for (const path of ["/login", "/get-started", "/forgot-password", "/reset-password"]) {
+      expect(invokesProxy(path), path).toBe(false);
+    }
+  });
+
+  it("is not invoked for the scheduler, webhooks or the plans feed", () => {
+    for (const path of ["/api/cron", "/api/webhooks/stripe", "/api/plans", "/api/auth/session"]) {
+      expect(invokesProxy(path), path).toBe(false);
+    }
+  });
 });

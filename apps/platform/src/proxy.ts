@@ -128,9 +128,24 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Everything except Next internals and static assets. Authenticated
-     * surfaces additionally carry no-store headers from next.config.ts.
+     * Everything except Next internals, static assets, and the public paths
+     * above. Authenticated surfaces additionally carry no-store headers from
+     * next.config.ts.
+     *
+     * The public paths are excluded here as well as listed in PUBLIC_PATHS
+     * because on Netlify this proxy is not free to run. It is deployed as an
+     * edge function that carries Next's server runtime (~1.7 MB across 138
+     * modules), and that function cold-starts at the visitor's nearest edge
+     * location in 1.3–2 s — measured, and the bulk of a cold sign-in page.
+     * For a public path the proxy only ever answers `NextResponse.next()`, so
+     * not invoking it changes no response; it removes the cold start from
+     * /login, the reset flow, webhooks and the scheduler.
+     *
+     * PUBLIC_PATHS stays the source of truth for behaviour. A path added there
+     * but not here still works — it simply pays for the edge hop. Each entry
+     * must end at a segment boundary, for the same reason the `isPublic` check
+     * does: a bare prefix would also exclude `/login-something`.
      */
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|(?:login|get-started|forgot-password|reset-password|api/auth|preview|api/webhooks|api/attachments|api/media/agent|api/cron|api/thumbnails|api/plans|auth-backdrop\\.webp|auth-backdrop-sm\\.webp|manifest\\.webmanifest|icon\\.svg|maskable\\.svg|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png)(?:/|$)).*)",
   ],
 };
