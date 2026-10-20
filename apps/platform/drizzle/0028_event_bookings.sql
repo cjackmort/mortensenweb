@@ -1,5 +1,7 @@
 -- Event bookings: a client's decision on a performer's booking request, and
--- the approved ones a site lists as its upcoming events.
+-- the approved ones a site lists as its upcoming events. `held` is a date and
+-- time saved to the client's calendar while they agree it with the band: not
+-- on the site, nobody emailed.
 --
 -- Additive only — one new table. Code already deployed runs unchanged.
 --
@@ -32,8 +34,8 @@ CREATE TABLE IF NOT EXISTS "event_bookings" (
   "removed_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "event_bookings_decision_known" CHECK ("decision" IN ('approved', 'declined')),
-  CONSTRAINT "event_bookings_approved_has_date" CHECK ("decision" <> 'approved' OR "event_date" IS NOT NULL),
+  CONSTRAINT "event_bookings_decision_known" CHECK ("decision" IN ('held', 'approved', 'declined')),
+  CONSTRAINT "event_bookings_scheduled_has_date" CHECK ("decision" = 'declined' OR "event_date" IS NOT NULL),
   CONSTRAINT "event_bookings_start_time_shape" CHECK ("start_time" IS NULL OR "start_time" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
   CONSTRAINT "event_bookings_email_status_known" CHECK ("email_status" IS NULL OR "email_status" IN ('sent', 'failed', 'not_sent'))
 );--> statement-breakpoint
