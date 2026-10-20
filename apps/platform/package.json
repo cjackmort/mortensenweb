@@ -25,6 +25,7 @@
     "@mortensenweb/plans": "*",
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^10.7.13",
+    "@paulmillr/qr": "^0.3.0",
     "drizzle-orm": "^0.45.2",
     "libsodium-wrappers": "^0.8.4",
     "next": "16.3.6",
