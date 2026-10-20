@@ -52,9 +52,17 @@ const CSP = [
  * added here is a route a proxy may cache and serve to the wrong client. Note
  * `dashboard` rather than `client`: the client surface lives at /dashboard, and
  * naming a route group that does not exist protects nothing.
+ *
+ * `/login`, `/get-started` and `/forgot-password` are deliberately absent.
+ * They are prerendered at build time and identical for every visitor — no
+ * cookie, no query string and no database read reaches their HTML — so the
+ * CDN may serve them, and that is what makes them load in tens of
+ * milliseconds rather than waiting on a function. Their forms post to server
+ * actions, and a POST is never cached. `/reset-password` stays listed: its
+ * URL carries the reset token and its HTML depends on it.
  */
 const SENSITIVE_ROUTES =
-  "admin|dashboard|change-password|reset-password|forgot-password|get-started|login|api";
+  "admin|dashboard|change-password|reset-password|api";
 
 const NO_STORE = [
   { key: "Cache-Control", value: "no-store, must-revalidate" },
@@ -132,6 +140,38 @@ const nextConfig: NextConfig = {
   // bundle out of the server build; it is additionally behind a runtime dynamic
   // import, so a deployed function never loads it.
   serverExternalPackages: ["@electric-sql/pglite"],
+
+  /**
+   * Files the deployed function never runs, kept out of it.
+   *
+   * External does not mean absent: file tracing still followed the dynamic
+   * import above and copied PGlite's 21 MB of WASM and data into the Netlify
+   * function, along with sharp's 9 MB WebAssembly fallback — a third of the
+   * bundle every cold start had to load, for code production never executes.
+   * Production reads Neon (`DATABASE_URL` is a postgres:// URL there, so
+   * `getDb` never reaches the import), and sharp loads its native linux-x64
+   * build; the WASM build is only a fallback for platforms without one.
+   *
+   * This affects the traced output only. `next dev` and the tests resolve
+   * PGlite from node_modules as before.
+   *
+   * Each package is named twice because Next matches excludes two ways: the
+   * server's own trace as a substring (the `**` form), and each route's trace
+   * resolved from this directory. npm workspaces hoist both packages to the
+   * repository root, two levels up, so a route-relative `node_modules/...`
+   * matches nothing and excludes nothing. The `pglite-*` entry is Turbopack's
+   * alias for the external under `.next/node_modules`, a symlink that would
+   * otherwise ship pointing at nothing.
+   */
+  outputFileTracingExcludes: {
+    "*": [
+      "**/node_modules/@electric-sql/pglite/**",
+      "../../node_modules/@electric-sql/pglite/**",
+      "**/node_modules/@electric-sql/pglite-*",
+      "**/node_modules/@img/sharp-wasm32/**",
+      "../../node_modules/@img/sharp-wasm32/**",
+    ],
+  },
 };
 
 export default nextConfig;

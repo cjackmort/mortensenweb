@@ -10,7 +10,8 @@ import { BUILDS, GROWTH_FEATURES, OVERAGE_CENTS, PLANS } from "@mortensenweb/pla
  * price is set: the site and the portal still cannot quote different numbers.
  *
  * Public by design — every figure here is already on the pricing page — and
- * listed in the proxy's PUBLIC_PATHS, because a build server has no session.
+ * listed as public in tests/route-auth.test.ts, because a build server has no
+ * session.
  * `comp-unlimited` is absent for the reason the package gives: it is granted,
  * never sold.
  *

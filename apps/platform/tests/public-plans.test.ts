@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { NextRequest } from "next/server";
 import {
   BUILDS,
   GROWTH_FEATURES,
@@ -9,7 +8,6 @@ import {
   type PlanKey,
 } from "@mortensenweb/plans";
 import { GET } from "@/app/api/plans/route";
-import { proxy } from "@/proxy";
 
 /**
  * The price list the public site builds from.
@@ -18,10 +16,9 @@ import { proxy } from "@/proxy";
  * `@mortensenweb/plans` any more, so it fetches this at build time. The point
  * of the package — the site and the portal quoting the same numbers — now
  * depends on this endpoint returning the package exactly, and on it being
- * reachable without a session, because a build server has none.
+ * reachable without a session, because a build server has none. The handler
+ * checks for none, and `route-auth.test.ts` lists it as public on purpose.
  */
-
-const PORTAL = "https://portal.mortensenweb.com";
 
 describe("GET /api/plans", () => {
   it("returns the plans exactly as the package defines them", async () => {
@@ -43,18 +40,6 @@ describe("GET /api/plans", () => {
     const body = await GET().json();
     const keys = body.plans.map((plan: { key: string }) => plan.key);
     expect(keys).not.toContain("comp-unlimited");
-  });
-});
-
-describe("the proxy", () => {
-  it("serves /api/plans to a caller with no session", () => {
-    const response = proxy(new NextRequest(`${PORTAL}/api/plans`));
-    expect(response.headers.get("location")).toBeNull();
-  });
-
-  it("still sends a lookalike path to sign-in", () => {
-    const response = proxy(new NextRequest(`${PORTAL}/api/plans-admin`));
-    expect(response.headers.get("location")).toBe(`${PORTAL}/login`);
   });
 });
 

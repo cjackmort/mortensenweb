@@ -9,8 +9,8 @@ import type { NetlifySubmissionPayload } from "@/lib/netlify/api";
  * from one client site, into that client's leads inbox. It sends nothing —
  * Netlify's own notification email is what tells the client.
  *
- * Public under `/api/webhooks` in `proxy.ts`; the signature is the
- * authentication. Each site's hook signs with a secret derived from the master
+ * No session reaches this; the signature is the authentication (listed in
+ * tests/route-auth.test.ts). Each site's hook signs with a secret derived from the master
  * secret and the site id in this URL, so a delivery that verifies here was
  * signed for *this* site — the path picks the inbox, and the signature proves
  * the path was not edited.
