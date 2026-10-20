@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, type SQL } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { eventBookings, leads, sites } from "@/db/schema";
 import type { LeadField } from "@/lib/growth/netlify-forms";
@@ -19,14 +19,27 @@ export function isLeadStatus(value: unknown): value is LeadStatus {
 }
 
 /**
- * What the inbox can be narrowed to. `open` is the default view: everything
- * still in play, which is what a client opening the inbox wants to see.
+ * The inbox's two tabs. `open` is the inbox itself — every enquiry not
+ * archived, whatever the client marked it — and holds the newest
+ * `INBOX_SIZE`. `archived` is everything else.
  */
-export type LeadView = "open" | LeadStatus | "all";
+export type LeadView = "open" | "archived";
 
 export function isLeadView(value: unknown): value is LeadView {
-  return value === "open" || value === "all" || isLeadStatus(value);
+  return value === "open" || value === "archived";
 }
+
+/**
+ * Newest first. `created_at` breaks a tie in `received_at` the same way the
+ * inbox's trim does, so the ten shown are the ten kept.
+ */
+export const INBOX_ORDER = [desc(leads.receivedAt), desc(leads.createdAt), desc(leads.id)] as const;
+
+/**
+ * How many enquiries the inbox holds. When another arrives, the oldest is
+ * archived — not deleted; it is one tap back from the Archived tab.
+ */
+export const INBOX_SIZE = 10;
 
 export interface LeadSummary {
   publicId: string;
@@ -46,10 +59,8 @@ export interface LeadSummary {
 
 const PAGE_SIZE = 50;
 
-function viewFilter(view: LeadView): SQL | undefined {
-  if (view === "all") return undefined;
-  if (view === "open") return inArray(leads.status, ["new", "contacted"]);
-  return eq(leads.status, view);
+function viewFilter(view: LeadView): SQL {
+  return view === "archived" ? eq(leads.status, "archived") : ne(leads.status, "archived");
 }
 
 function previewOf(message: string | null): string | null {
@@ -87,7 +98,7 @@ export async function listLeads(
         viewFilter(view),
       ),
     )
-    .orderBy(desc(leads.receivedAt), desc(leads.id))
+    .orderBy(...INBOX_ORDER)
     // One extra row answers "is there another page" without a count query.
     .limit(PAGE_SIZE + 1)
     .offset(offset);
@@ -264,11 +275,12 @@ export async function deleteLead(
   if (!leadId) throw new NotFoundError();
 
   // A booking request goes with it. An approved show stays on the site — the
-  // client published it — but loses the performer's address; a declined one
-  // was never anything but the person's request, so it goes entirely.
+  // client published it — but loses the performer's address; a held or
+  // declined one was never public, only the person's request, so it goes
+  // entirely, off the calendar too.
   await db
     .delete(eventBookings)
-    .where(and(eq(eventBookings.leadId, leadId), eq(eventBookings.decision, "declined")));
+    .where(and(eq(eventBookings.leadId, leadId), ne(eventBookings.decision, "approved")));
   await db
     .update(eventBookings)
     .set({ contactEmail: null, updatedAt: now })

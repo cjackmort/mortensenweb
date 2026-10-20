@@ -150,7 +150,7 @@ export function formatShowDate(eventDate: string, startTime: string | null): str
 }
 
 export interface DecisionSummary {
-  decision: "approved" | "declined";
+  decision: "held" | "approved" | "declined";
   actName: string;
   eventDate: string | null;
   startTime: string | null;
@@ -171,6 +171,9 @@ export function decisionNotice(state: DecisionSummary): string {
     return `You declined ${state.actName}. They haven't been emailed.`;
   }
   const when = state.eventDate ? ` for ${formatShowDate(state.eventDate, state.startTime)}` : "";
+  if (state.decision === "held") {
+    return `${state.actName} is held on your calendar${when}. It isn't on your site yet.`;
+  }
   if (state.removed) {
     return `${state.actName} was approved${when}, then taken off your events page.`;
   }

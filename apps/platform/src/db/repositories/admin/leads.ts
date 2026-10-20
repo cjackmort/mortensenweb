@@ -1,6 +1,7 @@
-import { and, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, leads, sites } from "@/db/schema";
+import { INBOX_ORDER, INBOX_SIZE } from "../client/leads";
 import { newPublicId } from "@/lib/ids";
 import { parseSubmission, siteHookSecret, type ParsedLead } from "@/lib/growth/netlify-forms";
 import {
@@ -96,7 +97,35 @@ export async function recordLead(
     .returning({ id: leads.id });
 
   const row = inserted[0];
-  return row ? { created: true, leadId: row.id } : { created: false };
+  if (!row) return { created: false };
+  await trimInbox(db, site.organizationId, now);
+  return { created: true, leadId: row.id };
+}
+
+/**
+ * Archive whatever in a client's inbox falls past the newest `INBOX_SIZE`,
+ * oldest first by when it was sent — so an imported old submission goes
+ * straight to Archived rather than pushing out a newer one.
+ */
+async function trimInbox(db: Database, organizationId: string, now: Date): Promise<void> {
+  const overflow = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(
+      and(
+        eq(leads.organizationId, organizationId),
+        isNull(leads.deletedAt),
+        ne(leads.status, "archived"),
+      ),
+    )
+    .orderBy(...INBOX_ORDER)
+    .offset(INBOX_SIZE);
+  if (overflow.length === 0) return;
+
+  await db
+    .update(leads)
+    .set({ status: "archived", statusChangedAt: now, updatedAt: now })
+    .where(inArray(leads.id, overflow.map((lead) => lead.id)));
 }
 
 export type ImportOutcome =

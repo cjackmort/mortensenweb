@@ -10,7 +10,12 @@ import { DeleteLeadForm, LeadStatusForm } from "../lead-controls";
 import { RefreshOnRead } from "../refresh-on-read";
 import { LeadReplyForm } from "../reply-form";
 import { listLeadReplies, replyIdentity } from "@/db/repositories/client/lead-replies";
-import { findBookingState, type BookingState } from "@/db/repositories/client/event-bookings";
+import {
+  bookingCalendar,
+  findBookingState,
+  type BookingState,
+} from "@/db/repositories/client/event-bookings";
+import { isMonth, monthOf } from "@/lib/growth/booking-calendar";
 import {
   BOOKING_FIELDS,
   formatEventDate,
@@ -20,6 +25,7 @@ import {
   todayIn,
   type BookingRequest,
 } from "@/lib/growth/bookings";
+import { BookingCalendar } from "../booking-calendar";
 import { BookingDecision, BookingLogoPreview, type BookingView } from "../booking-controls";
 
 const TICKETS: Record<NonNullable<BookingRequest["sellingTickets"]>, string> = {
@@ -41,11 +47,13 @@ function BookingPanel({
   publicId,
   request,
   booking,
+  canReply,
   readOnly,
 }: {
   publicId: string;
   request: BookingRequest;
   booking: BookingState | null;
+  canReply: boolean;
   readOnly: boolean;
 }) {
   const today = todayIn(businessTimeZone());
@@ -99,11 +107,22 @@ function BookingPanel({
           requestedDate={request.requestedDate}
           today={today}
           booking={view}
+          canReply={canReply}
           readOnly={readOnly}
         />
       </div>
     </section>
   );
+}
+
+/**
+ * The month the calendar opens on beside a request: the night it is booked or
+ * held for, else the night they asked for — unless that has passed, when this
+ * month is more use.
+ */
+function requestMonth(booking: BookingState | null, request: BookingRequest, today: string): string {
+  const night = booking?.decision !== "declined" ? (booking?.eventDate ?? request.requestedDate) : request.requestedDate;
+  return night && night >= today ? monthOf(night) : monthOf(today);
 }
 
 /** Field names the booking panel already shows. */
@@ -130,8 +149,10 @@ export const metadata = {
 
 export default async function LeadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ publicId: string }>;
+  searchParams: Promise<{ month?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -173,26 +194,22 @@ export default async function LeadPage({
   const request = isBooking ? readBookingRequest(lead.fields) : null;
   const who = lead.name ?? lead.email ?? lead.phone;
 
-  return (
-    <main className="shell">
-      <RefreshOnRead wasUnread={lead.unread} />
-      <p className="lead-back">
-        <Link href="/dashboard/growth/leads">← All leads</Link>
-      </p>
+  // Beside a booking request, the venue's calendar for that night's month.
+  const today = todayIn(businessTimeZone());
+  const { month: monthParam } = await searchParams;
+  const month = request && (isMonth(monthParam) ? monthParam : requestMonth(booking, request, today));
+  const calendar = month ? await bookingCalendar(db, ctx, month) : null;
+  const focusDate =
+    booking && booking.decision !== "declined" ? booking.eventDate : (request?.requestedDate ?? null);
 
-      <div className="masthead">
-        <h1>{request?.actName ?? who ?? "Enquiry"}</h1>
-        <span>
-          {request?.actName && who ? `From ${who} · ` : ""}
-          {formatDateTime(lead.receivedAt)} · {lead.siteName}
-        </span>
-      </div>
-
+  const content = (
+    <div className="lead-main">
       {request && (
         <BookingPanel
           publicId={lead.publicId}
           request={request}
           booking={booking}
+          canReply={Boolean(lead.email)}
           readOnly={ctx.impersonating}
         />
       )}
@@ -238,7 +255,7 @@ export default async function LeadPage({
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="reply">
         <div className="panel-head">
           <h2>Reply</h2>
         </div>
@@ -293,6 +310,38 @@ export default async function LeadPage({
       </section>
 
       <DeleteLeadForm publicId={lead.publicId} readOnly={ctx.impersonating} />
+    </div>
+  );
+
+  return (
+    <main className="shell">
+      <RefreshOnRead wasUnread={lead.unread} />
+      <p className="lead-back">
+        <Link href="/dashboard/growth/leads">← All leads</Link>
+      </p>
+
+      <div className="masthead">
+        <h1>{request?.actName ?? who ?? "Enquiry"}</h1>
+        <span>
+          {request?.actName && who ? `From ${who} · ` : ""}
+          {formatDateTime(lead.receivedAt)} · {lead.siteName}
+        </span>
+      </div>
+
+      {month && calendar ? (
+        <div className="leads-layout">
+          {content}
+          <BookingCalendar
+            month={month}
+            entries={calendar}
+            today={today}
+            focusDate={focusDate}
+            hrefFor={(m) => `/dashboard/growth/leads/${lead.publicId}?month=${m}`}
+          />
+        </div>
+      ) : (
+        content
+      )}
     </main>
   );
 }

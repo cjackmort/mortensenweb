@@ -175,7 +175,10 @@ export const eventBookings = pgTable(
       .references(() => sites.id, { onDelete: "cascade" }),
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
 
-    /** `approved` or `declined`. */
+    /**
+     * `held` (saved to the client's calendar, not on the site, nobody
+     * emailed), `approved`, or `declined`.
+     */
     decision: text("decision").notNull(),
     actName: text("act_name").notNull(),
     genre: text("genre"),
@@ -208,10 +211,10 @@ export const eventBookings = pgTable(
       .on(t.leadId)
       .where(sql`${t.leadId} IS NOT NULL`),
     index("event_bookings_site_date_idx").on(t.siteId, t.eventDate),
-    check("event_bookings_decision_known", sql`${t.decision} IN ('approved', 'declined')`),
+    check("event_bookings_decision_known", sql`${t.decision} IN ('held', 'approved', 'declined')`),
     check(
-      "event_bookings_approved_has_date",
-      sql`${t.decision} <> 'approved' OR ${t.eventDate} IS NOT NULL`,
+      "event_bookings_scheduled_has_date",
+      sql`${t.decision} = 'declined' OR ${t.eventDate} IS NOT NULL`,
     ),
     check(
       "event_bookings_start_time_shape",

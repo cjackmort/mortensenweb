@@ -3,14 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { getDb } from "@/db/client";
-import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
+import { getDb, type Database } from "@/db/client";
+import { NotFoundError, tenantContextFrom, type TenantContext } from "@/db/repositories/context";
 import { deleteLead, isLeadStatus, isLeadView, setLeadStatus } from "@/db/repositories/client/leads";
 import { sendLeadReply } from "@/db/repositories/client/lead-replies";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import {
   approveBooking,
   declineBooking,
+  holdBooking,
   setBookingListed,
   type BookingResult,
 } from "@/db/repositories/client/event-bookings";
@@ -124,17 +125,31 @@ export async function sendLeadReplyAction(
 // Booking requests
 // ---------------------------------------------------------------------------
 
-const BOOKING_OPS = ["approve", "decline", "unlist", "relist"] as const;
+const BOOKING_OPS = ["hold", "approve", "decline", "unlist", "relist"] as const;
 type BookingOp = (typeof BOOKING_OPS)[number];
 
 function isBookingOp(value: unknown): value is BookingOp {
   return typeof value === "string" && (BOOKING_OPS as readonly string[]).includes(value);
 }
 
+async function runBookingOp(
+  db: Database,
+  ctx: TenantContext,
+  publicId: string,
+  op: BookingOp,
+  formData: FormData,
+): Promise<BookingResult> {
+  const when = { eventDate: formData.get("date"), startTime: formData.get("time") };
+  if (op === "hold") return holdBooking(db, ctx, publicId, when);
+  if (op === "approve") return approveBooking(db, ctx, publicId, when);
+  if (op === "decline") return declineBooking(db, ctx, publicId);
+  return setBookingListed(db, ctx, publicId, op === "relist");
+}
+
 /**
- * Approve, decline, take off the site, put back — one action, chosen by the
- * button pressed, so the panel holds one result that survives the panel
- * redrawing itself into its new state.
+ * Save to calendar, approve, decline, take off the site, put back — one
+ * action, chosen by the button pressed, so the panel holds one result that
+ * survives the panel redrawing itself into its new state.
  *
  * Gated like replies: approving emails someone in the business's name, and
  * every one of these changes what the client's website shows.
@@ -156,15 +171,7 @@ export async function bookingAction(
   const { db, ctx } = session;
   let result: BookingResult;
   try {
-    result =
-      op === "approve"
-        ? await approveBooking(db, ctx, publicId, {
-            eventDate: formData.get("date"),
-            startTime: formData.get("time"),
-          })
-        : op === "decline"
-          ? await declineBooking(db, ctx, publicId)
-          : await setBookingListed(db, ctx, publicId, op === "relist");
+    result = await runBookingOp(db, ctx, publicId, op, formData);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { ok: false, message: "That request no longer exists." };
@@ -175,8 +182,9 @@ export async function bookingAction(
   if (!result.ok) return result;
   refresh(publicId);
 
-  // From the inbox list the row is about to leave the Open view, and this
-  // result would leave with it. The list says what happened instead.
+  // From the inbox list, the row's buttons give way to its new state as soon
+  // as the list redraws, and this result would go with them. The list says
+  // what happened instead.
   const inboxView = formData.get("inbox");
   if (isLeadView(inboxView)) {
     const view = inboxView === "open" ? "" : `view=${inboxView}&`;

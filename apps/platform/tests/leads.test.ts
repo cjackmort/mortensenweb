@@ -228,10 +228,10 @@ describe("the client's inbox", () => {
     const mine = await record(globexSite, submission({ data: { name: "Only Globex", email: "g@example.test" } }));
     if (!mine.created) throw new Error("not created");
 
-    const acmeView = await listLeads(db, acme.ctx, { view: "all" });
+    const acmeView = await listLeads(db, acme.ctx, { view: "open" });
     expect(acmeView.leads.some((l) => l.name === "Only Globex")).toBe(false);
 
-    const globexView = await listLeads(db, globex.ctx, { view: "all" });
+    const globexView = await listLeads(db, globex.ctx, { view: "open" });
     expect(globexView.leads.some((l) => l.name === "Only Globex")).toBe(true);
   });
 
@@ -264,17 +264,21 @@ describe("the client's inbox", () => {
     expect(await countUnreadLeads(db, acme.ctx)).toBe(before - 1);
   });
 
-  it("files a lead by status, and keeps won ones out of the open view", async () => {
-    const created = await record(acmeSite, submission({ data: { name: "Will Win", email: "w@example.test" } }));
-    if (!created.created) throw new Error("not created");
-    const [row] = await db.select({ publicId: leads.publicId }).from(leads).where(eq(leads.id, created.leadId));
+  it("keeps won and lost leads in the inbox, and moves archived ones to Archived", async () => {
+    const won = await record(acmeSite, submission({ data: { name: "Will Win", email: "w@example.test" } }));
+    const archived = await record(acmeSite, submission({ data: { name: "Put Away", email: "p@example.test" } }));
+    if (!won.created || !archived.created) throw new Error("not created");
+    const [wonRow] = await db.select({ publicId: leads.publicId }).from(leads).where(eq(leads.id, won.leadId));
+    const [archivedRow] = await db.select({ publicId: leads.publicId }).from(leads).where(eq(leads.id, archived.leadId));
 
-    await setLeadStatus(db, acme.ctx, row!.publicId, "won");
+    await setLeadStatus(db, acme.ctx, wonRow!.publicId, "won");
+    await setLeadStatus(db, acme.ctx, archivedRow!.publicId, "archived");
 
-    const open = await listLeads(db, acme.ctx, { view: "open" });
-    const won = await listLeads(db, acme.ctx, { view: "won" });
-    expect(open.leads.some((l) => l.publicId === row!.publicId)).toBe(false);
-    expect(won.leads.some((l) => l.publicId === row!.publicId)).toBe(true);
+    const inbox = (await listLeads(db, acme.ctx, { view: "open" })).leads.map((l) => l.publicId);
+    const put = (await listLeads(db, acme.ctx, { view: "archived" })).leads.map((l) => l.publicId);
+    expect(inbox).toContain(wonRow!.publicId);
+    expect(inbox).not.toContain(archivedRow!.publicId);
+    expect(put).toContain(archivedRow!.publicId);
   });
 
   it("erases a deleted lead's details, and the next import does not bring it back", async () => {
@@ -291,9 +295,65 @@ describe("the client's inbox", () => {
 
     // Netlify still holds the submission; the backfill re-reads it.
     expect((await record(acmeSite, payload, { asHistory: true })).created).toBe(false);
-    const all = await listLeads(db, acme.ctx, { view: "all" });
-    expect(all.leads.some((l) => l.publicId === row!.publicId)).toBe(false);
+    for (const view of ["open", "archived"] as const) {
+      const listed = await listLeads(db, acme.ctx, { view });
+      expect(listed.leads.some((l) => l.publicId === row!.publicId)).toBe(false);
+    }
     await expect(openLead(db, acme.ctx, row!.publicId)).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("keeping the inbox to the newest ten", () => {
+  async function freshInbox(name: string) {
+    const tenant = await seedTenant(db, name);
+    return { tenant, site: await addSite(tenant, name.toLowerCase()) };
+  }
+
+  /** A submission received on `day` of October, so the order is unambiguous. */
+  function onDay(day: number) {
+    const dd = String(day).padStart(2, "0");
+    return submission({ created_at: `2026-10-${dd}T15:00:00.000Z`, data: { name: `Day ${day}`, email: `d${day}@example.test` } });
+  }
+
+  it("archives the oldest when an eleventh arrives, so ten stay in the inbox", async () => {
+    const { tenant, site } = await freshInbox("Initech");
+    for (let day = 1; day <= 12; day += 1) await record(site, onDay(day));
+
+    const inbox = (await listLeads(db, tenant.ctx, { view: "open" })).leads.map((l) => l.name);
+    const archived = (await listLeads(db, tenant.ctx, { view: "archived" })).leads.map((l) => l.name);
+    expect(inbox).toEqual(["Day 12", "Day 11", "Day 10", "Day 9", "Day 8", "Day 7", "Day 6", "Day 5", "Day 4", "Day 3"]);
+    expect(archived).toEqual(["Day 2", "Day 1"]);
+    // Archived ones no longer count as waiting.
+    expect(await countUnreadLeads(db, tenant.ctx)).toBe(10);
+  });
+
+  it("archives by when they were sent, so an imported older submission goes straight to Archived", async () => {
+    const { tenant, site } = await freshInbox("Hooli");
+    for (let day = 11; day <= 20; day += 1) await record(site, onDay(day));
+    await record(site, onDay(2), { asHistory: true });
+
+    const archived = (await listLeads(db, tenant.ctx, { view: "archived" })).leads.map((l) => l.name);
+    expect(archived).toEqual(["Day 2"]);
+  });
+
+  it("does not count leads already archived by hand", async () => {
+    const { tenant, site } = await freshInbox("Umbrella");
+    for (let day = 1; day <= 10; day += 1) await record(site, onDay(day));
+    const [first] = (await listLeads(db, tenant.ctx, { view: "open" })).leads.slice(-1);
+    await setLeadStatus(db, tenant.ctx, first!.publicId, "archived");
+
+    await record(site, onDay(11));
+    const inbox = await listLeads(db, tenant.ctx, { view: "open" });
+    const archived = (await listLeads(db, tenant.ctx, { view: "archived" })).leads.map((l) => l.name);
+    expect(inbox.leads).toHaveLength(10);
+    expect(archived).toEqual(["Day 1"]);
+  });
+
+  it("leaves other clients' inboxes alone", async () => {
+    const before = (await listLeads(db, globex.ctx, { view: "open" })).leads.length;
+    const { site } = await freshInbox("Soylent");
+    for (let day = 1; day <= 11; day += 1) await record(site, onDay(day));
+    expect((await listLeads(db, globex.ctx, { view: "open" })).leads.length).toBe(before);
   });
 });
 

@@ -19,13 +19,16 @@ import { recordLead, type FormsSite } from "@/db/repositories/admin/leads";
 import { listUpcomingEvents, findListedEventLogo } from "@/db/repositories/admin/event-bookings";
 import {
   approveBooking,
+  bookingCalendar,
   bookingStatesFor,
   declineBooking,
+  holdBooking,
   readBookingLogo,
   setBookingListed,
+  takesBookings,
   type BookingDeps,
 } from "@/db/repositories/client/event-bookings";
-import { deleteLead } from "@/db/repositories/client/leads";
+import { deleteLead, setLeadStatus } from "@/db/repositories/client/leads";
 import { AuthorizationError, NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import type { EmailMessage, SendResult } from "@/lib/email/mailer";
 import type { StorageDriver } from "@/lib/storage";
@@ -402,6 +405,152 @@ describe("declining a booking", () => {
   });
 });
 
+describe("holding a date on the calendar", () => {
+  it("saves the date and time without listing the show or emailing anyone", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Pencilled In" });
+
+    const held = await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "21:30" }, { now: NOW });
+    expect(held).toEqual({
+      ok: true,
+      message:
+        "Saved to your calendar for Friday, May 14, 2027 · 9:30 PM. It isn't on your site yet, and they haven't been emailed.",
+    });
+    expect(outbox).toHaveLength(0);
+
+    expect((await bookingStatesFor(db, venue.ctx, [lead])).get(lead)).toMatchObject({
+      decision: "held",
+      eventDate: "2027-05-14",
+      startTime: "21:30",
+      emailStatus: null,
+    });
+    const events = await listUpcomingEvents(db, venueSite.sitePublicId, "2027-05-01");
+    expect(events?.some((e) => e.actName === "Pencilled In")).toBe(false);
+
+    const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
+    expect(row!.status).toBe("contacted");
+    expect(row!.readAt).not.toBeNull();
+  });
+
+  it("puts the held date on the site when approved, and emails them once", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Then Approved" });
+    await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-15", startTime: "20:00" }, { now: NOW });
+
+    const approved = await approveBooking(db, venue.ctx, lead, { eventDate: "2027-05-15", startTime: "20:00" }, deps());
+    expect(approved.ok).toBe(true);
+    expect(outbox).toHaveLength(1);
+    const events = await listUpcomingEvents(db, venueSite.sitePublicId, "2027-05-01");
+    expect(events?.find((e) => e.actName === "Then Approved")).toMatchObject({
+      eventDate: "2027-05-15",
+      startTime: "20:00",
+    });
+  });
+
+  it("can move a held date, but not a show that is already on the site", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Moved Around" });
+    await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-21", startTime: "" }, { now: NOW });
+    const moved = await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-22", startTime: "22:00" }, { now: NOW });
+    expect(moved.ok).toBe(true);
+    expect((await bookingStatesFor(db, venue.ctx, [lead])).get(lead)).toMatchObject({
+      decision: "held",
+      eventDate: "2027-05-22",
+      startTime: "22:00",
+    });
+
+    await approveBooking(db, venue.ctx, lead, { eventDate: "2027-05-22", startTime: "22:00" }, deps());
+    const again = await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-29", startTime: "" }, { now: NOW });
+    expect(again).toEqual({
+      ok: false,
+      message: "It's already on your site. Take it off the site first to move it.",
+    });
+  });
+
+  it("refuses a date that has passed, or a time that isn't one", async () => {
+    const lead = await recordBooking(venueSite);
+    expect(await holdBooking(db, venue.ctx, lead, { eventDate: "2026-10-01", startTime: "" }, { now: NOW })).toMatchObject({
+      ok: false,
+    });
+    expect(await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "late" }, { now: NOW })).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("cannot be done to another client's request, or while an operator is viewing", async () => {
+    const lead = await recordBooking(venueSite);
+    await expect(
+      holdBooking(db, other.ctx, lead, { eventDate: "2027-05-14", startTime: "" }, { now: NOW }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    const viewing = tenantContextFrom(
+      { userId: venue.userId, organizationId: venue.organizationId, role: "admin", status: "active", sessionEpoch: 0 },
+      venue.organizationId,
+      { impersonating: true },
+    );
+    await expect(
+      holdBooking(db, viewing, lead, { eventDate: "2027-05-14", startTime: "" }, { now: NOW }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("leaves an archived request in Archived when it is decided", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Stays Archived" });
+    await setLeadStatus(db, venue.ctx, lead, "archived");
+    await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "" }, { now: NOW });
+    await approveBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "" }, deps());
+    const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
+    expect(row!.status).toBe("archived");
+  });
+});
+
+describe("the booking calendar", () => {
+  it("shows a month's booked, held and requested nights in date order, and nothing declined, removed or another client's", async () => {
+    const booked = await recordBooking(venueSite, { act_name: "June Booked", preferred_date: "2027-06-04" });
+    const held = await recordBooking(venueSite, { act_name: "June Held", preferred_date: "2027-06-11" });
+    await recordBooking(venueSite, { act_name: "June Asked", preferred_date: "2027-06-19" });
+    const declined = await recordBooking(venueSite, { act_name: "June No", preferred_date: "2027-06-20" });
+    const removed = await recordBooking(venueSite, { act_name: "June Off", preferred_date: "2027-06-25" });
+    await recordBooking(otherSite, { act_name: "Not Yours", preferred_date: "2027-06-05" });
+
+    await approveBooking(db, venue.ctx, booked, { eventDate: "2027-06-04", startTime: "21:00" }, deps());
+    await holdBooking(db, venue.ctx, held, { eventDate: "2027-06-12", startTime: "20:00" }, { now: NOW });
+    await declineBooking(db, venue.ctx, declined, { now: NOW });
+    await approveBooking(db, venue.ctx, removed, { eventDate: "2027-06-25", startTime: "" }, deps());
+    await setBookingListed(db, venue.ctx, removed, false, { now: NOW });
+
+    const entries = await bookingCalendar(db, venue.ctx, "2027-06");
+    expect(entries.map((e) => [e.date, e.kind, e.actName, e.startTime])).toEqual([
+      ["2027-06-04", "booked", "June Booked", "21:00"],
+      ["2027-06-12", "held", "June Held", "20:00"],
+      ["2027-06-19", "requested", "June Asked", null],
+    ]);
+    expect(entries.map((e) => e.leadPublicId)).toEqual([booked, held, expect.any(String)]);
+  });
+
+  it("drops a request for a night that has passed, but keeps a past show as it was", async () => {
+    const asked = await recordBooking(venueSite, { act_name: "Missed It", preferred_date: "2026-11-02" });
+    const played = await recordBooking(venueSite, { act_name: "Played It", preferred_date: "2026-11-03" });
+    await approveBooking(db, venue.ctx, played, { eventDate: "2026-11-03", startTime: "" }, deps());
+    expect(asked).toBeTruthy();
+
+    const entries = await bookingCalendar(db, venue.ctx, "2026-11", { today: "2026-11-10" });
+    const names = entries.map((e) => e.actName);
+    expect(names).toContain("Played It");
+    expect(names).not.toContain("Missed It");
+  });
+
+  it("is only shown to clients that take bookings", async () => {
+    expect(await takesBookings(db, venue.ctx)).toBe(true);
+    const plumber = await seedTenant(db, "Pipe Works");
+    expect(await takesBookings(db, plumber.ctx)).toBe(false);
+  });
+
+  it("keeps an undecided request on the calendar after it is archived", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "July Asked", preferred_date: "2027-07-09" });
+    await setLeadStatus(db, venue.ctx, lead, "archived");
+    const entries = await bookingCalendar(db, venue.ctx, "2027-07");
+    expect(entries).toEqual([
+      { date: "2027-07-09", kind: "requested", actName: "July Asked", startTime: null, leadPublicId: lead },
+    ]);
+  });
+});
+
 describe("the inbox's line after a quick approve or decline", () => {
   // The row leaves the Open list as soon as it is decided, taking its buttons
   // with it, so the inbox says what happened from the stored decision.
@@ -459,13 +608,18 @@ describe("the public list of upcoming shows", () => {
     await setBookingListed(db, venue.ctx, removed, false, { now: NOW });
     await approveBooking(db, other.ctx, elsewhere, { eventDate: "2027-01-08", startTime: "" }, deps());
 
+    // Other tests share this venue and list later shows of their own.
+    const ours = new Set(["Early Bird", "Night Owl", "Whenever", "Not Tonight", "Taken Down", "Wrong Venue"]);
+    const names = (list: Awaited<ReturnType<typeof listUpcomingEvents>>) =>
+      list?.map((e) => e.actName).filter((name) => ours.has(name));
+
     const events = await listUpcomingEvents(db, venueSite.sitePublicId, "2027-01-01");
-    expect(events?.map((e) => e.actName)).toEqual(["Early Bird", "Night Owl", "Whenever"]);
+    expect(names(events)).toEqual(["Early Bird", "Night Owl", "Whenever"]);
     expect(JSON.stringify(events)).not.toContain("band.example");
 
     // A day later the first show has passed.
     const later = await listUpcomingEvents(db, venueSite.sitePublicId, "2027-01-09");
-    expect(later?.map((e) => e.actName)).toEqual(["Night Owl", "Whenever"]);
+    expect(names(later)).toEqual(["Night Owl", "Whenever"]);
   });
 
   it("says the site does not exist rather than returning an empty list", async () => {
@@ -516,6 +670,14 @@ describe("deleting a booking request's lead", () => {
     await declineBooking(db, venue.ctx, lead, { now: NOW });
     await deleteLead(db, venue.ctx, lead);
     const rows = await db.select().from(eventBookings).where(eq(eventBookings.actName, "Gone Entirely"));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("removes a held date from the calendar too — it was never public", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Held Then Gone" });
+    await holdBooking(db, venue.ctx, lead, { eventDate: "2027-08-06", startTime: "" }, { now: NOW });
+    await deleteLead(db, venue.ctx, lead);
+    const rows = await db.select().from(eventBookings).where(eq(eventBookings.actName, "Held Then Gone"));
     expect(rows).toHaveLength(0);
   });
 });
