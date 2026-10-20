@@ -8,6 +8,7 @@ import { PrintButton } from "@/components/print-button";
 import { ReportView } from "@/components/report-view";
 import { formatDateTime } from "@/lib/time";
 import { ReportButton } from "../../report-forms";
+import { emailStatusLabel } from "../../reports-section";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +44,7 @@ export default async function AdminReportPreviewPage({
   }
   if (!preview) notFound();
 
-  const status = preview.emailStatus
-    ? `${preview.emailStatus}${preview.emailedAt ? `, ${formatDateTime(preview.emailedAt)}` : ""}${preview.emailError ? ` (${preview.emailError})` : ""}`
-    : "not emailed";
+  const status = `${emailStatusLabel(preview.emailStatus)}${preview.emailedAt ? `, ${formatDateTime(preview.emailedAt)}` : ""}${preview.emailError ? `: ${preview.emailError}` : ""}`;
 
   return (
     <main className="shell">

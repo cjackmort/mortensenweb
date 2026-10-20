@@ -59,6 +59,18 @@
   font-weight: 600;
 }
 
+/* On a phone the label sits above its figure rather than squeezing it. */
+@media (max-width: 30rem) {
+  .glance {
+    grid-template-columns: 1fr;
+    gap: 0.125rem;
+  }
+
+  .glance dd {
+    margin-bottom: 0.625rem;
+  }
+}
+
 .glance dd.missing,
 .missingNote {
   color: var(--muted);

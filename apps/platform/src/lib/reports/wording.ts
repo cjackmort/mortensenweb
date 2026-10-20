@@ -14,7 +14,7 @@ export const MISSING_MESSAGES: Record<MissingReason, string> = {
   analytics_not_configured:
     "Analytics isn't connected yet, so there are no visitor figures for this month.",
   analytics_not_connected:
-    "Analytics isn't set up on your site yet, so visits weren't recorded this month.",
+    "Analytics isn't set up on your site yet, so visits and taps weren't recorded this month.",
   analytics_error:
     "We couldn't reach the analytics service when this report was made. That's our problem, not a drop in your traffic.",
   no_site: "You don't have a website with us yet.",

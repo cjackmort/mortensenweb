@@ -11,6 +11,11 @@ const EMAIL_STATUS: Record<string, string> = {
   no_recipient: "Not emailed (no one to send to)",
 };
 
+/** What happened to a report's email, in plain words. */
+export function emailStatusLabel(status: string | null): string {
+  return status ? (EMAIL_STATUS[status] ?? status) : "Not emailed";
+}
+
 /**
  * Monthly reports for one client: what was built, what each email did, and
  * the buttons to preview, rebuild and re-send. Building here never emails;
@@ -68,7 +73,7 @@ export function ReportsSection({
                   </td>
                   <td data-label="Headline">{report.headline ?? "Unreadable: rebuild it"}</td>
                   <td data-label="Email">
-                    {report.emailStatus ? (EMAIL_STATUS[report.emailStatus] ?? report.emailStatus) : "Not emailed"}
+                    {emailStatusLabel(report.emailStatus)}
                     {report.emailedAt && <span className="muted"> · {formatDateTime(report.emailedAt)}</span>}
                     {report.emailError && <span className="error"> · {report.emailError}</span>}
                   </td>
