@@ -211,6 +211,13 @@
       "when": 1789900000000,
       "tag": "0028_event_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790500000000,
+      "tag": "0034_google_profile",
+      "breakpoints": true
     }
   ]
 }
