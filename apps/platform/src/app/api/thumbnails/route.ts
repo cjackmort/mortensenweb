@@ -6,8 +6,9 @@ import { hasCronSecret, listThumbnailTargets } from "@/lib/thumbnails";
  * The sites the thumbnail job should photograph.
  *
  * Called by `.github/workflows/site-thumbnails.yml`, which holds CRON_SECRET
- * and no session. Public in `proxy.ts` for that reason; the secret is the
- * authentication, and without it this answers 401.
+ * and no session. Listed as self-authenticating in tests/route-auth.test.ts
+ * for that reason; the secret is the authentication, and without it this
+ * answers 401.
  */
 
 export const dynamic = "force-dynamic";
