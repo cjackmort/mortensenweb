@@ -543,3 +543,43 @@ export function describeWindow(
 ): DateWindow {
   return resolveWindow(filters, timeZone, now);
 }
+
+// ---------------------------------------------------------------------------
+// One campaign's share
+// ---------------------------------------------------------------------------
+
+export interface UtmCampaignFigures {
+  visitors: number;
+  visits: number;
+  /** Every event recorded on the tagged landing page, unclassified. */
+  events: Breakdown[];
+}
+
+/**
+ * What arrived tagged `utm_campaign=<value>`: the QR & campaign tracking
+ * page's "visits from this campaign". Two calls, both through the same
+ * five-minute cache as the dashboard's.
+ *
+ * Umami matches a UTM filter against each event's own URL, so the events
+ * here are the ones on the page the campaign opened, before the visitor
+ * clicked anywhere else. The caller says so wherever it shows them.
+ *
+ * Throws on failure, like the calls above. The caller turns that into an
+ * explicit state, never into zeroes.
+ */
+export async function fetchUtmCampaignFigures(
+  websiteId: string,
+  utmCampaign: string,
+  window: { startAt: number; endAt: number },
+): Promise<UtmCampaignFigures> {
+  const params = { startAt: window.startAt, endAt: window.endAt, utmCampaign };
+  const [stats, events] = await Promise.all([
+    umamiFetch<UmamiStatsResponse>(`/websites/${websiteId}/stats`, params),
+    umamiFetch<UmamiMetric[]>(`/websites/${websiteId}/metrics`, { ...params, type: "event", limit: 500 }),
+  ]);
+  return {
+    visitors: statValue(stats.visitors),
+    visits: statValue(stats.visits),
+    events: toBreakdown(Array.isArray(events) ? events : [], 500),
+  };
+}

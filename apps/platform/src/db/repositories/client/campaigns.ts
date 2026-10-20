@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  analyticsConnections,
   auditLog,
   CAMPAIGN_PLACEMENTS,
   campaigns,
@@ -326,4 +327,26 @@ export async function setCampaignPaused(
     .where(and(eq(campaigns.publicId, publicId), eq(campaigns.organizationId, ctx.organizationId)))
     .returning({ id: campaigns.id });
   if (updated.length === 0) throw new NotFoundError();
+}
+
+/**
+ * Each campaign's analytics name and its site's Umami website id, for
+ * attribution. Resolved from the session's organization, so a campaign can
+ * only ever be looked up in its own site's analytics.
+ */
+export async function campaignAnalyticsTargets(
+  db: Database,
+  ctx: TenantContext,
+): Promise<Map<string, { utmCampaign: string; websiteId: string | null }>> {
+  const rows = await db
+    .select({
+      publicId: campaigns.publicId,
+      utmCampaign: campaigns.utmCampaign,
+      websiteId: analyticsConnections.umamiWebsiteId,
+    })
+    .from(campaigns)
+    .innerJoin(sites, eq(sites.id, campaigns.siteId))
+    .leftJoin(analyticsConnections, eq(analyticsConnections.siteId, sites.id))
+    .where(eq(campaigns.organizationId, ctx.organizationId));
+  return new Map(rows.map((row) => [row.publicId, { utmCampaign: row.utmCampaign, websiteId: row.websiteId }]));
 }

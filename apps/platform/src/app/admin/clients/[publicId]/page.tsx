@@ -36,6 +36,7 @@ import { BillingSection } from "./billing-section";
 import { getClientGrowth } from "@/db/repositories/admin/growth";
 import { WebsiteSection } from "./website-section";
 import { AnalyticsSection } from "./analytics-section";
+import { CampaignsPanel } from "./campaigns-panel";
 import { BriefsSection, RequestsSection } from "./work-sections";
 import {
   SECTIONS,
@@ -326,7 +327,12 @@ async function Section(props: {
         />
       );
     case "analytics":
-      return <AnalyticsSection clientPublicId={clientPublicId} sites={sites} />;
+      return (
+        <>
+          <AnalyticsSection clientPublicId={clientPublicId} sites={sites} />
+          <CampaignsPanel ctx={props.ctx} clientPublicId={clientPublicId} />
+        </>
+      );
     case "briefs":
       return (
         <BriefsSection

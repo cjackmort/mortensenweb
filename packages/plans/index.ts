@@ -83,7 +83,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Know which print campaign actually brought in calls — and stop paying for the ones that don't.",
     addOnCents: 2000,
     includedFrom: "growth",
-    available: false,
+    available: true,
   },
   {
     key: "reviews",
