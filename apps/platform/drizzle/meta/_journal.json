@@ -211,6 +211,13 @@
       "when": 1789900000000,
       "tag": "0028_event_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790600000000,
+      "tag": "0035_monthly_reports",
+      "breakpoints": true
     }
   ]
 }
