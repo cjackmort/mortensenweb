@@ -87,6 +87,22 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },
 
+  // Links in a review request, opened by the business's customer, who has no
+  // account. Each checks a token signed for its own purpose before any query,
+  // and rate-limits by address.
+  "review/[token]/route.ts": {
+    reason: "tracked review link in a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/stop/page.tsx": {
+    reason: "unsubscribe page reached from a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/unsubscribe/route.ts": {
+    reason: "one-click unsubscribe, POSTed by mail providers",
+    checks: "verifyReviewToken(",
+  },
+
   // Read by client websites in their visitors' browsers, where no session can
   // exist. Each returns only what the client chose to publish, and 404s on a
   // site or show it does not list.
