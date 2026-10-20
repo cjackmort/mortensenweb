@@ -46,6 +46,8 @@ const CLIENT_NAV: NavItem[] = [
   // part of asking for a change — a client uploads photos and then refers to
   // them — while Billing is a place you go for its own reasons.
   { href: "/dashboard/media", label: "Media" },
+  // Looking back over a month, after the tabs for doing things this month.
+  { href: "/dashboard/reports", label: "Reports" },
   // What they get and changing it, beside what they have paid. Separate tabs
   // because "cancel my plan" and "where is my receipt" are different errands.
   { href: "/dashboard/plan", label: "Plan" },

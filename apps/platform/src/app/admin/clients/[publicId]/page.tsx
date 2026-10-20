@@ -37,6 +37,8 @@ import { getClientGrowth } from "@/db/repositories/admin/growth";
 import { WebsiteSection } from "./website-section";
 import { AnalyticsSection } from "./analytics-section";
 import { BriefsSection, RequestsSection } from "./work-sections";
+import { getClientReports, type ClientReportsView } from "@/db/repositories/admin/reports";
+import { ReportsSection } from "./reports-section";
 import {
   SECTIONS,
   SectionGrid,
@@ -88,13 +90,14 @@ export default async function ClientDetailPage({
   }
 
   const { client, organization, requests } = detail;
-  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reports] = await Promise.all([
     listOrganizationUsers(ctx, db, organization.id),
     listSitesWithAnalytics(ctx, db, organization.id),
     listClientPaymentRequests(ctx, db, organization.id),
     listBriefs(ctx, db, organization.id),
     getBusinessProfile(db, organization.id),
     getBillingPlan(db, client.id),
+    getClientReports(ctx, db, client.publicId),
   ]);
 
   const summaries = summarise({
@@ -104,6 +107,7 @@ export default async function ClientDetailPage({
     sites: siteRows,
     briefs,
     requests,
+    reports,
   });
 
   return (
@@ -145,6 +149,7 @@ export default async function ClientDetailPage({
             profile={profile}
             sites={siteRows}
             requests={requests}
+            reports={reports}
           />
         </>
       ) : (
@@ -286,6 +291,7 @@ async function Section(props: {
   profile: Profile;
   sites: Sites;
   requests: Requests;
+  reports: ClientReportsView;
 }) {
   const { section, clientPublicId, sites } = props;
 
@@ -337,6 +343,8 @@ async function Section(props: {
       );
     case "requests":
       return <RequestsSection requests={props.requests} />;
+    case "reports":
+      return <ReportsSection clientPublicId={clientPublicId} view={props.reports} />;
   }
 }
 
@@ -398,8 +406,10 @@ function summarise(input: {
   sites: Sites;
   briefs: Briefs;
   requests: Requests;
+  reports: ClientReportsView;
 }): SectionSummaries {
-  const { billingPlan: plan, sites, briefs, requests } = input;
+  const { billingPlan: plan, sites, briefs, requests, reports } = input;
+  const latestReport = reports.reports[0];
   const connected = sites.filter((site) => site.umamiWebsiteId).length;
   const open = requests.filter((request) => isOpen(request.status)).length;
   const drafts = briefs.filter((brief) => brief.status === "draft").length;
@@ -433,5 +443,11 @@ function summarise(input: {
     requests: {
       status: requests.length === 0 ? "None yet" : `${open} in progress · ${requests.length} recent`,
     },
+    reports: latestReport
+      ? {
+          status: `${latestReport.label}${latestReport.emailStatus === "failed" ? " · email failed" : ""}${reports.emailsOff ? " · emails off" : ""}`,
+          attention: latestReport.emailStatus === "failed",
+        }
+      : { status: reports.eligible ? "First one on the 1st" : "Not on their plan" },
   };
 }
