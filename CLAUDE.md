@@ -93,12 +93,17 @@ cheap the query is. Anything new that creates scheduled work must open the
 gate's window (`nudgeScheduler` or `keepSchedulerAwake`), or that work waits up
 to six hours for the next sweep.
 
-**Anything unauthenticated must be listed in `proxy.ts` (Next 16 renamed `middleware.ts`).** Webhook
-receivers, signed attachment links and `/api/cron` all authenticate themselves
-and none can hold a session. An unlisted route is redirected to `/login` and
-answered 307 — so the scheduler ran every five minutes for a day, recorded a
-response, reported success, and never once reached the endpoint. Every job it
-runs was silently absent.
+**There is no `proxy.ts` (Next 16's `middleware.ts`), on purpose — every route
+authenticates itself.** Pages, layouts, route handlers and server actions call
+`currentUser()`; webhook receivers, signed links and `/api/cron` check their
+own signature, token or `CRON_SECRET`. `tests/route-auth.test.ts` fails on any
+route that does neither, so a new public route goes in its `SELF_AUTHENTICATING`
+list with a reason. The proxy that used to sit in front only checked that *a*
+session cookie existed, and it cost twice: on Netlify it ran as an edge
+function that cold-started in 1.3–2 s on almost every visit, and a public
+route left off its list was silently answered 307 — the scheduler once ran for
+a day without reaching `/api/cron`. Don't add one back for redirects; the
+`/dashboard` and `/admin` layouts already send a missing session to `/login`.
 
 **`secrets` is not available in a workflow `if:` condition.** It is a parse
 error, not a falsy no-op: the run fails in zero seconds with no job starting,
