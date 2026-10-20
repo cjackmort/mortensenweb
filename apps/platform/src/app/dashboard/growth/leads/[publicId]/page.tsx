@@ -14,7 +14,7 @@ import { findBookingState, type BookingState } from "@/db/repositories/client/ev
 import {
   BOOKING_FIELDS,
   formatEventDate,
-  formatStartTime,
+  formatShowDate,
   isBookingForm,
   readBookingRequest,
   todayIn,
@@ -29,9 +29,7 @@ const TICKETS: Record<NonNullable<BookingRequest["sellingTickets"]>, string> = {
 };
 
 function showsOn(state: BookingState): string | null {
-  if (!state.eventDate) return null;
-  const day = formatEventDate(state.eventDate);
-  return state.startTime ? `${day} · ${formatStartTime(state.startTime)}` : day;
+  return state.eventDate ? formatShowDate(state.eventDate, state.startTime) : null;
 }
 
 /**

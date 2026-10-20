@@ -6,7 +6,13 @@ import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { isLeadView, listLeads, type LeadSummary, type LeadView } from "@/db/repositories/client/leads";
 import { bookingStatesFor, type BookingState } from "@/db/repositories/client/event-bookings";
-import { formatEventDate, isBookingForm, readBookingRequest, todayIn } from "@/lib/growth/bookings";
+import {
+  decisionNotice,
+  formatEventDate,
+  isBookingForm,
+  readBookingRequest,
+  todayIn,
+} from "@/lib/growth/bookings";
 import { businessTimeZone, formatDateTime } from "@/lib/time";
 import { BookingQuickActions } from "./booking-controls";
 import { LeadStatusPill } from "./status-pill";
@@ -65,7 +71,7 @@ const EMPTY: Record<LeadView, string> = {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; page?: string; deleted?: string }>;
+  searchParams: Promise<{ view?: string; page?: string; deleted?: string; decided?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -92,6 +98,10 @@ export default async function LeadsPage({
   const bookingIds = leads.filter((lead) => isBookingForm(lead.formName)).map((lead) => lead.publicId);
   const bookings = await bookingStatesFor(db, ctx, bookingIds);
   const today = todayIn(businessTimeZone());
+  // Set by a quick Approve or Decline. Looked up in this client's own
+  // decisions, so a hand-edited id shows nothing rather than someone else's.
+  const decidedId = typeof params.decided === "string" && params.decided.length <= 64 ? params.decided : null;
+  const decided = decidedId ? (await bookingStatesFor(db, ctx, [decidedId])).get(decidedId) : undefined;
 
   const href = (v: LeadView, p = 1) =>
     `/dashboard/growth/leads${v === "open" && p === 1 ? "" : `?view=${v}${p > 1 ? `&page=${p}` : ""}`}`;
@@ -106,6 +116,13 @@ export default async function LeadsPage({
       {params.deleted === "1" && (
         <p className="notice notice-success">
           Deleted. Netlify, which receives your form, still keeps its own copy.
+        </p>
+      )}
+
+      {decided && decidedId && (
+        <p className={`notice ${decided.emailStatus === "failed" ? "notice-warning" : "notice-success"}`} role="status">
+          {decisionNotice(decided)}{" "}
+          <Link href={`/dashboard/growth/leads/${decidedId}`}>Open the request</Link>
         </p>
       )}
 
@@ -164,6 +181,7 @@ export default async function LeadsPage({
                       publicId={lead.publicId}
                       requestedDate={readBookingRequest(lead.fields).requestedDate}
                       today={today}
+                      view={view}
                       readOnly={ctx.impersonating}
                     />
                   )}

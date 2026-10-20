@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { eventBookings, leads, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
@@ -42,6 +42,7 @@ export type BookingDecision = "approved" | "declined";
 export interface BookingState {
   publicId: string;
   decision: BookingDecision;
+  actName: string;
   eventDate: string | null;
   startTime: string | null;
   hasLogo: boolean;
@@ -113,12 +114,27 @@ function toState(row: typeof eventBookings.$inferSelect): BookingState {
   return {
     publicId: row.publicId,
     decision: row.decision as BookingDecision,
+    actName: row.actName,
     eventDate: row.eventDate,
     startTime: row.startTime,
     hasLogo: Boolean(row.logoKey),
     emailStatus: row.emailStatus as BookingState["emailStatus"],
     decidedAt: row.decidedAt,
     removed: row.removedAt !== null,
+  };
+}
+
+/**
+ * The lead's side of a decision. Deciding counts as reading it: a request
+ * approved straight from the inbox list was never opened, and would otherwise
+ * stay in the Growth tab's unread count. A time it was already read is kept.
+ */
+function decidedLead(status: "won" | "lost", now: Date) {
+  return {
+    status,
+    statusChangedAt: now,
+    readAt: sql`coalesce(${leads.readAt}, ${now})`,
+    updatedAt: now,
   };
 }
 
@@ -357,7 +373,7 @@ export async function approveBooking(
 
   await db
     .update(leads)
-    .set({ status: "won", statusChangedAt: now, updatedAt: now })
+    .set(decidedLead("won", now))
     .where(eq(leads.id, lead.id));
 
   const told =
@@ -446,7 +462,7 @@ export async function declineBooking(
 
   await db
     .update(leads)
-    .set({ status: "lost", statusChangedAt: now, updatedAt: now })
+    .set(decidedLead("lost", now))
     .where(eq(leads.id, lead.id));
 
   return {

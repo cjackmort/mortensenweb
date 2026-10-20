@@ -6,6 +6,7 @@ import { newPublicId } from "@/lib/ids";
 import { parseSubmission } from "@/lib/growth/netlify-forms";
 import {
   buildBookingApprovedEmail,
+  decisionNotice,
   eventsPageUrl,
   fetchUploadedImage,
   isAllowedUploadUrl,
@@ -318,10 +319,13 @@ describe("approving a booking", () => {
 
     const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
     expect(row!.status).toBe("won");
+    // Decided from the inbox without opening it: no longer counted as unread.
+    expect(row!.readAt).not.toBeNull();
 
     const states = await bookingStatesFor(db, venue.ctx, [lead]);
     expect(states.get(lead)).toMatchObject({
       decision: "approved",
+      actName: "The Late Shift",
       eventDate: "2026-11-14",
       startTime: "21:00",
       hasLogo: true,
@@ -390,10 +394,51 @@ describe("declining a booking", () => {
     expect(outbox).toHaveLength(0);
     const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
     expect(row!.status).toBe("lost");
+    expect(row!.readAt).not.toBeNull();
 
     const approved = await approveBooking(db, venue.ctx, lead, { eventDate: "2026-12-05", startTime: "" }, deps());
     expect(approved.ok).toBe(true);
     expect(outbox).toHaveLength(1);
+  });
+});
+
+describe("the inbox's line after a quick approve or decline", () => {
+  // The row leaves the Open list as soon as it is decided, taking its buttons
+  // with it, so the inbox says what happened from the stored decision.
+  const booked = {
+    decision: "approved" as const,
+    actName: "The Late Shift",
+    eventDate: "2026-11-14",
+    startTime: "21:00",
+    emailStatus: "sent" as const,
+  };
+
+  it("says an approved act was emailed and is on the events page", () => {
+    expect(decisionNotice(booked)).toBe(
+      "The Late Shift is booked for Saturday, November 14, 2026 · 9 PM. They were emailed, and the show is on your events page.",
+    );
+  });
+
+  it("says plainly when the email to them did not go out", () => {
+    expect(decisionNotice({ ...booked, startTime: null, emailStatus: "failed" })).toBe(
+      "The Late Shift is booked for Saturday, November 14, 2026 and is on your events page, but the email to them didn't go through. Open the request to reply to them.",
+    );
+    expect(decisionNotice({ ...booked, emailStatus: "not_sent" })).toBe(
+      "The Late Shift is booked for Saturday, November 14, 2026 · 9 PM and is on your events page. They weren't emailed.",
+    );
+  });
+
+  it("does not claim a show taken off the site is still on it", () => {
+    expect(decisionNotice({ ...booked, removed: true })).toBe(
+      "The Late Shift was approved for Saturday, November 14, 2026 · 9 PM, then taken off your events page.",
+    );
+  });
+
+  it("says a declined act was not emailed, from what was stored", async () => {
+    const lead = await recordBooking(venueSite);
+    await declineBooking(db, venue.ctx, lead, { now: NOW });
+    const state = (await bookingStatesFor(db, venue.ctx, [lead])).get(lead)!;
+    expect(decisionNotice(state)).toBe("You declined The Late Shift. They haven't been emailed.");
   });
 });
 

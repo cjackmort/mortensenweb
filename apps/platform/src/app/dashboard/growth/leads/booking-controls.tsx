@@ -48,6 +48,7 @@ function OpButton({
   action,
   disabled,
   className,
+  inbox,
   children,
 }: {
   publicId: string;
@@ -55,12 +56,15 @@ function OpButton({
   action: Action;
   disabled: boolean;
   className?: string;
+  /** The inbox view this was pressed in, so the action can return there. */
+  inbox?: string;
   children: React.ReactNode;
 }) {
   return (
     <form action={action}>
       <input type="hidden" name="lead" value={publicId} />
       <input type="hidden" name="op" value={op} />
+      {inbox && <input type="hidden" name="inbox" value={inbox} />}
       <button type="submit" className={className ?? "secondary"} disabled={disabled}>
         {children}
       </button>
@@ -206,17 +210,20 @@ export function BookingDecision({
 /**
  * Approve and Decline straight from the inbox, for a request whose date is
  * still ahead. Anything needing a different date or a start time opens the
- * request instead.
+ * request instead. On success the action returns to `view` and the inbox
+ * says what happened; only a refusal is shown here.
  */
 export function BookingQuickActions({
   publicId,
   requestedDate,
   today,
+  view,
   readOnly,
 }: {
   publicId: string;
   requestedDate: string | null;
   today: string;
+  view: string;
   readOnly: boolean;
 }) {
   const [state, action, pending] = useActionState<LeadActionResult | null, FormData>(bookingAction, null);
@@ -230,6 +237,7 @@ export function BookingQuickActions({
           <input type="hidden" name="lead" value={publicId} />
           <input type="hidden" name="op" value="approve" />
           <input type="hidden" name="date" value={requestedDate ?? ""} />
+          <input type="hidden" name="inbox" value={view} />
           <button type="submit" className="small" disabled={disabled}>
             {pending ? "Working…" : "Approve"}
           </button>
@@ -239,11 +247,18 @@ export function BookingQuickActions({
           Pick a date
         </Link>
       )}
-      <OpButton publicId={publicId} op="decline" action={action} disabled={disabled} className="small secondary">
+      <OpButton
+        publicId={publicId}
+        op="decline"
+        action={action}
+        disabled={disabled}
+        className="small secondary"
+        inbox={view}
+      >
         Decline
       </OpButton>
-      {state && (
-        <p className={state.ok ? "booking-quick-done" : "error"} role="status">
+      {state && !state.ok && (
+        <p className="error" role="status">
           {state.message}
         </p>
       )}

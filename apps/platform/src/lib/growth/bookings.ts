@@ -143,6 +143,47 @@ export function formatStartTime(time: string): string {
   return m === 0 ? `${hour} ${suffix}` : `${hour}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
+/** `Saturday, November 14, 2026 · 9 PM`, or just the day when no time was set. */
+export function formatShowDate(eventDate: string, startTime: string | null): string {
+  const day = formatEventDate(eventDate);
+  return startTime ? `${day} · ${formatStartTime(startTime)}` : day;
+}
+
+export interface DecisionSummary {
+  decision: "approved" | "declined";
+  actName: string;
+  eventDate: string | null;
+  startTime: string | null;
+  emailStatus: "sent" | "failed" | "not_sent" | null;
+  /** Approved, then taken off the site. */
+  removed?: boolean;
+}
+
+/**
+ * One sentence for the inbox after a quick Approve or Decline.
+ *
+ * The row leaves the Open list the moment it is decided, and its buttons and
+ * their result go with it — so this is read back from the stored decision,
+ * and in particular never says "emailed" when the send failed.
+ */
+export function decisionNotice(state: DecisionSummary): string {
+  if (state.decision === "declined") {
+    return `You declined ${state.actName}. They haven't been emailed.`;
+  }
+  const when = state.eventDate ? ` for ${formatShowDate(state.eventDate, state.startTime)}` : "";
+  if (state.removed) {
+    return `${state.actName} was approved${when}, then taken off your events page.`;
+  }
+  const booked = `${state.actName} is booked${when}`;
+  if (state.emailStatus === "sent") {
+    return `${booked}. They were emailed, and the show is on your events page.`;
+  }
+  if (state.emailStatus === "failed") {
+    return `${booked} and is on your events page, but the email to them didn't go through. Open the request to reply to them.`;
+  }
+  return `${booked} and is on your events page. They weren't emailed.`;
+}
+
 // ---------------------------------------------------------------------------
 // The uploaded logo
 // ---------------------------------------------------------------------------

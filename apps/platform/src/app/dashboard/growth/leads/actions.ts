@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
-import { deleteLead, isLeadStatus, setLeadStatus } from "@/db/repositories/client/leads";
+import { deleteLead, isLeadStatus, isLeadView, setLeadStatus } from "@/db/repositories/client/leads";
 import { sendLeadReply } from "@/db/repositories/client/lead-replies";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import {
@@ -172,6 +172,15 @@ export async function bookingAction(
     throw error;
   }
 
-  if (result.ok) refresh(publicId);
+  if (!result.ok) return result;
+  refresh(publicId);
+
+  // From the inbox list the row is about to leave the Open view, and this
+  // result would leave with it. The list says what happened instead.
+  const inboxView = formData.get("inbox");
+  if (isLeadView(inboxView)) {
+    const view = inboxView === "open" ? "" : `view=${inboxView}&`;
+    redirect(`/dashboard/growth/leads?${view}decided=${encodeURIComponent(publicId)}`);
+  }
   return result;
 }

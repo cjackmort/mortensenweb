@@ -4028,15 +4028,16 @@ form + .field-hint {
   margin: 0;
 }
 
-.booking-quick .error,
-.booking-quick-done {
+.booking-quick .error {
   flex-basis: 100%;
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
 }
 
-.booking-quick-done {
-  color: var(--success);
+/* The buttons sit under the row's link, so the hover tint has to cover the
+   whole item or it stops short of them. */
+.lead-list li:has(> .lead-row:hover, > .lead-row:focus-visible) {
+  background: var(--surface-sunk);
 }
 
 /* ------------------------------------------------------- growth & plan */
