@@ -79,6 +79,11 @@ const PUBLIC_PATHS = [
   // The care plans, fetched by mortensenweb.com's build. A build server has no
   // session, and every figure in it is already on the public pricing page.
   "/api/plans",
+  // What client websites read in their visitors' browsers: a site's approved
+  // upcoming shows and their logos. No session can exist there. Each handler
+  // returns only what a client chose to publish, and 404s on a site or show it
+  // does not list.
+  "/api/public",
   // The auth screens' background photo, served from public/. The matcher
   // below only excludes _next/static and _next/image, not arbitrary files
   // under public/ — so without this entry, every visitor without a session

@@ -448,3 +448,20 @@ export async function connectFormsWebhook(input: {
   }
   return { hookId: data.id };
 }
+
+/**
+ * One submission, read again from Netlify.
+ *
+ * For its uploaded files: the link Netlify gives for a file may be signed to
+ * expire, so the copy the webhook delivered days ago is not trusted to still
+ * open. Null when Netlify no longer has the submission.
+ */
+export async function getFormSubmission(
+  submissionId: string,
+): Promise<NetlifySubmissionPayload | null> {
+  const { status, data } = await netlifyRequest<NetlifySubmissionPayload>(
+    `/submissions/${encodeURIComponent(submissionId)}`,
+    { allowStatuses: [404] },
+  );
+  return status === 404 ? null : (data ?? null);
+}

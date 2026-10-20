@@ -3936,6 +3936,358 @@ form + .field-hint {
   margin-top: 0.5rem;
 }
 
+/* -------------------------------------------------- booking requests */
+
+/* The request first, the decision under it. Accent rule on the left so the
+   panel reads as "this needs you" among the plain panels below. */
+.booking-panel {
+  border-left: 3px solid var(--accent-fill);
+}
+
+.booking-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.25rem 1.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.booking-request .detail-grid {
+  flex: 1 1 18rem;
+}
+
+/* A performer's logo can be any shape and any colour, including white on
+   transparent: a neutral ground and a hairline keep it visible. */
+.booking-logo {
+  width: 8.5rem;
+  height: 8.5rem;
+  object-fit: contain;
+  padding: 0.5rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+}
+
+.booking-logo-missing {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--muted);
+}
+
+.booking-links {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.booking-decided {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+
+.booking-status {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.booking-status .pill {
+  margin-right: 0.35rem;
+}
+
+.booking-when {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0 1rem;
+  max-width: 30rem;
+}
+
+.booking-hint {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.booking-when-note {
+  margin-top: 0.6rem;
+}
+
+.booking-decline {
+  margin-top: -0.25rem;
+}
+
+/* Approve and Decline under a request in the inbox list. Outside the row's
+   link — a button inside a link is two tap targets fighting over one tap. */
+.booking-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 var(--pane-pad) 1rem;
+  margin-top: -0.35rem;
+}
+
+.booking-quick form {
+  margin: 0;
+}
+
+.booking-quick .error {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+/* The buttons sit under the row's link, so the hover tint has to cover the
+   whole item or it stops short of them. */
+.lead-list li:has(> .lead-row:hover, > .lead-row:focus-visible) {
+  background: var(--surface-sunk);
+}
+
+.lead-inbox-note {
+  margin: 0;
+  padding: 0.9rem var(--pane-pad);
+  border-top: 1px solid var(--border);
+}
+
+/* ------------------------------------------------ the booking calendar */
+
+/* The inbox, or one request, with the venue's month beside it. On a phone
+   the month comes first: a glance at what is booked is why it is there. */
+.leads-layout {
+  display: grid;
+  gap: 0 var(--stack);
+  align-items: start;
+}
+
+.leads-layout > .booking-calendar {
+  order: -1;
+}
+
+.lead-main {
+  min-width: 0;
+}
+
+@media (min-width: 64rem) {
+  .leads-layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+
+  .leads-layout > .booking-calendar {
+    order: 0;
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+.booking-calendar {
+  padding: 1rem 1rem 1.1rem;
+}
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.cal-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.cal-step {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 1.3rem;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.cal-step:hover,
+.cal-step:focus-visible {
+  background: var(--surface-sunk);
+}
+
+.cal-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+
+.cal-grid th {
+  padding: 0.2rem 0;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.cal-grid td {
+  position: relative;
+  height: 2.35rem;
+  border: 1.5px solid transparent;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  vertical-align: middle;
+  color: var(--text-soft);
+}
+
+/* Booked: solid, the one to see from across the room. */
+.cal-grid td.cal-booked,
+.cal-swatch.cal-booked {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--surface);
+  font-weight: 700;
+}
+
+/* Held: pencilled in, not yet on the site. */
+.cal-grid td.cal-held,
+.cal-swatch.cal-held {
+  background: var(--warning-wash);
+  border: 1.5px dashed var(--warning);
+  color: var(--warning);
+  font-weight: 700;
+}
+
+/* Asked for: a dot under the date. */
+.cal-grid td.cal-requested::after,
+.cal-swatch.cal-requested::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+}
+
+.cal-today .cal-num {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The night the open request is about. */
+.cal-grid td.cal-focus {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 1px;
+}
+
+.cal-count {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.cal-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cal-swatch {
+  position: relative;
+  display: inline-block;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid var(--border);
+}
+
+.cal-swatch.cal-requested::after {
+  bottom: 50%;
+  margin-bottom: -2.5px;
+}
+
+.cal-list {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.9rem 0 0;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.cal-list a,
+.cal-list li > span {
+  display: grid;
+  grid-template-columns: 3.3rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.3rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.cal-list a:hover,
+.cal-list a:focus-visible {
+  background: var(--surface-sunk);
+}
+
+.cal-list-date {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.cal-list-act {
+  overflow-wrap: anywhere;
+}
+
+.cal-tag {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid currentColor;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cal-tag-booked {
+  color: var(--success);
+}
+
+.cal-tag-held {
+  color: var(--warning);
+}
+
+.cal-tag-requested {
+  color: var(--accent);
+}
+
+.cal-empty {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 /* ------------------------------------------------------- growth & plan */
 
 .notice-warning {
