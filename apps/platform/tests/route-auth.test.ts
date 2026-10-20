@@ -86,6 +86,18 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
 
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },
+
+  // Read by client websites in their visitors' browsers, where no session can
+  // exist. Each returns only what the client chose to publish, and 404s on a
+  // site or show it does not list.
+  "api/public/sites/[sitePublicId]/events/route.ts": {
+    reason: "a site's approved upcoming shows, read by visitors' browsers",
+    checks: "listUpcomingEvents(",
+  },
+  "api/public/sites/[sitePublicId]/events/[eventPublicId]/logo/route.ts": {
+    reason: "the logo of a show that is still listed",
+    checks: "findListedEventLogo(",
+  },
 };
 
 const APP_DIR = join(process.cwd(), "src", "app");

@@ -131,6 +131,13 @@ export async function netlifySignatureFor(rawBody: string, secret: string): Prom
 export interface LeadField {
   label: string;
   value: string;
+  /**
+   * The form field's `name` attribute. Absent on leads stored before it was
+   * kept. Labels are for people and can be reworded on the site at any time;
+   * a feature that reads one field back out — the booking form's date — must
+   * go by the name, which is what the site's instructions say never to change.
+   */
+  key?: string;
 }
 
 export interface ParsedLead {
@@ -167,11 +174,30 @@ const NOT_THE_VISITORS = new Set([
   "g-recaptcha-response",
 ]);
 
+/**
+ * An uploaded file, as Netlify reports one: an object carrying the file's
+ * name and a link to it. The link is not kept — it points at Netlify's
+ * storage and may be signed to expire — only the name, so the inbox can say a
+ * file came with the message. Whoever needs the file asks Netlify's API for
+ * the submission again (see `lib/growth/bookings.ts`).
+ */
+function uploadName(value: object): string {
+  const { filename, url } = value as { filename?: unknown; url?: unknown };
+  if (typeof filename === "string" && filename.trim()) {
+    return filename.replace(/[\r\n\t]+/g, " ").trim().slice(0, MAX_LABEL);
+  }
+  return typeof url === "string" ? "Uploaded file" : "";
+}
+
 function asText(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(", ");
-  if (typeof value === "object") return "";
+  if (typeof value === "object") return uploadName(value);
   return String(value).replace(/\r\n?/g, "\n").trim().slice(0, MAX_VALUE);
+}
+
+function isUpload(value: unknown): boolean {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && uploadName(value as object) !== "";
 }
 
 /** `phone_number` → `Phone number`. Only used when the form gave no label. */
@@ -202,6 +228,17 @@ function collectFields(payload: NetlifySubmissionPayload): Array<LeadField & { k
       const text = asText(value);
       if (!text) continue;
       out.push({ key, label: humanise(key).slice(0, MAX_LABEL), value: text });
+    }
+  }
+
+  // An upload the ordered list left out. Whether Netlify puts file fields in
+  // `ordered_human_fields` is not something its documentation promises, and a
+  // logo the inbox cannot see is a logo nobody approves.
+  if (Array.isArray(payload.ordered_human_fields) && payload.data && typeof payload.data === "object") {
+    const seen = new Set(out.map((field) => field.key));
+    for (const [key, value] of Object.entries(payload.data as Record<string, unknown>)) {
+      if (seen.has(key) || NOT_THE_VISITORS.has(key.toLowerCase()) || !isUpload(value)) continue;
+      out.push({ key, label: humanise(key).slice(0, MAX_LABEL), value: asText(value) });
     }
   }
 
@@ -279,7 +316,7 @@ export function parseSubmission(
       email,
       phone: phone ? phone.slice(0, 60) : null,
       message,
-      fields: fields.map(({ label, value }) => ({ label, value })),
+      fields: fields.map(({ key, label, value }) => ({ label, value, key })),
       pageUrl: webUrl(data.referrer),
     },
   };
