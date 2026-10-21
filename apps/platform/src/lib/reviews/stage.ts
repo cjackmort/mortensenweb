@@ -64,9 +64,11 @@ export function describeRequest(row: RequestFacts): RequestDescription {
         ? (REMINDER_NOT_SENT[row.reminderStatus] ?? "Not sent")
         : row.clickedAt
           ? "Not needed"
-          : row.reminderDueAt
-            ? `Due ${formatDate(row.reminderDueAt)}`
-            : "Off";
+          : row.unsubscribedAt
+            ? "Not sent: they unsubscribed"
+            : row.reminderDueAt
+              ? `Due ${formatDate(row.reminderDueAt)}`
+              : "Off";
 
   const pill: RequestDescription["pill"] = row.unsubscribedAt
     ? { label: "Unsubscribed", tone: "neutral" }

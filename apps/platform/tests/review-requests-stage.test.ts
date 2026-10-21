@@ -70,6 +70,14 @@ describe("describeRequest", () => {
     expect(describeRequest({ ...base, emailStatus: null, smsStatus: "sent" }).sent).toBe("Oct 17 · text");
   });
 
+  it("does not promise a reminder to someone who unsubscribed", () => {
+    const row = { ...base, unsubscribedAt: new Date("2026-10-18T03:00:00Z") };
+    expect(describeRequest(row).reminder).toBe("Not sent: they unsubscribed");
+    // One that already went before they unsubscribed still says so.
+    const reminded = { ...row, remindedAt: new Date("2026-10-17T18:00:00Z"), reminderStatus: "sent" };
+    expect(describeRequest(reminded).reminder).toBe("Sent Oct 17");
+  });
+
   it("shows an unsubscribe above everything else", () => {
     const row = { ...base, clickedAt: new Date("2026-10-18T02:00:00Z"), unsubscribedAt: new Date("2026-10-18T03:00:00Z") };
     expect(describeRequest(row).pill).toEqual({ label: "Unsubscribed", tone: "neutral" });
