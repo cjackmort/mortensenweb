@@ -3,7 +3,7 @@ import type { Database } from "@/db/client";
 import { leads, reviewRequests, reviewSettings, reviewSuppressions } from "@/db/schema";
 import { normalizeEmail, normalizePhone } from "@/lib/reviews/contact";
 import { getPlaceSummary, placesConfigured, type PlacesFailure, type PlaceSummary } from "@/lib/reviews/places";
-import { parseReviewLink } from "@/lib/reviews/review-link";
+import { parseReviewLink, reviewDestination, type ReviewDestination } from "@/lib/reviews/review-link";
 import {
   DEFAULT_TEMPLATE,
   effectiveTemplate,
@@ -11,6 +11,7 @@ import {
   type ReviewTemplate,
 } from "@/lib/reviews/template";
 import { assertMutable, type TenantContext } from "../context";
+import { getGoogleReviewLink } from "./google-profile";
 
 /**
  * Review requests from the client's side, tenant-scoped: the one-time setup,
@@ -53,6 +54,21 @@ export async function getReviewSetup(db: Database, ctx: TenantContext): Promise<
     remindersEnabled: row.remindersEnabled,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * Where the "Leave a review" button sends this business's customers right
+ * now: the review form Google gives its linked profile, or `enteredUrl` (the
+ * link from its setup, null before it has one). The click itself is resolved
+ * the same way in `admin/reviews.ts`, so what the page says is what happens.
+ */
+export async function getReviewDestination(
+  db: Database,
+  ctx: TenantContext,
+  enteredUrl: string | null,
+): Promise<ReviewDestination | null> {
+  const profile = await getGoogleReviewLink(db, ctx);
+  return reviewDestination(profile?.url, enteredUrl);
 }
 
 export type PlaceLookup = (placeId: string) => Promise<{ ok: true; place: PlaceSummary } | PlacesFailure>;

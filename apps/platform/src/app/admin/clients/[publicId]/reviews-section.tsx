@@ -19,9 +19,15 @@ export function ReviewsSection({ reviews }: { reviews: ClientReviewsView }) {
         <dl className="detail-grid" style={{ marginBottom: "1.5rem" }}>
           <dt>Review link</dt>
           <dd>
-            <a href={setup.reviewUrl} target="_blank" rel="noreferrer">
-              {setup.placeName ?? setup.reviewUrl}
-            </a>
+            {reviews.destination?.from === "profile" ? (
+              <a href={reviews.destination.url} target="_blank" rel="noreferrer">
+                Their Google profile&rsquo;s review form
+              </a>
+            ) : (
+              <a href={setup.reviewUrl} target="_blank" rel="noreferrer">
+                {setup.placeName ?? setup.reviewUrl}
+              </a>
+            )}
           </dd>
           <dt>Reminder</dt>
           <dd>{setup.remindersEnabled ? `After ${setup.reminderDays} days` : "Off"}</dd>

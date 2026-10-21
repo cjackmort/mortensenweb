@@ -4,7 +4,12 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
-import { getReviewSetup, listReviewSuppressions, type ReviewSuppression } from "@/db/repositories/client/reviews";
+import {
+  getReviewDestination,
+  getReviewSetup,
+  listReviewSuppressions,
+  type ReviewSuppression,
+} from "@/db/repositories/client/reviews";
 import { placesConfigured } from "@/lib/reviews/places";
 import { formatDate } from "@/lib/time";
 import { ReviewMessageForm } from "../message-form";
@@ -41,7 +46,10 @@ export default async function ReviewSettingsPage() {
 
   const setup = await getReviewSetup(db, ctx);
   if (!setup) redirect("/dashboard/growth/reviews");
-  const suppressions = await listReviewSuppressions(db, ctx);
+  const [suppressions, destination] = await Promise.all([
+    listReviewSuppressions(db, ctx),
+    getReviewDestination(db, ctx, setup.reviewUrl),
+  ]);
   const readOnly = ctx.impersonating;
 
   return (
@@ -59,12 +67,18 @@ export default async function ReviewSettingsPage() {
         <div className="panel-head">
           <h2>Your Google review link</h2>
           <div className="panel-head-actions">
-            <a href={setup.reviewUrl} target="_blank" rel="noreferrer">
+            <a href={destination?.url ?? setup.reviewUrl} target="_blank" rel="noreferrer">
               Open it to check
             </a>
           </div>
         </div>
         <div className="panel-body">
+          {destination?.from === "profile" && (
+            <p className="notice" role="status">
+              Your Google profile is linked, so customers go straight to the review form Google gives it. The link
+              below is only used if the profile is unlinked.
+            </p>
+          )}
           {setup.placeName && (
             <p className="muted" style={{ marginTop: 0 }}>
               Google lists this as <strong>{setup.placeName}</strong>.

@@ -5,7 +5,9 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
+import { getGoogleReviewStats } from "@/db/repositories/client/google-profile";
 import {
+  getReviewDestination,
   getReviewSetup,
   listLeadsForReview,
   listReviewRequests,
@@ -94,6 +96,9 @@ export default async function ReviewRequestsPage({
   const readOnly = ctx.impersonating;
 
   if (!setup) {
+    // A linked Google profile already knows its review form: offer it, so
+    // setting up is one click instead of a hunt through Google's menus.
+    const fromProfile = await getReviewDestination(db, ctx, null);
     return (
       <main className="shell">
         <div className="masthead">
@@ -108,7 +113,12 @@ export default async function ReviewRequestsPage({
             <p className="muted" style={{ marginTop: 0 }}>
               This is where the &ldquo;Leave a review&rdquo; button in every request goes. You set it once.
             </p>
-            <ReviewLinkForm current={null} placesEnabled={placesConfigured()} readOnly={readOnly} />
+            {fromProfile && (
+              <p className="notice" role="status">
+                We filled in the review link from your Google profile. Save it to start asking.
+              </p>
+            )}
+            <ReviewLinkForm current={fromProfile?.url ?? null} placesEnabled={placesConfigured()} readOnly={readOnly} />
           </div>
         </section>
       </main>
@@ -163,7 +173,7 @@ export default async function ReviewRequestsPage({
         <div className="panel-head">
           <h2>How it&rsquo;s going</h2>
           <Suspense fallback={null}>
-            <GoogleRating placeId={setup.placeId} />
+            <GoogleRating placeId={setup.placeId} linkedProfile={() => getGoogleReviewStats(db, ctx)} />
           </Suspense>
         </div>
         <Totals summary={summary} />

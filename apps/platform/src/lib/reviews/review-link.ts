@@ -79,3 +79,28 @@ export function parseReviewLink(raw: string): ReviewLinkResult {
     ((host === "www.google.com" || host === "google.com") && url.pathname.startsWith("/maps"));
   return { ok: false, message: isMaps ? NOT_A_REVIEW_LINK : UNRECOGNISED };
 }
+
+export interface ReviewDestination {
+  url: string;
+  /** `profile`: Google's own review form for the linked Business Profile. `entered`: the link the business set up. */
+  from: "profile" | "entered";
+}
+
+/**
+ * Where a review request's link sends the customer: the review form Google
+ * gives the business's linked profile (its `newReviewUri`) when there is one,
+ * otherwise the link the business entered.
+ *
+ * Google's link goes through the same check as a pasted one. It is still a
+ * redirect target wearing the business's name, read back from a stored copy,
+ * so a form this module does not recognise is passed over for the entered
+ * link rather than redirected to unchecked.
+ */
+export function reviewDestination(
+  profileUrl: string | null | undefined,
+  enteredUrl: string | null,
+): ReviewDestination | null {
+  const fromProfile = profileUrl ? parseReviewLink(profileUrl) : null;
+  if (fromProfile?.ok) return { url: fromProfile.reviewUrl, from: "profile" };
+  return enteredUrl ? { url: enteredUrl, from: "entered" } : null;
+}

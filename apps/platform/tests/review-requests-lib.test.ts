@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseReviewLink, reviewUrlForPlace } from "@/lib/reviews/review-link";
+import { parseReviewLink, reviewDestination, reviewUrlForPlace } from "@/lib/reviews/review-link";
+import { reviewStatsSource, type ReviewStatsResult } from "@/lib/reviews/stats";
 import { normalizeEmail, normalizePhone, firstName } from "@/lib/reviews/contact";
 import {
   DEFAULT_TEMPLATE,
@@ -63,6 +64,78 @@ describe("parseReviewLink", () => {
     ]) {
       expect(parseReviewLink(input).ok).toBe(false);
     }
+  });
+});
+
+describe("where a review link sends the customer", () => {
+  const PROFILE_PLACE = "ChIJ_profile_place_id_0001";
+  const PROFILE_REVIEW = `https://search.google.com/local/writereview?placeid=${PROFILE_PLACE}`;
+
+  it("prefers the review form Google gives the linked profile over the link the business entered", () => {
+    expect(reviewDestination(PROFILE_REVIEW, WRITE_REVIEW)).toEqual({ url: PROFILE_REVIEW, from: "profile" });
+  });
+
+  it("uses the entered link when no profile is linked, or Google gave it no review form", () => {
+    expect(reviewDestination(null, WRITE_REVIEW)).toEqual({ url: WRITE_REVIEW, from: "entered" });
+    expect(reviewDestination(undefined, WRITE_REVIEW)).toEqual({ url: WRITE_REVIEW, from: "entered" });
+  });
+
+  it("checks Google's link like a pasted one, and never redirects to one it does not recognise", () => {
+    for (const odd of ["https://evil.example/review", "javascript:alert(1)", "https://maps.google.com/?cid=1"]) {
+      expect(reviewDestination(odd, WRITE_REVIEW)).toEqual({ url: WRITE_REVIEW, from: "entered" });
+      expect(reviewDestination(odd, null)).toBeNull();
+    }
+  });
+
+  it("works from the profile alone, before the business has entered anything", () => {
+    expect(reviewDestination(PROFILE_REVIEW, null)).toEqual({ url: PROFILE_REVIEW, from: "profile" });
+    expect(reviewDestination(null, null)).toBeNull();
+  });
+});
+
+describe("the Google rating's source", () => {
+  const fromProfile: ReviewStatsResult = {
+    ok: true,
+    stats: { rating: 4.6, reviewCount: 38, source: "Google Business Profile" },
+  };
+  const fromPlaces: ReviewStatsResult = {
+    ok: true,
+    stats: { rating: 4.5, reviewCount: 37, source: "Google Maps" },
+  };
+
+  it("is the linked profile when it has figures, without asking Places", async () => {
+    const places = vi.fn(async () => fromPlaces);
+    const result = await reviewStatsSource({ linkedProfile: async () => fromProfile, places })({ placeId: PLACE });
+    expect(result).toEqual(fromProfile);
+    expect(places).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Places while the profile has not synced", async () => {
+    const places = vi.fn(async () => fromPlaces);
+    const unsynced = async (): Promise<ReviewStatsResult> => ({ ok: false, reason: "unavailable" });
+    expect(await reviewStatsSource({ linkedProfile: unsynced, places })({ placeId: PLACE })).toEqual(fromPlaces);
+    expect(places).toHaveBeenCalledWith({ placeId: PLACE });
+  });
+
+  it("falls back to Places when the profile synced without a rating or a count", async () => {
+    const places = vi.fn(async () => fromPlaces);
+    const empty = async (): Promise<ReviewStatsResult> => ({
+      ok: true,
+      stats: { rating: null, reviewCount: null, source: "Google Business Profile" },
+    });
+    expect(await reviewStatsSource({ linkedProfile: empty, places })({ placeId: PLACE })).toEqual(fromPlaces);
+  });
+
+  it("keeps a profile's real zero rather than replacing it with Places' figures", async () => {
+    const places = vi.fn(async () => fromPlaces);
+    const none: ReviewStatsResult = { ok: true, stats: { rating: null, reviewCount: 0, source: "Google Business Profile" } };
+    expect(await reviewStatsSource({ linkedProfile: async () => none, places })({ placeId: PLACE })).toEqual(none);
+    expect(places).not.toHaveBeenCalled();
+  });
+
+  it("is Places alone for a business with no linked profile", async () => {
+    const places = vi.fn(async () => fromPlaces);
+    expect(await reviewStatsSource({ places })({ placeId: PLACE })).toEqual(fromPlaces);
   });
 });
 
