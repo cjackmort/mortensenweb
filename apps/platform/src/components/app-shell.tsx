@@ -20,6 +20,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/clients", label: "Clients" },
   { href: "/admin/requests", label: "Requests" },
+  { href: "/admin/showcases", label: "Showcases" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/mortensenweb", label: "MortensenWeb" },
   // Prospects is hidden, not removed. Finding and pitching businesses moved out

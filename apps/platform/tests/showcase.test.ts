@@ -30,6 +30,8 @@ import {
   sendShowcaseToSite,
 } from "@/db/repositories/client/showcases";
 import type { GooglePostPublisher } from "@/lib/showcase/google-post";
+import { listAllShowcases } from "@/db/repositories/admin/showcases";
+import type { AdminContext } from "@/db/repositories/context";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
 
@@ -487,6 +489,23 @@ describe("deleteShowcase", () => {
     await expect(deleteShowcase(db, globex.ctx, publicId)).rejects.toThrow();
     await deleteShowcase(db, acme.ctx, publicId);
     await expect(getShowcase(db, acme.ctx, publicId)).rejects.toThrow();
+  });
+});
+
+describe("listAllShowcases (operator)", () => {
+  it("shows every client's showcases with the client named, and a blocked page's reason", async () => {
+    const theirs = await newShowcase(globex);
+    await createChangeRequest(db, acme.ctx, { title: "Change the hours", sitePublicId: acmeSitePublicId });
+    const ours = await newShowcase(acme);
+    await approveShowcase(db, acme.ctx, ours, approvedWording);
+
+    const rows = await listAllShowcases({ userId: acme.userId } as AdminContext, db);
+    const byId = new Map(rows.map((r) => [r.publicId, r]));
+    expect(byId.get(theirs)?.organizationName).toBe("Globex Plumbing");
+    expect(byId.get(theirs)?.status).toBe("draft");
+    expect(byId.get(ours)?.organizationName).toBe("Acme Heating");
+    expect(byId.get(ours)?.site.state).toBe("blocked");
+    expect(byId.get(ours)?.photoCount).toBe(1);
   });
 });
 
