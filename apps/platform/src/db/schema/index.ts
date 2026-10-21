@@ -18,3 +18,4 @@ export * from "./campaigns";
 export * from "./reviews";
 export * from "./winback";
 export * from "./showcase";
+export * from "./google-business";

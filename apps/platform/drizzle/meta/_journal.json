@@ -246,6 +246,13 @@
       "when": 1790400000000,
       "tag": "0033_job_showcase",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790500000000,
+      "tag": "0034_google_profile",
+      "breakpoints": true
     }
   ]
 }
