@@ -74,8 +74,10 @@ export async function getCampaignResults(
         calls: adStatsDaily.calls,
         leads: adStatsDaily.leads,
         conversions: adStatsDaily.conversions,
+        platform: adCampaignChannels.platform,
       })
       .from(adStatsDaily)
+      .innerJoin(adCampaignChannels, eq(adCampaignChannels.id, adStatsDaily.channelId))
       // Both columns, so a campaign id from another tenant can never pull rows.
       .where(and(eq(adStatsDaily.campaignId, campaign.id), eq(adStatsDaily.organizationId, ctx.organizationId))),
   ]);

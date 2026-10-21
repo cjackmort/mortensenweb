@@ -20,6 +20,8 @@ export interface StoredStat {
   calls: number;
   leads: number;
   conversions: number;
+  /** The channel's platform. Locations are kept apart by it: see `ReportLocation`. */
+  platform?: AdPlatform | string;
 }
 
 export interface ReportTotals {
@@ -51,8 +53,14 @@ export interface ReportPlacement {
   costMicros: number;
 }
 
+/**
+ * A place, per platform. Google places a viewer in a town and Meta only in a
+ * region, so one list would rank "Riverton, Utah" against "Utah" as if they
+ * were the same kind of place. Each platform gets its own list instead.
+ */
 export interface ReportLocation {
   label: string;
+  platform: AdPlatform;
   impressions: number;
   clicks: number;
   costMicros: number;
@@ -145,32 +153,39 @@ export function buildReport(
 
   const locationMap = new Map<string, ReportLocation>();
   for (const r of rows.filter((x) => x.dimension === "location")) {
-    const into = locationMap.get(r.dimensionValue) ?? { label: r.dimensionValue, impressions: 0, clicks: 0, costMicros: 0 };
-    locationMap.set(r.dimensionValue, {
+    const platform: AdPlatform = r.platform === "meta" ? "meta" : "google_ads";
+    const key = `${platform}|${r.dimensionValue}`;
+    const into = locationMap.get(key) ?? { label: r.dimensionValue, platform, impressions: 0, clicks: 0, costMicros: 0 };
+    locationMap.set(key, {
       ...into,
       impressions: into.impressions + r.impressions,
       clicks: into.clicks + r.clicks,
       costMicros: into.costMicros + r.costMicros,
     });
   }
-  const ranked = [...locationMap.values()]
-    .filter((l) => l.impressions > 0 || l.clicks > 0)
-    .sort((a, b) => b.impressions - a.impressions || a.label.localeCompare(b.label));
-  const locations =
-    ranked.length <= TOP_LOCATIONS + 1
-      ? ranked
-      : [
-          ...ranked.slice(0, TOP_LOCATIONS),
-          ranked.slice(TOP_LOCATIONS).reduce<ReportLocation>(
-            (other, l) => ({
-              label: "Everywhere else",
-              impressions: other.impressions + l.impressions,
-              clicks: other.clicks + l.clicks,
-              costMicros: other.costMicros + l.costMicros,
-            }),
-            { label: "Everywhere else", impressions: 0, clicks: 0, costMicros: 0 },
-          ),
-        ];
+
+  const locations: ReportLocation[] = [];
+  for (const platform of ["google_ads", "meta"] as const) {
+    const ranked = [...locationMap.values()]
+      .filter((l) => l.platform === platform && (l.impressions > 0 || l.clicks > 0))
+      .sort((a, b) => b.impressions - a.impressions || a.label.localeCompare(b.label));
+    if (ranked.length <= TOP_LOCATIONS + 1) {
+      locations.push(...ranked);
+      continue;
+    }
+    locations.push(
+      ...ranked.slice(0, TOP_LOCATIONS),
+      ranked.slice(TOP_LOCATIONS).reduce<ReportLocation>(
+        (other, l) => ({
+          ...other,
+          impressions: other.impressions + l.impressions,
+          clicks: other.clicks + l.clicks,
+          costMicros: other.costMicros + l.costMicros,
+        }),
+        { label: "Everywhere else", platform, impressions: 0, clicks: 0, costMicros: 0 },
+      ),
+    );
+  }
 
   return { totals, daily, placements, locations, hasData: totalsRows.length > 0 };
 }

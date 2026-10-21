@@ -67,6 +67,8 @@ export function AdResults({
   const share = results.budgetCents > 0 ? Math.min(100, (spentCents / results.budgetCents) * 100) : 0;
   const google = report.placements.filter((p) => p.platform === "google_ads");
   const meta = report.placements.filter((p) => p.platform === "meta");
+  const googlePlaces = report.locations.filter((l) => l.platform === "google_ads");
+  const metaPlaces = report.locations.filter((l) => l.platform === "meta");
 
   return (
     <>
@@ -183,10 +185,26 @@ export function AdResults({
 
       <section className="card">
         <h2>Where people were</h2>
-        <BarList rows={report.locations.map((l) => ({ label: l.label, value: l.impressions }))} unit="views" />
+        <div className={`panel-split ${googlePlaces.length && metaPlaces.length ? "panel-split-2" : ""}`}>
+          {googlePlaces.length > 0 && (
+            <div>
+              <h3>On Google, by town</h3>
+              <BarList rows={googlePlaces.map((l) => ({ label: l.label, value: l.impressions }))} unit="views" />
+            </div>
+          )}
+          {metaPlaces.length > 0 && (
+            <div>
+              <h3>On Facebook and Instagram, by region</h3>
+              <BarList rows={metaPlaces.map((l) => ({ label: l.label, value: l.impressions }))} unit="views" />
+            </div>
+          )}
+          {googlePlaces.length === 0 && metaPlaces.length === 0 && (
+            <p className="muted">The platforms haven&rsquo;t broken these views down by place yet.</p>
+          )}
+        </div>
         <p className="panel-note">
-          By the town or region Google and Meta placed each viewer in. Some views can&rsquo;t be placed, so these can
-          add up to fewer than the total.
+          Where Google and Meta placed each viewer. Meta only says which state or region. Some views can&rsquo;t be
+          placed at all, so these can add up to fewer than the total.
         </p>
       </section>
 

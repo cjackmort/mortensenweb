@@ -305,4 +305,18 @@ describe("buildReport", () => {
     expect(report.locations).toHaveLength(TOP_LOCATIONS + 1);
     expect(report.locations.at(-1)).toMatchObject({ label: "Everywhere else", impressions: 92 + 91 + 90 });
   });
+
+  it("keeps Google's towns and Meta's regions in separate lists", () => {
+    const report = buildReport(
+      [
+        stat({ dimension: "location", dimensionValue: "Riverton, Utah", impressions: 300, platform: "google_ads" }),
+        stat({ dimension: "location", dimensionValue: "Utah", impressions: 900, platform: "meta" }),
+      ],
+      { from: "2026-10-20", through: "2026-10-20" },
+    );
+    expect(report.locations.map((l) => [l.platform, l.label])).toEqual([
+      ["google_ads", "Riverton, Utah"],
+      ["meta", "Utah"],
+    ]);
+  });
 });
