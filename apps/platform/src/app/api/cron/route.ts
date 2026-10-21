@@ -15,6 +15,7 @@ import { reconcileStorageReservations } from "@/db/repositories/client/media-quo
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
+import { runReviewReminders } from "@/db/repositories/admin/reviews";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -25,7 +26,7 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Twelve jobs that have to run whether or not anyone is looking. The first six
+ * Thirteen jobs that have to run whether or not anyone is looking. The first six
  * are the loop's own; jobs 7-9 keep the media library's storage honest,
  * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, and
  * job 12 keeps the books:
@@ -65,6 +66,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      reaches the client's inbox.
  *  12. **Ledger.** Self-gated to at most hourly; records Stripe's fee on each
  *      card payment and adds this month's row of every monthly expense.
+ *  13. **Review reminders.** The one reminder a customer gets when they did
+ *      not click a review request's link. Days away when it is created, so it
+ *      does not nudge; it runs only between 9am and 8pm business time.
  *
  * ## Not every call runs them
  *
@@ -212,6 +216,10 @@ export async function POST(request: Request): Promise<Response> {
     // After the Stripe reconciliation, so a payment it recovered this tick can
     // have its fee recorded in the same one. Self-gated to at most hourly.
     ["ledgerAutomated", () => runScheduledLedger(db)],
+    // Emails and texts to customers, so last: nothing else waits on it, and a
+    // reminder an hour late is no worse. Bounded at 25 a run; the query is one
+    // partial-index scan when nothing is due.
+    ["reviewReminders", () => runReviewReminders(db)],
   ];
 
   const failed: string[] = [];

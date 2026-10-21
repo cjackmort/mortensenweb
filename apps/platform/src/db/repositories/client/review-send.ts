@@ -111,7 +111,8 @@ async function askedRecently(db: Database, ctx: TenantContext, email: string | n
   return row?.sentAt ?? null;
 }
 
-async function identityFor(db: Database, ctx: TenantContext) {
+/** Who requests go out as, and where replies land — also shown on the page before sending. */
+export async function reviewSenderIdentity(db: Database, ctx: TenantContext) {
   const [org] = await db
     .select({ name: organizations.name, details: businessProfiles.details })
     .from(organizations)
@@ -183,7 +184,7 @@ export async function sendReviewRequest(
   const publicId = newPublicId();
   if (!(await reviewLinks(publicId, env))) return refuse("Review links aren't switched on yet. Please contact us.");
 
-  const identity = await identityFor(db, ctx);
+  const identity = await reviewSenderIdentity(db, ctx);
   const [row] = await db
     .insert(reviewRequests)
     .values({
