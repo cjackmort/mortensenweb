@@ -218,6 +218,13 @@
       "when": 1790000000000,
       "tag": "0029_ad_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790100000000,
+      "tag": "0030_campaigns",
+      "breakpoints": true
     }
   ]
 }
