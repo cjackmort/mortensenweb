@@ -20,7 +20,7 @@ export async function CampaignsPanel({ ctx, clientPublicId }: { ctx: AdminContex
         <p className="muted">No campaigns yet. The client makes them under Growth → Campaigns.</p>
       ) : (
         <div className="table-wrap">
-          <table className="stack">
+          <table className="stack campaign-table">
             <thead>
               <tr>
                 <th>Campaign</th>

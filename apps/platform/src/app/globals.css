@@ -4576,3 +4576,17 @@ form + .field-hint {
 .panel-note + .campaign-form {
   margin-top: 1.25rem;
 }
+
+/* On a phone the campaign is the row's heading, not one more labelled
+   value squeezed into the right-hand half of the row. */
+@media (max-width: 40rem) {
+  .campaign-table td:first-child {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.5rem;
+  }
+
+  .campaign-table td:first-child::before {
+    content: none;
+  }
+}
