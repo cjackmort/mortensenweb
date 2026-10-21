@@ -205,7 +205,7 @@ export const PLANS: Plan[] = [
       "Unlimited content changes, one at a time",
       "Everything in Lite",
       "Leads inbox — reply to enquiries from your portal",
-      "Monthly report: visitors, calls and enquiries",
+      "Monthly report: visitors, taps to call and enquiries",
     ],
     featured: true,
     sortOrder: 20,
