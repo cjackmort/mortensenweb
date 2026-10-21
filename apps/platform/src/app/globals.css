@@ -1305,9 +1305,7 @@ label.checkbox input[type="checkbox"] {
  * The backdrop was a 469 KB JPEG on the one page every sign-in loads, most
  * of them on a phone. The same photo as WebP is 80 KB at 1600px and 30 KB at
  * 900px; a phone gets the small one, and the blur gradient over it hides any
- * difference. The two rules must stay in sync with the files in public/ and
- * with the public-path list in proxy.ts, which is what lets a visitor with no
- * session download them at all.
+ * difference. The two rules must stay in sync with the files in public/.
  */
 /* The home page's step card, value for value: fixed dark whatever the
    device's scheme, because it sits on the fixed dark ground above. */

@@ -1,10 +1,15 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
-import { currentUser, signIn } from "@/auth";
+import { signIn } from "@/auth";
+import { AuthForm, type AuthFormState } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
 
-export const dynamic = "force-dynamic";
+/**
+ * Prerendered and served from the CDN, like /login — see that page for why,
+ * and why a signed-in visitor is no longer bounced from here. This page used
+ * to do it with `currentUser()`, a database read on every view of the link in
+ * the welcome email.
+ */
+export const dynamic = "error";
 
 /**
  * First-run entry point.
@@ -15,64 +20,51 @@ export const dynamic = "force-dynamic";
  * they were told to do ("click Get Started") and echoing the words from the
  * email removes that hesitation.
  */
-export default async function GetStartedPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; expired?: string }>;
-}) {
-  const user = await currentUser();
-  if (user) {
-    if (user.mustChangePassword) redirect("/change-password");
-    redirect(user.role === "admin" ? "/admin" : "/dashboard");
+async function attempt(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  "use server";
+  const identifier = String(formData.get("identifier") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  try {
+    await signIn("credentials", { identifier, password, redirectTo: "/" });
+  } catch (error) {
+    if (error instanceof AuthError) return "failed";
+    throw error;
   }
+  return null;
+}
 
-  const params = await searchParams;
-  const failed = Boolean(params.error);
-  const expired = Boolean(params.expired);
-
-  async function attempt(formData: FormData) {
-    "use server";
-    const identifier = String(formData.get("identifier") ?? "");
-    const password = String(formData.get("password") ?? "");
-
-    try {
-      await signIn("credentials", { identifier, password, redirectTo: "/" });
-    } catch (error) {
-      if (error instanceof AuthError) redirect("/get-started?error=1");
-      throw error;
-    }
-  }
-
+export default function GetStartedPage() {
   return (
     <AuthShell>
-      <form action={attempt}>
-        <div className="auth-mark" aria-hidden="true">
-          M
-        </div>
-        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
-          Welcome — let&rsquo;s get you set up
-        </h1>
-        <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
-          Enter the username and temporary password from your welcome email.
-          You&rsquo;ll choose your own password on the next screen.
-        </p>
-
-        {expired && (
-          <p className="error">
-            That temporary password has expired. Contact us and we&rsquo;ll send
-            you a new one — it only takes a moment.
-          </p>
-        )}
-
-        {failed && (
+      <AuthForm
+        action={attempt}
+        header={
+          <>
+            <div className="auth-mark" aria-hidden="true">
+              M
+            </div>
+            <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
+              Welcome — let&rsquo;s get you set up
+            </h1>
+            <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
+              Enter the username and temporary password from your welcome email.
+              You&rsquo;ll choose your own password on the next screen.
+            </p>
+          </>
+        }
+        failed={
           <p className="error">
             That didn&rsquo;t work. Check the username and temporary password
             from your email — they&rsquo;re easy to mistype, and the password
             has two words and six numbers, like{" "}
             <code>granite-kestrel-418302</code>.
           </p>
-        )}
-
+        }
+      >
         <label htmlFor="identifier">Username</label>
         <input
           id="identifier"
@@ -104,9 +96,9 @@ export default async function GetStartedPage({
           className="muted"
           style={{ marginTop: "1.5rem", marginBottom: 0, fontSize: "0.85rem" }}
         >
-          Already set up your password? <Link href="/login">Sign in</Link>
+          Already set up your password? <a href="/login">Sign in</a>
         </p>
-      </form>
+      </AuthForm>
     </AuthShell>
   );
 }
