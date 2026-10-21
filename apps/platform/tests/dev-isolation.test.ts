@@ -102,14 +102,6 @@ describe("production authentication is not weakened", () => {
     expect(source).toContain('secure: process.env.NODE_ENV === "production"');
     expect(source).toContain("httpOnly: true");
   });
-
-  it("keeps the proxy's names in step with the auth config", () => {
-    // Hardcoding them in two places is how a developer ends up redirected to
-    // /login forever while holding a perfectly valid session.
-    const proxy = readFileSync("src/proxy.ts", "utf8");
-    expect(proxy).toContain("sessionCookieNames()");
-    expect(proxy).not.toContain('"authjs.session-token"');
-  });
 });
 
 describe("the development database is resolved the same way everywhere", () => {

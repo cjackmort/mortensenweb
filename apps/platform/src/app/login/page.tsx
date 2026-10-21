@@ -1,10 +1,19 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
-import { sessionHint, signIn } from "@/auth";
+import { signIn } from "@/auth";
+import { AuthForm, type AuthFormState } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
 
-export const dynamic = "force-dynamic";
+/**
+ * Prerendered, and the build fails if anything here makes it dynamic.
+ *
+ * This is the page every visit without a session lands on, so it is served
+ * from the CDN rather than rendered per request. It used to read the session
+ * cookie to bounce a signed-in visitor onward, which made every view a
+ * function invocation. That bounce also looped: a revoked session still
+ * decodes, so /login sent it to /dashboard, which rejected it back to /login.
+ * A signed-in visitor now simply sees the form; `/` is still the router.
+ */
+export const dynamic = "error";
 
 /**
  * Sign-in for returning users.
@@ -16,56 +25,48 @@ export const dynamic = "force-dynamic";
  * First-time clients are sent to /get-started instead, which is the same
  * authentication with onboarding framing.
  */
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  // A signed-in visitor is bounced by the cookie alone — no database read on
-  // the one page that every sign-in loads. The destination re-validates the
-  // session properly; a stale cookie makes one extra hop and ends up back here.
-  const hint = await sessionHint();
-  if (hint) {
-    if (hint.mustChangePassword) redirect("/change-password");
-    redirect(hint.role === "admin" ? "/admin" : "/dashboard");
+async function attempt(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  "use server";
+  const identifier = String(formData.get("identifier") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  try {
+    await signIn("credentials", { identifier, password, redirectTo: "/" });
+  } catch (error) {
+    // next-auth signals a successful redirect by throwing; let it through.
+    if (error instanceof AuthError) return "failed";
+    throw error;
   }
+  return null;
+}
 
-  const params = await searchParams;
-  const failed = Boolean(params.error);
-
-  async function attempt(formData: FormData) {
-    "use server";
-    const identifier = String(formData.get("identifier") ?? "");
-    const password = String(formData.get("password") ?? "");
-
-    try {
-      await signIn("credentials", { identifier, password, redirectTo: "/" });
-    } catch (error) {
-      // next-auth signals a successful redirect by throwing; let it through.
-      if (error instanceof AuthError) redirect("/login?error=1");
-      throw error;
-    }
-  }
-
+export default function LoginPage() {
   return (
     <AuthShell>
-      <form action={attempt}>
-        <div className="auth-mark" aria-hidden="true">
-          M
-        </div>
-        <h1 style={{ fontSize: "1.35rem", marginBottom: "0.3rem" }}>
-          Welcome back
-        </h1>
-        <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
-          Sign in to Mortensen Web Co.
-        </p>
-
-        {failed && (
+      <AuthForm
+        action={attempt}
+        header={
+          <>
+            <div className="auth-mark" aria-hidden="true">
+              M
+            </div>
+            <h1 style={{ fontSize: "1.35rem", marginBottom: "0.3rem" }}>
+              Welcome back
+            </h1>
+            <p className="muted" style={{ marginTop: 0, marginBottom: "1.5rem" }}>
+              Sign in to Mortensen Web Co.
+            </p>
+          </>
+        }
+        failed={
           <p className="error">
             We could not sign you in. Check your details and try again.
           </p>
-        )}
-
+        }
+      >
         <label htmlFor="identifier">Username or email</label>
         <input
           id="identifier"
@@ -89,6 +90,11 @@ export default async function LoginPage({
 
         <button type="submit">Sign in</button>
 
+        {/*
+         * Plain links, not next/link: the targets are static pages on the
+         * CDN, and next/link would add its runtime to this page and prefetch
+         * both on every view.
+         */}
         <p
           style={{
             marginTop: "1rem",
@@ -97,7 +103,7 @@ export default async function LoginPage({
             textAlign: "center",
           }}
         >
-          <Link href="/forgot-password">Forgot your password?</Link>
+          <a href="/forgot-password">Forgot your password?</a>
         </p>
 
         <p
@@ -105,9 +111,9 @@ export default async function LoginPage({
           style={{ marginTop: "1.5rem", marginBottom: 0, fontSize: "0.85rem" }}
         >
           First time here?{" "}
-          <Link href="/get-started">Get started with your welcome email</Link>
+          <a href="/get-started">Get started with your welcome email</a>
         </p>
-      </form>
+      </AuthForm>
     </AuthShell>
   );
 }

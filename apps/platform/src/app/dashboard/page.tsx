@@ -91,16 +91,21 @@ export default async function ClientDashboard({
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
 
-  // The same query the Requests page uses to build its panel — one source,
-  // so this page and that one cannot disagree about what is waiting.
-  const awaitingApproval = await listPreviewsAwaitingDecision(db, ctx);
-
-  // Analytics is kicked off here, before any HTML is sent, and awaited inside
-  // the boundary below. Starting it early means the eight analytics calls run
-  // *while* the top of the page is being streamed, not after.
+  // Analytics is kicked off first, before any HTML is sent, and awaited inside
+  // the boundary below. Starting it early means its site lookup runs alongside
+  // the query below rather than after it, and the eight analytics calls run
+  // *while* the top of the page is being streamed.
   // Filters, not just the day count: the provider query narrows too, so the
   // breakdowns and the headline figures agree with each other.
   const analytics = resolveClientAnalytics(db, ctx, filters);
+  // Awaited — and any failure rendered — by the boundaries below. This only
+  // stops a rejection being reported as unhandled if the next line throws
+  // first and the page never reaches them.
+  analytics.catch(() => {});
+
+  // The same query the Requests page uses to build its panel — one source,
+  // so this page and that one cannot disagree about what is waiting.
+  const awaitingApproval = await listPreviewsAwaitingDecision(db, ctx);
 
   return (
     <>

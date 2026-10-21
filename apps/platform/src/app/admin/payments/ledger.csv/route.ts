@@ -7,10 +7,10 @@ import { ledgerCsv } from "@/lib/finance/ledger-csv";
 /**
  * The ledger for one calendar year, as a CSV for the accountant.
  *
- * Behind the admin session like every other `/admin` path; `proxy.ts` sends
- * an anonymous request to the login page before it gets here. The role is
- * still checked, because a signed-in client is a session too, and anything
- * but an admin gets the same 404 as a path that does not exist.
+ * Behind the admin session like every other `/admin` path. Route handlers do
+ * not run inside the admin layout, so the check is here: anything but an
+ * admin — anonymous, or a signed-in client — gets the same 404 as a path that
+ * does not exist.
  */
 
 export const dynamic = "force-dynamic";
