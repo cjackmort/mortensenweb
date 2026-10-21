@@ -1,0 +1,250 @@
+/*
+ * Job showcase.
+ *
+ * Its own file rather than appended to globals.css, so the Growth features
+ * built in parallel do not all edit the end of one shared file. Tokens only;
+ * no colour is defined here.
+ */
+
+/* ------------------------------------------------------------------ list */
+
+.showcase-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.showcase-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.showcase-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.9rem;
+  align-items: start;
+  padding: 0.9rem 1.1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.showcase-row:hover,
+.showcase-row:focus-visible {
+  background: var(--surface-2);
+}
+
+.showcase-row-cover {
+  display: block;
+  width: 4.5rem;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+}
+
+.showcase-row-body {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.showcase-row-title {
+  font-weight: 600;
+}
+
+.showcase-row-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.showcase-outputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.3rem;
+}
+
+.showcase-output {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.showcase-output-name {
+  color: var(--muted);
+  font: 500 0.66rem / 1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ new */
+
+.showcase-picker {
+  max-height: 26rem;
+}
+
+.media-picker-tile.is-waiting {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.showcase-pick-order {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font: 600 0.72rem / 1 var(--mono);
+}
+
+.showcase-pick-blank {
+  display: block;
+  aspect-ratio: 1 / 1;
+  background: var(--surface-sunk);
+}
+
+.showcase-upload {
+  margin-top: 1rem;
+}
+
+.showcase-pair {
+  margin: 1rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.showcase-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.showcase-check input {
+  width: auto;
+  margin: 0;
+}
+
+.showcase-pair-pick {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+@media (min-width: 640px) {
+  .showcase-pair-pick {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* --------------------------------------------------------------- detail */
+
+.showcase-photos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.showcase-photos li {
+  position: relative;
+}
+
+.showcase-photos img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.showcase-photos .pill {
+  position: absolute;
+  left: 0.3rem;
+  bottom: 0.3rem;
+}
+
+.showcase-photos .is-missing img {
+  opacity: 0.35;
+}
+
+.showcase-photo-note {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.showcase-source {
+  margin-top: 0;
+}
+
+.showcase-graphics {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  align-items: end;
+}
+
+@media (min-width: 720px) {
+  .showcase-graphics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.showcase-graphics li {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.showcase-graphics img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 26rem;
+  object-fit: contain;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+}
+
+.showcase-graphic-label {
+  font-size: 0.85rem;
+}
+
+.showcase-subhead {
+  margin: 1.25rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.showcase-copy {
+  white-space: pre-line;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  margin: 0 0 0.75rem;
+}
+
+.showcase-steps {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.2rem;
+}
+
+.showcase-steps li + li {
+  margin-top: 0.25rem;
+}
+
+.showcase-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}

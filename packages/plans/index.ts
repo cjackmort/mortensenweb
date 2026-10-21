@@ -110,7 +110,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Show your real work everywhere customers look, without writing a word.",
     addOnCents: 4000,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
   {
     key: "google-profile",
