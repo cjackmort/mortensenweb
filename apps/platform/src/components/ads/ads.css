@@ -757,3 +757,16 @@
 .ad-channels-note {
   margin: 1rem 0 0;
 }
+
+/* "Create ad" and "See your ads" side by side on the Growth tab's card. */
+.ad-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.ad-card-actions .ad-create {
+  margin: 0;
+}

@@ -9,6 +9,7 @@ import type { FeatureAccess } from "@/lib/growth/access";
 import { addAddOnAction } from "../plan/actions";
 import { PlanActionButton } from "../plan/controls";
 import { CreateAdButton } from "@/components/ads/create-ad-button";
+import "@/components/ads/ads.css";
 
 /**
  * The Growth tab: every tool that brings a client more customers, in one
@@ -214,7 +215,7 @@ function AdsCard({ readOnly }: { readOnly: boolean }) {
         We draft the ad from your business information. You choose where it runs and how much to spend, and pay once
         per campaign: the ad spend at cost, plus our fee ({feeTermsLabel()}) on its own line.
       </p>
-      <div className="growth-actions">
+      <div className="request-cta-actions ad-card-actions">
         {!readOnly && <CreateAdButton />}
         <Link className="button secondary" href="/dashboard/growth/ads">
           See your ads
