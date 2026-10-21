@@ -98,7 +98,8 @@ function invalid(message: string): Error {
 }
 
 export function resetFakeStripe(): void {
-  state.counter = 0;
+  // The counter is not reset: ids stay unique across tests, as Stripe's are,
+  // because a reused customer id trips the unique index on clients.
   state.prices.clear();
   state.coupons.clear();
   state.promos.clear();

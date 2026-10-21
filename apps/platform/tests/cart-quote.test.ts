@@ -44,8 +44,13 @@ describe("selectionFrom", () => {
   });
 
   it("refuses an add-on that is not on sale", () => {
-    const result = selectionFrom(catalog, { planKey: null, addOnKeys: ["showcase"] });
-    expect(result.ok).toBe(false);
+    const result = selectionFrom(catalog, { planKey: "care", addOnKeys: ["showcase"] });
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/isn't available/) });
+  });
+
+  it("refuses add-ons without a plan to go on top of", () => {
+    const result = selectionFrom(catalog, { planKey: null, addOnKeys: ["reviews"] });
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/Choose a plan/) });
   });
 
   it("drops an add-on the chosen plan already includes, so it is never billed twice", () => {

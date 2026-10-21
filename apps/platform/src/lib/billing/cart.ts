@@ -61,6 +61,10 @@ export type SelectionResult =
  *
  * An add-on the chosen plan already includes is dropped rather than refused:
  * the form hides those boxes, and dropping one can only lower the charge.
+ *
+ * Add-ons need a plan. They are sold "on top of any plan", and a subscription
+ * of add-ons alone has no plan line for the mirror to read, so it would take
+ * an add-on for the plan (`planItemOf`).
  */
 export function selectionFrom(
   catalog: CartCatalog,
@@ -69,6 +73,9 @@ export function selectionFrom(
   const planKey = raw.planKey ? raw.planKey : null;
   const plan = planKey ? catalog.plans.find((p) => p.key === planKey) : null;
   if (planKey && !plan) return { ok: false, message: "That plan isn't available. Pick one of the plans shown." };
+  if (!plan && (raw.addOnKeys ?? []).length > 0) {
+    return { ok: false, message: "Growth add-ons go on top of a plan. Choose a plan first." };
+  }
 
   const addOnKeys: string[] = [];
   for (const key of raw.addOnKeys ?? []) {

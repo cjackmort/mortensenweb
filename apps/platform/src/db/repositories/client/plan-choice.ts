@@ -56,8 +56,23 @@ export async function getPlanChoice(db: Database, ctx: TenantContext): Promise<P
     .limit(1);
   if (billed[0]) return { open: false, reason: "subscribed" };
 
+  const { plans, assigned } = await offeredPlans(db, client.clientId);
+  return { open: true, plans, billingDay: assigned?.billingDay ?? null };
+}
+
+/**
+ * The plans this client may buy, and the one an operator assigned them.
+ *
+ * Every published plan that is on sale in the database, plus the $1 test plan
+ * only for a client it was assigned to. Shared by the plan picker and the cart
+ * so the two can never offer different plans.
+ */
+export async function offeredPlans(
+  db: Database,
+  clientId: string,
+): Promise<{ plans: PlanCard[]; assigned: { planKey: string; billingDay: number } | null }> {
   const [assigned, sellable] = await Promise.all([
-    assignedPlanFor(db, client.clientId),
+    assignedPlanFor(db, clientId),
     db
       .select({ key: servicePlans.key })
       .from(servicePlans)
@@ -94,5 +109,5 @@ export async function getPlanChoice(db: Database, ctx: TenantContext): Promise<P
     });
   }
 
-  return { open: true, plans, billingDay: assigned?.billingDay ?? null };
+  return { plans, assigned };
 }
