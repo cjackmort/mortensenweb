@@ -33,8 +33,10 @@ export function ReviewRequestList({ requests }: { requests: ReviewRequestRow[] }
             return (
               <tr key={request.publicId}>
                 <td data-label="Customer">
-                  <strong>{request.customerName}</strong>
-                  <span className="review-contact">{[request.email, request.phone].filter(Boolean).join(" · ")}</span>
+                  <span className="review-customer">
+                    <strong>{request.customerName}</strong>
+                    <span className="review-contact">{[request.email, request.phone].filter(Boolean).join(" · ")}</span>
+                  </span>
                 </td>
                 <td data-label="Status">
                   <span className={`pill pill-${row.pill.tone}`}>{row.pill.label}</span>

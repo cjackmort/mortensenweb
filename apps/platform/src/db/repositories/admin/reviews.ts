@@ -307,7 +307,10 @@ export interface ClientReviewsView {
     emailStatus: string | null;
     smsStatus: string | null;
     clickedAt: Date | null;
+    reminderDueAt: Date | null;
+    remindedAt: Date | null;
     reminderStatus: string | null;
+    unsubscribedAt: Date | null;
     createdAt: Date;
   }>;
 }
@@ -346,7 +349,10 @@ export async function getClientReviews(
       emailStatus: reviewRequests.emailStatus,
       smsStatus: reviewRequests.smsStatus,
       clickedAt: reviewRequests.firstClickedAt,
+      reminderDueAt: reviewRequests.reminderDueAt,
+      remindedAt: reviewRequests.remindedAt,
       reminderStatus: reviewRequests.reminderStatus,
+      unsubscribedAt: reviewRequests.unsubscribedAt,
       createdAt: reviewRequests.createdAt,
     })
     .from(reviewRequests)
