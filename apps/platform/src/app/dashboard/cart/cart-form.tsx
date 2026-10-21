@@ -98,7 +98,11 @@ export function CartForm({
       <div className="cart-choices">
         <section className="card cart-build" aria-labelledby="cart-build">
           <div className="card-head">
-            <h2 id="cart-build">Your website</h2>
+            <h2 id="cart-build">
+              Your website
+              {/* The build's own name, when the catalogue has more than "Website". */}
+              {catalog.build.name !== "Website" && <span className="muted cart-build-name"> · {catalog.build.name}</span>}
+            </h2>
             <span className="pill pill-neutral">Required</span>
           </div>
           <p className="cart-build-price">
@@ -190,7 +194,7 @@ export function CartForm({
           {quote.lines.map((line) => (
             <li key={`${line.kind}:${line.key}`}>
               <span>
-                {line.kind === "plan" ? `${line.name} plan` : line.name}
+                {line.kind === "build" ? "Website" : line.kind === "plan" ? `${line.name} plan` : line.name}
                 {line.recurring && <span className="muted"> · {formatCents(line.cents)}/month</span>}
               </span>
               {line.kind === "build" ? (
