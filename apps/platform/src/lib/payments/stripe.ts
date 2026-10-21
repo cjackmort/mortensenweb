@@ -216,6 +216,30 @@ export class StripeNotConfigured extends Error {
 
 let cached: { key: string; client: Stripe } | null = null;
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Where a local preview's Stripe calls go: a stand-in on this machine
+ * (`scripts/fake-stripe.ts`), so the cart and the Plan tab can be clicked
+ * through with no Stripe account. Only for a test key, never in production,
+ * and never anywhere but localhost — a real key always talks to Stripe.
+ */
+export function localStripeHost(
+  secretKey: string,
+): { host: string; port: number; protocol: "http" | "https" } | null {
+  const base = process.env.STRIPE_API_BASE;
+  if (!base || process.env.NODE_ENV === "production" || !secretKey.startsWith("sk_test_")) return null;
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return null;
+  }
+  if (!LOCAL_HOSTS.has(url.hostname)) return null;
+  const protocol = url.protocol === "https:" ? "https" : "http";
+  return { host: url.hostname, port: Number(url.port || (protocol === "https" ? 443 : 80)), protocol };
+}
+
 /**
  * The configured client, or null when Stripe is switched off.
  *
@@ -237,6 +261,7 @@ export function stripeClient(): Stripe | null {
     // idempotency-key aware, so a retried create cannot produce two objects.
     maxNetworkRetries: 2,
     appInfo: { name: "mortensenweb-portal", version: "1.0.0" },
+    ...(localStripeHost(key) ?? {}),
   });
 
   cached = { key, client };
