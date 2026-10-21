@@ -1,5 +1,6 @@
 import type { GrowthFeatureKey } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
+import { googleProfileReport } from "./google-profile";
 import type { ReportWindow } from "./period";
 import type { ExtraSection } from "./types";
 
@@ -63,4 +64,4 @@ export interface ReportExtension {
   build(input: ReportExtensionInput): Promise<ExtensionSection | null>;
 }
 
-export const REPORT_EXTENSIONS: ReportExtension[] = [];
+export const REPORT_EXTENSIONS: ReportExtension[] = [googleProfileReport];
