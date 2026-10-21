@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { metaPlacement } from "./placements";
-import { AdsApiError, count, kindForStatus, mergeRows, type AdStatRow, type FetchLike } from "./stats";
+import { AdsApiError, count, kindForStatus, mergeRows, type AdStatRow, type Env, type FetchLike } from "./stats";
 
 /**
  * Reading a Facebook or Instagram channel's results from the Meta Marketing
@@ -25,7 +25,7 @@ export const META_ENV = ["META_SYSTEM_USER_TOKEN", "META_APP_SECRET"] as const;
 /** v25.0 shipped 2026-02-18; Meta supports each version for about two years. */
 const DEFAULT_VERSION = "v25.0";
 
-export function metaConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+export function metaConfigured(env: Env = process.env): boolean {
   return META_ENV.every((name) => Boolean(env[name]));
 }
 
@@ -73,7 +73,7 @@ function metricsOf(row: MetaRow) {
 async function insights(
   objectId: string,
   params: Record<string, string>,
-  env: NodeJS.ProcessEnv,
+  env: Env,
   fetcher: FetchLike,
 ): Promise<MetaRow[]> {
   const token = env.META_SYSTEM_USER_TOKEN!;
@@ -108,7 +108,7 @@ export async function fetchMetaStats(input: {
   objectId: string;
   from: string;
   to: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Env;
   fetch?: FetchLike;
 }): Promise<AdStatRow[]> {
   const env = input.env ?? process.env;

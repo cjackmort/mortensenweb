@@ -1,5 +1,5 @@
 import { googlePlacement } from "./placements";
-import { AdsApiError, count, kindForStatus, mergeRows, type AdStatRow, type FetchLike } from "./stats";
+import { AdsApiError, count, kindForStatus, mergeRows, type AdStatRow, type Env, type FetchLike } from "./stats";
 
 /**
  * Reading a campaign's results from the Google Ads API, over plain REST.
@@ -31,7 +31,7 @@ export const GOOGLE_ADS_ENV = [
 /** Each major version is supported for about a year; v26 shipped 2026-10-14. */
 const DEFAULT_VERSION = "v26";
 
-export function googleAdsConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+export function googleAdsConfigured(env: Env = process.env): boolean {
   return GOOGLE_ADS_ENV.every((name) => Boolean(env[name]));
 }
 
@@ -49,7 +49,7 @@ interface GoogleConfig {
   version: string;
 }
 
-function config(env: NodeJS.ProcessEnv): GoogleConfig {
+function config(env: Env): GoogleConfig {
   if (!googleAdsConfigured(env)) {
     throw new AdsApiError("google_ads", "auth", "Google Ads is not connected: its environment variables are not set.");
   }
@@ -203,7 +203,7 @@ export async function fetchGoogleAdsStats(input: {
   campaignId: string;
   from: string;
   to: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Env;
   fetch?: FetchLike;
 }): Promise<AdStatRow[]> {
   const fetcher = input.fetch ?? fetch;

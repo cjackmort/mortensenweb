@@ -20,6 +20,9 @@ export interface AdStatRow {
   conversions: number;
 }
 
+/** Environment variables, as a plain record so tests can pass their own. */
+export type Env = Record<string, string | undefined>;
+
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 /**

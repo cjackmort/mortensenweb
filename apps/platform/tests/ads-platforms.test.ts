@@ -22,9 +22,9 @@ const GOOGLE_ENV = {
   GOOGLE_ADS_CLIENT_ID: "client",
   GOOGLE_ADS_CLIENT_SECRET: "secret",
   GOOGLE_ADS_REFRESH_TOKEN: "refresh",
-} as NodeJS.ProcessEnv;
+};
 
-const META_ENV = { META_SYSTEM_USER_TOKEN: "meta-token", META_APP_SECRET: "app-secret" } as NodeJS.ProcessEnv;
+const META_ENV = { META_SYSTEM_USER_TOKEN: "meta-token", META_APP_SECRET: "app-secret" };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
