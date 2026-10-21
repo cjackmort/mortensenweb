@@ -79,7 +79,7 @@ describe("buildWinbackEmail", () => {
   it("shows the offer and when it ends", () => {
     const message = buildWinbackEmail(input);
     expect(message.text).toContain("$20 off a tune-up");
-    expect(message.text).toContain("Nov 30, 2026");
+    expect(message.text).toContain("Offer: $20 off a tune-up. Ends Nov 30, 2026.");
     const noOffer = buildWinbackEmail({ ...input, campaign: { ...input.campaign, offer: null } });
     expect(noOffer.text).not.toMatch(/offer/i);
   });

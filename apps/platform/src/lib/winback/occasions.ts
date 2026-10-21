@@ -75,7 +75,11 @@ export interface Occasion {
   subject: string;
   /** The season, from the customer's side. No facts about the business. */
   opening: string;
-  /** Words that find the matching service in the profile's list. */
+  /**
+   * Words that find the matching service in the profile's list. Only this
+   * occasion's own topic: a generic word like "tune-up" would put a furnace
+   * service into an A/C email.
+   */
   serviceWords?: RegExp;
   /** "the furnace" — what the call to action is about when no service matches. */
   topic: string;
@@ -91,7 +95,7 @@ export const OCCASIONS: readonly Occasion[] = [
     subject: "Is your furnace ready for the first cold night?",
     opening:
       "Cold weather is on the way. A furnace that hasn't been looked at since last winter is the one most likely to quit on the first cold night, when everyone is calling for help at once.",
-    serviceWords: /furnace|heating|tune|maintenance|inspection/i,
+    serviceWords: /furnace|heating|heat pump/i,
     topic: "your furnace",
   },
   {
@@ -103,7 +107,7 @@ export const OCCASIONS: readonly Occasion[] = [
     subject: "Get your A/C checked before the first hot week",
     opening:
       "Summer is coming. Air conditioners that sat all winter tend to show their problems in the first hot week, when everyone needs a repair at the same time.",
-    serviceWords: /a\/c|air|cool|tune|maintenance/i,
+    serviceWords: /a\/c|air[- ]?condition|cooling/i,
     topic: "your A/C",
   },
   {
@@ -163,7 +167,7 @@ export const OCCASIONS: readonly Occasion[] = [
     subject: "Getting your yard ready for spring",
     opening:
       "Spring is nearly here. Sprinklers need starting up, beds need clearing, and the schedule fills up quickly once the weather turns.",
-    serviceWords: /spring|sprinkler|clean|mow|lawn|aerat/i,
+    serviceWords: /spring|start-?up|sprinkler|mow|lawn|aerat/i,
     topic: "your yard",
   },
   {
@@ -175,7 +179,7 @@ export const OCCASIONS: readonly Occasion[] = [
     subject: "Before the first freeze: your yard and sprinklers",
     opening:
       "The first freeze is coming. Sprinkler lines left full of water can crack, and leaves left on the lawn over winter make for a patchy spring.",
-    serviceWords: /fall|winteriz|sprinkler|blow|clean|leaf|leaves|aerat/i,
+    serviceWords: /fall|winteriz|blow-?out|leaf|leaves/i,
     topic: "your yard",
   },
   {

@@ -89,9 +89,11 @@ function subjectSafe(value: string): string {
 }
 
 function offerLine(offer: string | null, expiresOn: string | null): string | null {
-  if (!offer?.trim()) return null;
-  const until = expiresOn ? ` Until ${formatDateWithYear(`${expiresOn}T12:00:00Z`)}.` : "";
-  return `${offer.trim()}${until}`;
+  const text = offer?.trim();
+  if (!text) return null;
+  if (!expiresOn) return text;
+  // The end date is a sentence of its own, so the client's offer needs to end like one.
+  return `${/[.!?]$/.test(text) ? text : `${text}.`} Ends ${formatDateWithYear(`${expiresOn}T12:00:00Z`)}.`;
 }
 
 export function buildWinbackEmail(input: WinbackEmailInput): EmailMessage {

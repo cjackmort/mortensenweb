@@ -80,7 +80,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             <p>Nobody yet. Add customers above.</p>
           </div>
         ) : (
-          <div className="table-wrap">
+          <div className="panel-body table-wrap">
             <table className="stack">
               <thead>
                 <tr>

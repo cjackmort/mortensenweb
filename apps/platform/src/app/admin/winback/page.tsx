@@ -52,7 +52,7 @@ export default async function AdminWinbackPage() {
             <p>No client has approved a win-back email yet.</p>
           </div>
         ) : (
-          <div className="table-wrap">
+          <div className="panel-body table-wrap">
             <table className="stack">
               <thead>
                 <tr>

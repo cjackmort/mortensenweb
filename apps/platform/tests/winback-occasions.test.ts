@@ -92,6 +92,15 @@ describe("composeDraft", () => {
     expect(composeDraft(occasion, { businessName: "Peak" }).body).not.toMatch(/tune-up/i);
   });
 
+  it("never names another season's service", () => {
+    const ac = OCCASIONS.find((o) => o.key === "hvac-ac")!;
+    const both = { businessName: "Peak", services: "Furnace tune-up - $89\nA/C tune-up" };
+    expect(composeDraft(ac, both).body).toMatch(/ask about our A\/C tune-up\./i);
+    expect(composeDraft(ac, { businessName: "Peak", services: "Furnace tune-up" }).body).not.toMatch(/furnace/i);
+    const fall = OCCASIONS.find((o) => o.key === "landscaping-fall")!;
+    expect(composeDraft(fall, { businessName: "Yard", services: "Spring clean-up" }).body).not.toMatch(/ask about/i);
+  });
+
   it("asks them to reply when there is no phone or booking link", () => {
     const draft = composeDraft(occasion, { businessName: "Peak" });
     expect(draft.body).toMatch(/reply to this email/i);

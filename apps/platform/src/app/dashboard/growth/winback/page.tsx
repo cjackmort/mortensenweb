@@ -88,7 +88,7 @@ export default async function WinbackPage() {
         </div>
       </section>
 
-      <section aria-labelledby="winback-ideas">
+      <section aria-labelledby="winback-ideas" className="winback-ideas">
         <h2 id="winback-ideas" className="growth-heading">
           Ideas for {month}
         </h2>
