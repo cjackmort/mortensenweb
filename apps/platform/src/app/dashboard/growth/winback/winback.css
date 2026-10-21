@@ -183,3 +183,10 @@
 .winback-stop {
   margin-top: 3rem;
 }
+
+/* Five results in one row on a wide screen, where the portal's metrics use four. */
+@media (min-width: 60rem) {
+  .winback-metrics {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
