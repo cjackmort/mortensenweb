@@ -159,6 +159,12 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          # The commit message is data, so it reaches the script through the
+          # environment and is never pasted into it. Pasted in, a double quote
+          # in the message ended the string and the rest ran as shell commands
+          # in a job holding NETLIFY_AUTH_TOKEN, and the agent writes commit
+          # messages that quote what a client asked for.
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           # Production publishes the portal tile and nothing else from
           # __preview/. The per-page diff shots exist to illustrate a pull
@@ -168,4 +174,4 @@ jobs:
           npx --yes netlify-cli@17 deploy \
             --dir=dist \
             --prod \
-            --message="${{ github.event.head_commit.message }}"
+            --message="${COMMIT_MESSAGE%%$'\n'*}"
