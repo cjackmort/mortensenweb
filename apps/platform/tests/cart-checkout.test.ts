@@ -290,6 +290,16 @@ describe("beginCartCheckout", () => {
     expect(fakeStripe.state.created).toEqual([]);
   });
 
+  it("refuses to take the money again while the webhook for a paid checkout is still on its way", async () => {
+    const first = await beginCartCheckout(db, acme.ctx, { ...URLS, planKey: null, addOnKeys: [], promoCode: "" });
+    fakeStripe.state.sessions.get(first.ok ? first.sessionId : "")!.status = "complete";
+
+    const again = await beginCartCheckout(db, acme.ctx, { ...URLS, planKey: null, addOnKeys: [], promoCode: "" });
+
+    expect(again).toMatchObject({ ok: false, reason: "paid" });
+    expect(fakeStripe.state.created).toHaveLength(1);
+  });
+
   it("sends a double click to the checkout it already opened", async () => {
     const input = { ...URLS, planKey: "care", addOnKeys: [], promoCode: "" };
     const first = await beginCartCheckout(db, acme.ctx, input);

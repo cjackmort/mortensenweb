@@ -192,3 +192,13 @@ export function quoteCart(
     prorated: anchor !== null,
   };
 }
+
+/** "$500", "$17.74": whole dollars when there are no cents, as on the plan cards. */
+export function formatCents(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  }).format(cents / 100);
+}

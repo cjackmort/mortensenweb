@@ -316,6 +316,18 @@ async function resolvePrices(catalog: CartCatalog, selection: CartSelection, quo
   };
 }
 
+/**
+ * A cart checkout this customer has already completed, paid or with a bank
+ * transfer on its way. Checked at Stripe for the same reason as the
+ * subscription guard: between paying and the webhook landing, the portal
+ * still thinks the website is unpaid, and the client is back on a page that
+ * offers to take the money.
+ */
+async function completedCart(customerId: string): Promise<boolean> {
+  const done = await requireStripe().checkout.sessions.list({ customer: customerId, status: "complete", limit: 20 });
+  return done.data.some((session) => session.metadata?.checkout === "cart");
+}
+
 /** What makes two checkouts the same order: a double click reuses, anything else replaces. */
 function signatureOf(parts: unknown): string {
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 24);
@@ -368,6 +380,9 @@ export async function beginCartCheckout(
     const customerId = await ensureCustomer(db, client);
     if (await liveSubscription(customerId)) {
       return refusal("already_subscribed", "You already have an active subscription. Use the Plan tab to change it.");
+    }
+    if (await completedCart(customerId)) {
+      return refusal("paid", "You've already paid. It can take a minute to show here, and there's no need to pay again.");
     }
 
     let promo: BuildPromo | null = null;
