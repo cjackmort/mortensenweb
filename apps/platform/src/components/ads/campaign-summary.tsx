@@ -1,15 +1,10 @@
 import { AD_UNSPENT_POLICY, adChannel, type AdFeeTerms } from "@mortensenweb/plans";
 import type { CampaignDetail } from "@/db/repositories/client/ads";
 import { checkoutLines } from "@/lib/ads/money";
-import { formatDate, formatDateWithYear } from "@/lib/time";
+import { campaignDates } from "@/lib/ads/dates";
 import { CheckoutLinesTable } from "./checkout-lines";
 
-/** "Oct 25 – Nov 23, 2026". Noon UTC, so the business timezone keeps the same day. */
-export function campaignDates(campaign: Pick<CampaignDetail, "startsOn" | "endsOn">): string | null {
-  if (!campaign.startsOn || !campaign.endsOn) return null;
-  const at = (day: string) => new Date(`${day}T12:00:00Z`);
-  return `${formatDate(at(campaign.startsOn))} – ${formatDateWithYear(at(campaign.endsOn))}`;
-}
+export { campaignDates };
 
 /**
  * Where, when and for how much: the facts the client agreed to, for the

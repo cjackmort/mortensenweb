@@ -20,6 +20,7 @@ import { businessDate } from "@/lib/billing/period";
 import { draftAd } from "@/lib/ads/draft";
 import { creativeProblems, type CallToAction, type CreativeInput } from "@/lib/ads/creative";
 import { validateBudgets, type ChannelBudget } from "@/lib/ads/money";
+import { addDays } from "@/lib/ads/dates";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 
 /**
@@ -85,18 +86,7 @@ export interface CampaignDetail extends Omit<CampaignSummary, "channels"> {
   channels: CampaignChannel[];
 }
 
-/** The days a campaign runs, from its two dates. */
-export function durationDays(startsOn: string | null, endsOn: string | null): number | null {
-  if (!startsOn || !endsOn) return null;
-  const ms = Date.parse(`${endsOn}T00:00:00Z`) - Date.parse(`${startsOn}T00:00:00Z`);
-  return Math.round(ms / 86_400_000) + 1;
-}
-
-export function addDays(day: string, days: number): string {
-  const at = new Date(`${day}T00:00:00Z`);
-  at.setUTCDate(at.getUTCDate() + days);
-  return at.toISOString().slice(0, 10);
-}
+export { addDays, durationDays } from "@/lib/ads/dates";
 
 export async function listCampaigns(db: Database, ctx: TenantContext): Promise<CampaignSummary[]> {
   const rows = await db
