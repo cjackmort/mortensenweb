@@ -1516,3 +1516,83 @@ img {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* Key facts near the top of a long page: the handful of facts a reader — or
+   an AI answer engine — should be able to lift without reading further. */
+.keyfacts {
+  list-style: none;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-3);
+}
+
+.keyfacts li {
+  padding: var(--space-4);
+  border: 1px solid var(--rule-strong);
+  background: var(--white);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.keyfacts strong {
+  display: block;
+  font-size: var(--text-base);
+  margin-bottom: 0.2rem;
+}
+
+/* One section per Growth tool: tighter than a full section, since six of
+   them run back to back. */
+.section.growth-tool {
+  padding-block: var(--space-6);
+}
+
+/* About: the facts as a definition list, in a grid that wraps on a phone. */
+.about-facts {
+  margin: var(--space-6) 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+}
+
+.about-facts > div {
+  padding: var(--space-4);
+  border: 1px solid var(--rule-strong);
+  background: var(--white);
+}
+
+.about-facts dt {
+  font: 500 var(--text-xs) / 1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.about-facts dd {
+  margin: 0;
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+/* Read by screen readers and search engines, not drawn. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Links inside a dark section use the blue made for dark ground. The brand
+   blue on --dark is under 3:1 — the phone number in the About page's closing
+   section was unreadable for anyone with weaker eyesight. */
+.section--dark .link,
+.section--dark .lede a {
+  color: var(--blue-on-dark);
+}

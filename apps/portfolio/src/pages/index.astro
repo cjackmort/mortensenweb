@@ -5,7 +5,7 @@ import Lockup from "../components/Lockup.astro";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
 import PlanCard from "../components/PlanCard.astro";
-import { PLANS, dollars, BUILDS, CHEAPEST_BUILD, OVERAGE_CENTS } from "@mortensenweb/plans";
+import { PLANS, dollars, BUILDS, CHEAPEST_BUILD, OVERAGE_CENTS, GROWTH_FEATURES } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
 
 
@@ -20,6 +20,14 @@ const faq = [
   },
   // Both answers changed on 2026-10-06, when the build became three
   // standalone prices with no commitment behind any of them.
+  {
+    q: "Where is Mortensen Web Co. based?",
+    a: `In ${SITE.locality}, ${SITE.region}. We build for small businesses across the Salt Lake Valley and anywhere in the US — everything from the first call to approving a change happens online. Call ${SITE.phone} or email ${SITE.email}.`,
+  },
+  {
+    q: "What are Growth tools?",
+    a: "Growth tools turn your website into more customers: a leads inbox for every contact-form enquiry, with review requests, campaign tracking, win-back emails and Google profile management coming. They are included from the Care plan up, or can be added one at a time.",
+  },
   {
     q: "Do I have to sign a contract?",
     a: "No. Plans are month to month and the build has no strings attached. Your domain stays yours either way.",
@@ -82,7 +90,15 @@ const schema = [
     <div class="wrap">
       <div class="section-head reveal">
         <div><p class="eyebrow">What we do</p></div>
-        <h2>Three things, done properly. Nothing you won't use.</h2>
+        <div>
+          <h2>Four things, done properly. Nothing you won't use.</h2>
+          {/* The page's plain statement of who and where, written to be quoted
+              on its own by search and AI answers. */}
+          <p class="lede" style="margin-top: 1rem">
+            {SITE.name} is a web design company in {SITE.locality}, {SITE.region} that builds, hosts and
+            looks after websites for small businesses — in the Salt Lake Valley and anywhere else online.
+          </p>
+        </div>
       </div>
 
       <ul class="rows">
@@ -113,6 +129,16 @@ const schema = [
             you say so. Lite includes one change a month and a flat
             {" "}{dollars(OVERAGE_CENTS)} for each beyond it; every other plan
             includes unlimited changes.
+          </p>
+        </li>
+        <li class="reveal">
+          <h3><span class="n">D</span> Growth tools</h3>
+          <p>
+            A website should bring in work, not just sit there. Every enquiry
+            from your contact form lands in a leads inbox you can reply from,
+            and {GROWTH_FEATURES.length - 1} more tools — review requests, campaign
+            tracking, Google profile management and more — are on the way.
+            {" "}<a class="link" href="/growth/">See what Growth tools do</a>.
           </p>
         </li>
       </ul>

@@ -1,0 +1,230 @@
+---
+import Base from "../layouts/Base.astro";
+import { GROWTH_FEATURES, PLANS, dollars, type GrowthFeature } from "@mortensenweb/plans";
+import { SITE } from "../data/site";
+
+/**
+ * Growth: the tools beyond the website itself, for search and for sale.
+ *
+ * Every figure comes from `@mortensenweb/plans` — what each tool costs on its
+ * own, which plan includes it, and whether it is built yet. A tool that is not
+ * built says "coming soon" here exactly as it does in the portal, so this page
+ * can never sell something a client cannot use.
+ *
+ * Written answer-first for AI answer engines: each section opens with a
+ * sentence that stands on its own when quoted, naming the business and the
+ * tool rather than "it".
+ */
+
+const planName = (key: GrowthFeature["includedFrom"]) => PLANS.find((p) => p.key === key)!.name;
+const live = GROWTH_FEATURES.filter((f) => f.available);
+const allTogether = GROWTH_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
+const pro = PLANS.find((p) => p.key === "pro")!;
+
+/** Each tool's section heading, phrased the way people ask about it. */
+const QUESTION: Record<GrowthFeature["key"], string> = {
+  leads: "What is the leads inbox?",
+  campaigns: "How does QR & campaign tracking work?",
+  reviews: "How do review requests work?",
+  winback: "What are win-back emails?",
+  showcase: "What is a job showcase?",
+  "google-profile": "What does Google profile management include?",
+};
+
+/** What each tool is, said plainly — the answer-first lead for its section. */
+const LEAD: Record<GrowthFeature["key"], string> = {
+  leads:
+    "The Mortensen Web Co. leads inbox puts every contact-form enquiry from your website into your client portal, where you can read it, reply to the customer by email, and mark it contacted, won or lost.",
+  campaigns:
+    "QR & campaign tracking gives each piece of print — a door hanger, flyer, yard sign or truck wrap — its own QR code and link, so your monthly report shows which campaign brought in visits and enquiries.",
+  reviews:
+    "Review requests send your customers a short email with a direct link to leave a Google review, plus one reminder, so asking every customer takes one click instead of remembering to do it.",
+  winback:
+    "Win-back emails are seasonal reminders and offers to your past customers, drafted for you from what your business does, approved by you, and sent from the portal.",
+  showcase:
+    "Job showcase turns a few photos of a finished job into a project page on your website, a Google Business Profile post and ready-made social graphics.",
+  "google-profile":
+    "Google profile management means Mortensen Web Co. keeps your Google Business Profile current for you: regular posts, accurate hours and photos, and replies to reviews.",
+};
+
+const faq: Array<[string, string]> = [
+  [
+    "What are Growth tools?",
+    `Growth tools are the parts of a Mortensen Web Co. plan that bring a small business more customers, beyond the website itself: a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. They are included from the Care plan up, or can be added one at a time.`,
+  ],
+  [
+    "Can I add one Growth tool without changing my plan?",
+    `Yes. Every Growth tool can be added on its own for a monthly price, from ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))} a month, and removed again whenever you like. If you want several, the plan that includes them is usually cheaper — the portal tells you when it is.`,
+  ],
+  [
+    "Which Growth tools are available today?",
+    `${live.map((f) => f.name).join(", ")} ${live.length === 1 ? "is" : "are"} live now. The others are being built and switch on in your portal the day they are ready; they are never charged for before then.`,
+  ],
+  [
+    "Do I still get an email when someone fills in my contact form?",
+    "Yes. You still get the usual email for every enquiry. The leads inbox adds one place to see them all, reply from, and keep track of which turned into work.",
+  ],
+  [
+    "How much does it cost to get every Growth tool?",
+    `Everything is included in the ${pro.name} plan at ${dollars(pro.monthlyCents)} a month. Bought one at a time, the same tools would cost ${dollars(allTogether)} a month on top of a plan.`,
+  ],
+  [
+    "Do you run Google or Facebook ads?",
+    "No. Mortensen Web Co. does not manage ad spend. Growth tools are about turning the visitors and customers you already have into more work: answering enquiries quickly, collecting reviews, and getting repeat business.",
+  ],
+];
+
+const schema = [
+  {
+    "@type": "Service",
+    "@id": `${SITE.url}/growth/#service`,
+    name: "Growth tools for small business websites",
+    serviceType: "Small business marketing tools",
+    provider: { "@id": `${SITE.url}/#organization` },
+    areaServed: { "@type": "Country", name: "United States" },
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: "Growth tools",
+      itemListElement: GROWTH_FEATURES.map((f) => ({
+        "@type": "Offer",
+        name: f.name,
+        description: f.summary,
+        price: (f.addOnCents / 100).toFixed(2),
+        priceCurrency: "USD",
+        availability: f.available ? "https://schema.org/InStock" : "https://schema.org/PreOrder",
+        priceSpecification: {
+          "@type": "UnitPriceSpecification",
+          price: (f.addOnCents / 100).toFixed(2),
+          priceCurrency: "USD",
+          unitText: "MONTH",
+        },
+      })),
+    },
+  },
+  {
+    "@type": "FAQPage",
+    mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+  },
+];
+---
+
+<Base
+  title="Growth tools for small business websites"
+  description={`Growth tools for small business websites: a leads inbox for every enquiry, review requests, QR campaign tracking and more. From ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))}/month, or included from ${dollars(PLANS[1]!.monthlyCents)}.`}
+  path="/growth/"
+  schema={schema}
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Growth</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">A website that brings in customers, not just visitors.</h1>
+          <p class="lede" style="margin-top: 1rem">
+            Growth tools are the part of a Mortensen Web Co. plan that turns your website into more work: every
+            enquiry in one inbox you can reply from, more Google reviews, and proof of which marketing pays off.
+          </p>
+        </div>
+      </div>
+
+      <ul class="keyfacts">
+        <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{live.length} live today; the rest switch on as they are ready.</li>
+        <li><strong>Included from {PLANS[1]!.name}</strong>{dollars(PLANS[1]!.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}.</li>
+        <li><strong>Or one at a time</strong>From {dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))}/month, added or removed in your portal.</li>
+        <li><strong>No ads, no contracts</strong>Month to month. Cancel any time.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">01 · The tools</p></div>
+        <h2>Every Growth tool, what it costs, and which plan includes it.</h2>
+      </div>
+      <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tools comparison table, scrolls sideways">
+        <table class="compare">
+          <caption class="sr-only">Growth tools by what they do, the plan that includes them, their price on their own, and whether they are available yet.</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">What it does</th>
+              <th scope="col">Included in</th>
+              <th scope="col">On its own</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {GROWTH_FEATURES.map((f) => (
+              <tr>
+                <th scope="row"><span class="compare__plan">{f.name}</span></th>
+                <td>{f.summary}</td>
+                <td>{planName(f.includedFrom)} and up</td>
+                <td class="compare__money">{dollars(f.addOnCents)}/mo</td>
+                <td>{f.available ? "Live" : "Coming soon"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="eyebrow table-hint">Swipe sideways for the last columns →</p>
+      </div>
+    </div>
+  </section>
+
+  {GROWTH_FEATURES.map((f, i) => (
+    <section class="section growth-tool" id={f.key}>
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div>
+            <p class="eyebrow">{String(i + 2).padStart(2, "0")} · {f.available ? "Live now" : "Coming soon"}</p>
+          </div>
+          <div>
+            <h2>{QUESTION[f.key]}</h2>
+            <p class="lede" style="margin-top: 1rem">{LEAD[f.key]}</p>
+            <p style="margin-top: 1rem"><strong>Why it matters:</strong> {f.benefit}</p>
+            <p class="build__fine" style="margin-top: 1rem">
+              Included in {planName(f.includedFrom)} and above, or {dollars(f.addOnCents)} a month on its own.
+              {!f.available && " Being built now — it switches on in your portal the day it is ready, and is never charged for before then."}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  ))}
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Questions</p></div>
+        <h2>About Growth tools.</h2>
+      </div>
+      <ul class="rows">
+        {faq.map(([q, a]) => (
+          <li class="reveal"><h3>{q}</h3><p>{a}</p></li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--dark">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>Want your website working harder?</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Tell us about the business. We will tell you which of these would actually help — including when the
+            answer is none of them yet.
+          </p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/" data-umami-event="cta: growth start a project">Start a project <span class="arrow">→</span></a>
+          <a class="btn btn--ghost" href="/pricing/">Compare plans</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

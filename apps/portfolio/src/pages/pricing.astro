@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import PlanCard from "../components/PlanCard.astro";
+import { SITE } from "../data/site";
 import {
   PLANS,
   OVERAGE_CENTS,
@@ -22,6 +23,7 @@ const faq = [
   // that no longer exists.
   ["Is there a minimum term?", "No. Every plan is month to month, and the build has no strings attached — you can take a plan, change plans or stop whenever you like. The domain and the site stay yours."],
   ["What does the build cost?", `It depends on where the business is: ${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name.toLowerCase()}`).join(", ")}. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost. Anything unusual we quote before you commit.`],
+  ["Can I add one Growth tool without upgrading?", `Yes. Each Growth tool can be added to any plan on its own, from ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))} a month, and removed again any time from your portal. If you want several, the plan that includes them usually costs less — the portal tells you when it does.`],
   ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising is outside what we do, and an online store is something we connect rather than host — see Services."],
 ];
 
@@ -44,10 +46,39 @@ const columns = [
 ---
 
 <Base
-  title="Pricing"
-  description={`Websites from ${dollars(CHEAPEST_BUILD.priceCents)}, priced by where your business is. Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month: hosting, security, analytics and changes, with unlimited changes and Growth tools from ${dollars(PLANS[1]!.monthlyCents)}.`}
+  title="Website pricing for small businesses"
+  description={`Small business website pricing: sites from ${dollars(CHEAPEST_BUILD.priceCents)}, plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month, and unlimited changes plus Growth tools from ${dollars(PLANS[1]!.monthlyCents)}. No contracts.`}
   path="/pricing/"
   schema={[
+    {
+      "@type": "OfferCatalog",
+      "@id": `${SITE.url}/pricing/#offers`,
+      name: "Mortensen Web Co. pricing",
+      itemListElement: [
+        ...BUILDS.map((b) => ({
+          "@type": "Offer",
+          name: `${b.name} website build`,
+          description: b.who,
+          price: (b.priceCents / 100).toFixed(2),
+          priceCurrency: "USD",
+          seller: { "@id": `${SITE.url}/#organization` },
+        })),
+        ...PLANS.map((p) => ({
+          "@type": "Offer",
+          name: `${p.name} plan`,
+          description: p.description,
+          price: (p.monthlyCents / 100).toFixed(2),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: (p.monthlyCents / 100).toFixed(2),
+            priceCurrency: "USD",
+            unitText: "MONTH",
+          },
+          seller: { "@id": `${SITE.url}/#organization` },
+        })),
+      ],
+    },
     {
       "@type": "FAQPage",
       mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
@@ -156,7 +187,45 @@ const columns = [
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">04 · Questions</p></div>
+        <div><p class="eyebrow">04 · Growth tools</p></div>
+        <div>
+          <h2>Add one tool on its own.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Every Growth tool is included in the plans above, or can be added to any plan for a monthly price —
+            and removed again whenever you like. <a class="link" href="/growth/">What each tool does</a>.
+          </p>
+        </div>
+      </div>
+      <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tool prices, scrolls sideways">
+        <table class="compare">
+          <caption class="sr-only">Growth tools with their monthly price on their own, the plan that includes them, and whether they are available yet.</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">On its own</th>
+              <th scope="col">Included in</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {GROWTH_FEATURES.map((f) => (
+              <tr>
+                <th scope="row"><span class="compare__plan">{f.name}</span></th>
+                <td class="compare__money">{dollars(f.addOnCents)}/month</td>
+                <td>{PLANS.find((p) => p.key === f.includedFrom)!.name} and up</td>
+                <td>{f.available ? "Live" : "Coming soon"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">05 · Questions</p></div>
         <h2>Before you pick one.</h2>
       </div>
       <ul class="rows">
