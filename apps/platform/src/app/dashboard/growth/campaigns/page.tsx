@@ -183,53 +183,55 @@ function CampaignTable({
         <h2>Your campaigns</h2>
         <span className="panel-sub">Most scanned first</span>
       </div>
-      <div className="table-wrap">
-        <table className="stack campaign-table">
-          <thead>
-            <tr>
-              <th>Campaign</th>
-              <th>Scans, {DAYS} days</th>
-              <th>All time</th>
-              {showVisits && <th>Visits</th>}
-              {showVisits && <th>Taps to get in touch</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((c) => {
-              const figures = attribution.kind === "ok" ? attribution.byUtm[c.utmCampaign] : undefined;
-              return (
-                <tr key={c.publicId}>
-                  <td data-label="Campaign">
-                    <Link href={`/dashboard/growth/campaigns/${c.publicId}`} className="campaign-name">
-                      {c.name}
-                    </Link>
-                    <span className="campaign-meta">
-                      {c.placementLabel} · {c.printedLink}
-                      {c.paused && <span className="pill pill-neutral">Paused</span>}
-                    </span>
-                  </td>
-                  <td data-label={`Scans, ${DAYS} days`}>
-                    <span className="campaign-count">
-                      {c.scansInWindow.toLocaleString("en-US")}
-                      {c.scansInWindow > 0 && <Sparkline values={c.daily} id={`spark-${c.publicId}`} />}
-                    </span>
-                  </td>
-                  <td data-label="All time">{c.scansTotal.toLocaleString("en-US")}</td>
-                  {showVisits && (
-                    <td data-label="Visits">{figures ? figures.visitors.toLocaleString("en-US") : "—"}</td>
-                  )}
-                  {showVisits && (
-                    <td data-label="Taps to get in touch">
-                      {figures ? figures.reachedOut.toLocaleString("en-US") : "—"}
+      <div className="panel-body">
+        <div className="table-wrap">
+          <table className="stack campaign-table">
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>Scans, {DAYS} days</th>
+                <th>All time</th>
+                {showVisits && <th>Visits</th>}
+                {showVisits && <th>Taps to get in touch</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map((c) => {
+                const figures = attribution.kind === "ok" ? attribution.byUtm[c.utmCampaign] : undefined;
+                return (
+                  <tr key={c.publicId}>
+                    <td data-label="Campaign">
+                      <Link href={`/dashboard/growth/campaigns/${c.publicId}`} className="campaign-name">
+                        {c.name}
+                      </Link>
+                      <span className="campaign-meta">
+                        {c.placementLabel} · {c.printedLink}
+                        {c.paused && <span className="pill pill-neutral">Paused</span>}
+                      </span>
                     </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td data-label={`Scans, ${DAYS} days`}>
+                      <span className="campaign-count">
+                        {c.scansInWindow.toLocaleString("en-US")}
+                        {c.scansInWindow > 0 && <Sparkline values={c.daily} id={`spark-${c.publicId}`} />}
+                      </span>
+                    </td>
+                    <td data-label="All time">{c.scansTotal.toLocaleString("en-US")}</td>
+                    {showVisits && (
+                      <td data-label="Visits">{figures ? figures.visitors.toLocaleString("en-US") : "—"}</td>
+                    )}
+                    {showVisits && (
+                      <td data-label="Taps to get in touch">
+                        {figures ? figures.reachedOut.toLocaleString("en-US") : "—"}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="panel-note">{attributionNote(attribution)}</p>
       </div>
-      <p className="panel-note">{attributionNote(attribution)}</p>
     </section>
   );
 }

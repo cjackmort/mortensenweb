@@ -4572,3 +4572,7 @@ form + .field-hint {
 .campaign-form {
   max-width: 32rem;
 }
+
+.panel-note + .campaign-form {
+  margin-top: 1.25rem;
+}
