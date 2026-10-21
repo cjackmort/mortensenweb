@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { BUILDS, GROWTH_FEATURES, OVERAGE_CENTS, PLANS } from "@mortensenweb/plans";
+import { BUILDS, FREE_PORTAL, GROWTH_FEATURES, OVERAGE_CENTS, PLANS } from "@mortensenweb/plans";
 
 /**
  * The care plans, for the public site's build.
@@ -26,9 +26,11 @@ export function GET() {
     plans: PLANS,
     growthFeatures: GROWTH_FEATURES,
     overageCents: OVERAGE_CENTS,
-    // Three standalone builds since 2026-10-06, replacing `build` (one price
-    // and a discount behind a twelve-month commitment). The standalone site
-    // repository reads this at build time and must be updated with it.
+    // A list since 2026-10-06, replacing `build` (one price and a discount
+    // behind a twelve-month commitment); one entry again since 2026-10-21.
+    // The standalone site repository reads this at build time and must be
+    // updated with it.
     builds: BUILDS,
+    freePortal: FREE_PORTAL,
   });
 }
