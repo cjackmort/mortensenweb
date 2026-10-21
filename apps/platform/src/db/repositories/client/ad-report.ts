@@ -6,6 +6,7 @@ import { businessDate } from "@/lib/billing/period";
 import { googleAdsConfigured } from "@/lib/ads/google-ads";
 import { metaConfigured } from "@/lib/ads/meta";
 import { buildReport, type CampaignReport } from "@/lib/ads/report";
+import { byChannelOrder } from "@/lib/ads/money";
 import type { Env } from "@/lib/ads/stats";
 import { NotFoundError, type TenantContext } from "../context";
 
@@ -109,6 +110,10 @@ export async function getCampaignResults(
     lastSyncedAt,
     spentMicros: channels.reduce((n, c) => n + c.spendMicros, 0),
     budgetCents: campaign.spendBudgetCents,
-    channels: channels.map((c) => ({ channel: c.channel as AdChannelKey, connected: connected(c), lastSyncedAt: c.lastSyncedAt })),
+    channels: byChannelOrder(channels).map((c) => ({
+      channel: c.channel as AdChannelKey,
+      connected: connected(c),
+      lastSyncedAt: c.lastSyncedAt,
+    })),
   };
 }

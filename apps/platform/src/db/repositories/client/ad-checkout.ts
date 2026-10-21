@@ -6,7 +6,7 @@ import { adCampaignChannels, adCampaigns, paymentRequests } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { generatePaymentReference } from "@/lib/payments/venmo";
 import { requireStripe, stripeConfigured } from "@/lib/payments/stripe";
-import { checkoutLines, validateBudgets } from "@/lib/ads/money";
+import { byChannelOrder, checkoutLines, validateBudgets } from "@/lib/ads/money";
 import { creativeProblems } from "@/lib/ads/creative";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 import { ensureCustomer, resolveClient } from "./stripe-checkout";
@@ -65,7 +65,7 @@ async function loadForCheckout(db: Database, ctx: TenantContext, publicId: strin
 
   return {
     campaign,
-    channels: channels.map((c) => ({ channel: c.channel as AdChannelKey, budgetCents: c.budgetCents })),
+    channels: byChannelOrder(channels.map((c) => ({ channel: c.channel as AdChannelKey, budgetCents: c.budgetCents }))),
   };
 }
 

@@ -1,4 +1,5 @@
 import {
+  AD_CHANNELS,
   AD_DURATIONS_DAYS,
   adChannel,
   channelMinimumCents,
@@ -15,6 +16,19 @@ import {
  * back when it ends. Pure, so the checkout page, the Stripe line items and the
  * operator's refund all work from the one calculation.
  */
+
+/**
+ * Channels in the order they are offered, wherever a list of them is shown.
+ * Rows inserted in one statement share a timestamp, so the database's order
+ * is no order at all.
+ */
+export function byChannelOrder<T extends { channel: string }>(rows: T[]): T[] {
+  const at = (key: string) => {
+    const i = AD_CHANNELS.findIndex((c) => c.key === key);
+    return i === -1 ? AD_CHANNELS.length : i;
+  };
+  return [...rows].sort((a, b) => at(a.channel) - at(b.channel));
+}
 
 export interface ChannelBudget {
   channel: AdChannelKey;

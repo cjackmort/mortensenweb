@@ -134,6 +134,16 @@ describe("draftAd", () => {
     }
   });
 
+  it("keeps an acronym in capitals mid-sentence", () => {
+    const hvac = draftAd({
+      profile: { businessName: "Northwind", services: "Furnace repair\nAC installation\nDuct cleaning" },
+      organizationName: "x",
+      siteUrl: null,
+      images: [],
+    });
+    expect(hvac.descriptions.join(" ")).toContain("Furnace repair, AC installation and duct cleaning");
+  });
+
   it("shortens a long business name rather than cutting a word in half", () => {
     const long = draftAd({
       profile: { ...profile, businessName: "Acme Plumbing, Heating and Air Conditioning of Utah" },

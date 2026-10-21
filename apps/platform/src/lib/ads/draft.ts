@@ -96,6 +96,17 @@ export function parseServices(value: string | undefined): string[] {
 
 export const parseServiceAreas = splitAreas;
 
+/**
+ * "Water heaters" becomes "water heaters" mid-sentence, but "AC installation"
+ * stays: a word already in capitals is an acronym, and lowercasing it reads
+ * as a typo.
+ */
+function lowerFirst(text: string): string {
+  const first = text.split(" ")[0] ?? "";
+  if (first.length > 1 && first === first.toUpperCase() && /[A-Z]/.test(first)) return text;
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 /** "A, B and C" */
 function listOf(items: string[]): string {
   if (items.length <= 1) return items.join("");
@@ -110,7 +121,7 @@ function sentence(text: string): string {
 function servicesSentence(services: string[], areas: string[]): string | null {
   for (let s = Math.min(services.length, 4); s >= 1; s--) {
     for (let a = Math.min(areas.length, 3); a >= 0; a--) {
-      const what = listOf(services.slice(0, s).map((x, i) => (i === 0 ? x : x.toLowerCase())));
+      const what = listOf(services.slice(0, s).map((x, i) => (i === 0 ? x : lowerFirst(x))));
       const where = a > 0 ? ` in ${listOf(areas.slice(0, a))}` : "";
       const line = sentence(`${what}${where}`);
       if (line.length <= DESCRIPTION_MAX) return line;

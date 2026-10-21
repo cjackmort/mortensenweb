@@ -19,7 +19,7 @@ import { newPublicId } from "@/lib/ids";
 import { businessDate } from "@/lib/billing/period";
 import { draftAd } from "@/lib/ads/draft";
 import { creativeProblems, type CallToAction, type CreativeInput } from "@/lib/ads/creative";
-import { validateBudgets, type ChannelBudget } from "@/lib/ads/money";
+import { byChannelOrder, validateBudgets, type ChannelBudget } from "@/lib/ads/money";
 import { addDays } from "@/lib/ads/dates";
 import { assertMutable, NotFoundError, type TenantContext } from "../context";
 
@@ -117,7 +117,7 @@ export async function listCampaigns(db: Database, ctx: TenantContext): Promise<C
   return rows.map(({ id, ...row }) => ({
     ...row,
     status: row.status as CampaignStatus,
-    channels: channels.filter((c) => c.campaignId === id).map((c) => c.channel as AdChannelKey),
+    channels: byChannelOrder(channels.filter((c) => c.campaignId === id)).map((c) => c.channel as AdChannelKey),
   }));
 }
 
@@ -181,7 +181,7 @@ export async function getCampaign(db: Database, ctx: TenantContext, publicId: st
     reviewNote: row.reviewNote,
     launchedAt: row.launchedAt,
     endedAt: row.endedAt,
-    channels: channels.map((c) => ({ ...c, channel: c.channel as AdChannelKey })),
+    channels: byChannelOrder(channels.map((c) => ({ ...c, channel: c.channel as AdChannelKey }))),
   };
 }
 

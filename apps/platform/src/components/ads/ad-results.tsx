@@ -67,6 +67,9 @@ export function AdResults({
   const share = results.budgetCents > 0 ? Math.min(100, (spentCents / results.budgetCents) * 100) : 0;
   const google = report.placements.filter((p) => p.platform === "google_ads");
   const meta = report.placements.filter((p) => p.platform === "meta");
+  // A channel with nothing synced and no connection is missing from every
+  // figure on this page; say which, rather than let the totals look complete.
+  const silent = results.channels.filter((c) => !c.connected && !c.lastSyncedAt);
   const googlePlaces = report.locations.filter((l) => l.platform === "google_ads");
   const metaPlaces = report.locations.filter((l) => l.platform === "meta");
 
@@ -133,6 +136,14 @@ export function AdResults({
           </nav>
         </div>
         <AdDailyChart days={report.daily} metric={metric} />
+
+        {silent.length > 0 && (
+          <p className="notice notice-info ad-channels-note">
+            {silent.map((c) => adChannel(c.channel).name).join(" and ")}{" "}
+            {silent.length === 1 ? "isn’t" : "aren’t"} connected to your portal yet, so{" "}
+            {silent.length === 1 ? "its" : "their"} results aren&rsquo;t in these figures.
+          </p>
+        )}
 
         <details className="chart-table">
           <summary>View these numbers as a table</summary>
@@ -208,13 +219,6 @@ export function AdResults({
         </p>
       </section>
 
-      <p className="panel-note">
-        Running on{" "}
-        {results.channels
-          .map((c) => `${adChannel(c.channel).name}${c.connected ? "" : " (results not connected)"}`)
-          .join(", ")}
-        .
-      </p>
     </>
   );
 }

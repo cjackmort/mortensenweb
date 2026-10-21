@@ -15,7 +15,7 @@ import {
   users,
 } from "@/db/schema";
 import { creativeProblems, unsupportedClaims, type CallToAction } from "@/lib/ads/creative";
-import { microsToCents, settleCampaign } from "@/lib/ads/money";
+import { byChannelOrder, microsToCents, settleCampaign } from "@/lib/ads/money";
 import { sendEmail, type EmailMessage } from "@/lib/email/mailer";
 import { buildAdNeedsChangesEmail } from "@/lib/email/ad-updates";
 import type { CampaignStatus } from "../client/ads";
@@ -171,9 +171,7 @@ export async function listAdminCampaigns(
   return rows.map(({ id, ...row }) => ({
     ...row,
     status: row.status as CampaignStatus,
-    channels: channels
-      .filter((c) => c.campaignId === id)
-      .map(({ campaignId: _campaignId, ...c }) => ({
+    channels: byChannelOrder(channels.filter((c) => c.campaignId === id)).map(({ campaignId: _campaignId, ...c }) => ({
         ...c,
         channel: c.channel as AdChannelKey,
         platform: c.platform as AdminChannel["platform"],
@@ -288,7 +286,7 @@ export async function getAdminCampaign(_ctx: AdminContext, db: Database, publicI
     reviewedAt: c.reviewedAt,
     policy: { problems: creativeProblems(c), claims: unsupportedClaims(text, facts) },
     payment: payment[0] ?? null,
-    channels: channels.map(({ campaignId: _campaignId, ...ch }) => ({
+    channels: byChannelOrder(channels).map(({ campaignId: _campaignId, ...ch }) => ({
       ...ch,
       channel: ch.channel as AdChannelKey,
       platform: ch.platform as AdminChannel["platform"],

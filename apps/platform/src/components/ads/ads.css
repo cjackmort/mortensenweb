@@ -539,9 +539,14 @@
   font-size: 0.95rem;
 }
 
+/* A row label, not a column header: the global th is a small mono caps
+   heading that never wraps, which pushed long lines out of the card. */
 .ad-bill th {
   text-align: left;
-  font-weight: 400;
+  font: 400 0.95rem/1.35 var(--font);
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
   color: var(--text-soft);
 }
 
@@ -622,6 +627,8 @@
 }
 
 .ad-meter .barlist-track {
+  /* Not inside a bar list, so not in its "track" grid area. */
+  grid-area: auto;
   display: block;
   height: 0.6rem;
 }
@@ -671,6 +678,10 @@
 
 .ad-admin-form .actions {
   margin: 0;
+}
+
+.ad-admin-form > button {
+  justify-self: start;
 }
 
 .ad-admin-channels {
@@ -737,11 +748,12 @@
   user-select: none;
 }
 
-.ad-admin-table td {
-  font-variant-numeric: tabular-nums;
-}
 
 .ad-admin-syncerror {
   display: block;
   font-size: 0.8rem;
+}
+
+.ad-channels-note {
+  margin: 1rem 0 0;
 }
