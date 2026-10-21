@@ -15,3 +15,4 @@ export * from "./media";
 export * from "./growth";
 export * from "./ads";
 export * from "./campaigns";
+export * from "./reviews";

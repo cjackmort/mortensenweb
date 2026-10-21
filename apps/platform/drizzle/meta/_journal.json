@@ -225,6 +225,13 @@
       "when": 1790100000000,
       "tag": "0030_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0031_review_requests",
+      "breakpoints": true
     }
   ]
 }
