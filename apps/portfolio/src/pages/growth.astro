@@ -70,7 +70,7 @@ const faq: Array<[string, string]> = [
   ],
   [
     "Do you run Google or Facebook ads?",
-    "No. Mortensen Web Co. does not manage ad spend. Growth tools are about turning the visitors and customers you already have into more work: answering enquiries quickly, collecting reviews, and getting repeat business.",
+    "Not yet. Ads on Google, Facebook and Instagram are coming to the portal: an ad made from your business details, where it runs and the budget chosen by you, and the results beside your visitor numbers.",
   ],
 ];
 
@@ -121,8 +121,7 @@ const schema = [
         <div>
           <h1 style="font-size: var(--text-2xl)">A website that brings in customers, not just visitors.</h1>
           <p class="lede" style="margin-top: 1rem">
-            Growth tools are the part of a Mortensen Web Co. plan that turns your website into more work: every
-            enquiry in one inbox you can reply from, more Google reviews, and proof of which marketing pays off.
+            Every enquiry in one inbox, more Google reviews, and proof of which marketing pays off.
           </p>
         </div>
       </div>
@@ -131,7 +130,7 @@ const schema = [
         <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{live.length} live today; the rest switch on as they are ready.</li>
         <li><strong>Included from {PLANS[1]!.name}</strong>{dollars(PLANS[1]!.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}.</li>
         <li><strong>Or one at a time</strong>From {dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))}/month, added or removed in your portal.</li>
-        <li><strong>No ads, no contracts</strong>Month to month. Cancel any time.</li>
+        <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
       </ul>
     </div>
   </section>

@@ -908,6 +908,17 @@ img {
   color: var(--ink-2);
 }
 
+/* "Coming soon" beside a one-line service: the status label's type, inline. */
+.soon {
+  display: inline-block;
+  margin-left: 0.5em;
+  font: 500 var(--text-xs) / 1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------- pricing */
 
 .plans {

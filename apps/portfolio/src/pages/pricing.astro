@@ -24,7 +24,7 @@ const faq = [
   ["Is there a minimum term?", "No. Every plan is month to month, and the build has no strings attached — you can take a plan, change plans or stop whenever you like. The domain and the site stay yours."],
   ["What does the build cost?", `It depends on where the business is: ${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name.toLowerCase()}`).join(", ")}. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost. Anything unusual we quote before you commit.`],
   ["Can I add one Growth tool without upgrading?", `Yes. Each Growth tool can be added to any plan on its own, from ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))} a month, and removed again any time from your portal. If you want several, the plan that includes them usually costs less — the portal tells you when it does.`],
-  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising is outside what we do, and an online store is something we connect rather than host — see Services."],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. An online store is something we connect rather than host — see Services."],
 ];
 
 /** Whether a plan includes a Growth feature, for the comparison table. */
@@ -92,10 +92,7 @@ const columns = [
         <div>
           <h1 style="font-size: var(--text-2xl)">Priced by where your business is.</h1>
           <p class="lede" style="margin-top: 1rem">
-            A business just starting out needs less than one with years of
-            customers and search rankings to protect. Every build is mobile
-            first, written with you, and launched on your domain — and none of
-            them requires a plan.
+            Every build is phone first, launched on your domain, and needs no plan.
           </p>
         </div>
       </div>
@@ -114,10 +111,8 @@ const columns = [
       </div>
 
       <p class="build__note">
-        No plan? The site is still yours: we hand it over at launch on your own
-        hosting account, with no monthly cost. Want changes later? Start any
-        plan and the portal switches on. The build is invoiced half to start
-        and half at launch.
+        No plan? The site is handed over at launch, with no monthly cost.
+        Invoiced half to start, half at launch.
       </p>
     </div>
   </section>
@@ -129,9 +124,7 @@ const columns = [
         <div>
           <h2>Monthly, with no minimum term.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Every plan includes hosting, SSL, security updates and visitor
-            analytics. Lite includes one change a month; from Care up, changes
-            are unlimited and the plans add tools that bring in customers.
+            Hosting, SSL, updates and analytics on every plan. Unlimited changes from {PLANS[1]!.name}.
           </p>
         </div>
       </div>
@@ -191,8 +184,8 @@ const columns = [
         <div>
           <h2>Add one tool on its own.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Every Growth tool is included in the plans above, or can be added to any plan for a monthly price —
-            and removed again whenever you like. <a class="link" href="/growth/">What each tool does</a>.
+            Included in the plans above, or added to any plan. Remove any time.
+            {" "}<a class="link" href="/growth/">What each tool does</a>.
           </p>
         </div>
       </div>
