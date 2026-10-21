@@ -232,6 +232,13 @@
       "when": 1790200000000,
       "tag": "0031_review_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0032_winback_emails",
+      "breakpoints": true
     }
   ]
 }
