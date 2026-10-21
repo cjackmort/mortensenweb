@@ -9,6 +9,7 @@ import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import {
   createDraftCampaign,
   discardDraft,
+  resubmitCampaign,
   saveChannels,
   saveCreative,
   type ChannelsOutcome,
@@ -56,7 +57,13 @@ export async function saveCreativeAction(_previous: CreativeState | null, formDa
   if (!outcome.ok) return { saved: false, problems: [], message: outcome.message };
 
   revalidatePath(`${BASE}/${publicId}`);
-  if (formData.get("intent") === "continue" && outcome.problems.length === 0) {
+  const intent = formData.get("intent");
+  if (intent === "resubmit") {
+    const sent = await resubmitCampaign(db, ctx, publicId);
+    if (!sent.ok) return { saved: true, problems: outcome.problems, message: sent.message };
+    redirect(`${BASE}/${publicId}`);
+  }
+  if (intent === "continue" && outcome.problems.length === 0) {
     redirect(`${BASE}/${publicId}/channels`);
   }
   return { saved: true, problems: outcome.problems };

@@ -605,3 +605,143 @@
   border-left: 3px solid var(--danger);
   background: var(--danger-wash);
 }
+
+/* --------------------------------------------------------- results */
+
+.ad-meter {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: var(--stack);
+}
+
+.ad-meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-meter .barlist-track {
+  display: block;
+  height: 0.6rem;
+}
+
+.ad-meter .barlist-fill {
+  display: block;
+  height: 100%;
+}
+
+.ad-stats {
+  margin-bottom: 0.75rem;
+}
+
+.ad-chart-head {
+  margin-top: var(--stack);
+  padding: 0;
+}
+
+.ad-chart-head h3 {
+  margin: 0;
+}
+
+.ad-chart-label {
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------- admin */
+
+.ad-admin-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.ad-admin-inline {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.ad-admin-form {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.ad-admin-form .actions {
+  margin: 0;
+}
+
+.ad-admin-channels {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .ad-admin-channels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ad-admin-channel {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.ad-admin-channel h3 {
+  margin: 0;
+}
+
+.ad-admin-steps {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.ad-admin-link {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ad-admin-link label {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.ad-admin-link input {
+  margin: 0.3rem 0 0;
+}
+
+.ad-admin-link button {
+  justify-self: start;
+}
+
+.ad-copy-list {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+}
+
+.ad-copy-list li {
+  margin-bottom: 0.3rem;
+  user-select: all;
+}
+
+.ad-copy-list .muted {
+  display: inline-block;
+  min-width: 6.5rem;
+  font: 500 0.72rem/1.4 var(--mono);
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.ad-admin-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-admin-syncerror {
+  display: block;
+  font-size: 0.8rem;
+}

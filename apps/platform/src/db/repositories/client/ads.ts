@@ -290,12 +290,15 @@ export async function createDraftCampaign(
   return { publicId, missing: draft.missing };
 }
 
-async function requireDraft(db: Database, ctx: TenantContext, publicId: string) {
+/**
+ * Which states let the client change what. The words can change in a draft,
+ * and after we send an ad back; the money only in a draft, because once it
+ * is paid the budgets are what Stripe charged.
+ */
+async function requireDraft(db: Database, ctx: TenantContext, publicId: string, { creative = false } = {}) {
   const campaign = await ownCampaign(db, ctx, publicId);
-  if (campaign.status !== "draft") {
-    return { campaign, editable: false as const };
-  }
-  return { campaign, editable: true as const };
+  const editable = campaign.status === "draft" || (creative && campaign.status === "rejected");
+  return editable ? { campaign, editable: true as const } : { campaign, editable: false as const };
 }
 
 export type SaveOutcome =
@@ -320,7 +323,7 @@ export async function saveCreative(
   input: CreativeInput,
 ): Promise<SaveOutcome> {
   assertMutable(ctx);
-  const { campaign, editable } = await requireDraft(db, ctx, publicId);
+  const { campaign, editable } = await requireDraft(db, ctx, publicId, { creative: true });
   if (!editable) return NOT_EDITABLE;
 
   let imageAssetId: string | null = null;
@@ -442,4 +445,26 @@ export async function discardDraft(db: Database, ctx: TenantContext, publicId: s
     )
     .returning({ id: adCampaigns.id });
   return deleted.length > 0;
+}
+
+/**
+ * Back to us after we asked for a change. Only when the ad now keeps the
+ * rules: sending back an ad that would be refused again wastes a review.
+ */
+export async function resubmitCampaign(
+  db: Database,
+  ctx: TenantContext,
+  publicId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  assertMutable(ctx);
+  const campaign = await ownCampaign(db, ctx, publicId);
+  if (campaign.status !== "rejected") return { ok: false, message: "This ad isn't waiting on a change from you." };
+  if (creativeProblems(campaign).length > 0) return { ok: false, message: "Fix what the checks below point out first." };
+
+  const now = new Date();
+  await db
+    .update(adCampaigns)
+    .set({ status: "pending_review", updatedAt: now })
+    .where(and(eq(adCampaigns.id, campaign.id), eq(adCampaigns.status, "rejected")));
+  return { ok: true };
 }

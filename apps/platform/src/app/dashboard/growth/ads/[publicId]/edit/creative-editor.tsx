@@ -33,6 +33,7 @@ export function CreativeEditor({
   facts,
   images,
   readOnly,
+  mode = "draft",
 }: {
   campaign: string;
   businessName: string;
@@ -49,6 +50,8 @@ export function CreativeEditor({
   facts: Record<string, string>;
   images: EditorImage[];
   readOnly: boolean;
+  /** `resubmit` after we sent the ad back: the next step is review, not budgets. */
+  mode?: "draft" | "resubmit";
 }) {
   const [state, formAction, pending] = useActionState<CreativeState | null, FormData>(saveCreativeAction, null);
 
@@ -228,8 +231,13 @@ export function CreativeEditor({
         {state?.saved && state.problems.length === 0 && <p className="notice notice-success">Saved.</p>}
 
         <div className="actions">
-          <button type="submit" name="intent" value="continue" disabled={readOnly || pending || problems.length > 0}>
-            {pending ? "Saving…" : "Save and choose where it runs"}
+          <button
+            type="submit"
+            name="intent"
+            value={mode === "resubmit" ? "resubmit" : "continue"}
+            disabled={readOnly || pending || problems.length > 0}
+          >
+            {pending ? "Saving…" : mode === "resubmit" ? "Send it back to us" : "Save and choose where it runs"}
           </button>
           <button type="submit" name="intent" value="save" className="secondary" disabled={readOnly || pending}>
             Save draft

@@ -372,9 +372,11 @@ export const CHEAPEST_BUILD = BUILDS.reduce((low, b) => (b.priceCents < low.pric
  *
  * `ADS_AVAILABLE` gates every way into it, for the same reason a Growth
  * feature has `available`: a client must not be able to pay for an ad before
- * there is anything on the other side to launch it.
+ * there is anything on the other side to launch it. On since the operator
+ * queue landed: review, manual launch, results and refunds all work without
+ * the platform APIs, which only add automatic syncing.
  */
-export const ADS_AVAILABLE = false;
+export const ADS_AVAILABLE = true;
 
 /**
  * The fee: a share of the ad spend in basis points (1500 = 15%), with a floor

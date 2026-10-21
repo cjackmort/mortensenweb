@@ -38,7 +38,8 @@ export default async function EditAdPage({
   const user = await currentUser();
   const { publicId } = await params;
   const { ctx, db, campaign, businessName, readOnly } = await loadCampaignPage(user, publicId);
-  if (campaign.status !== "draft") redirect(`/dashboard/growth/ads/${publicId}`);
+  if (campaign.status !== "draft" && campaign.status !== "rejected") redirect(`/dashboard/growth/ads/${publicId}`);
+  const resubmitting = campaign.status === "rejected";
 
   const images = await listAdImages(db, ctx);
   const missing = ((await searchParams).missing ?? "")
@@ -55,7 +56,17 @@ export default async function EditAdPage({
         </span>
       </div>
 
-      <AdSteps campaign={publicId} current="edit" />
+      {resubmitting ? (
+        <div className="notice notice-warning">
+          <p>
+            <strong>We couldn&rsquo;t run this ad as it is.</strong> Change what the note says, then send it back.
+            Your budgets and payment stay as they are.
+          </p>
+          {campaign.reviewNote && <blockquote className="ad-review-note">{campaign.reviewNote}</blockquote>}
+        </div>
+      ) : (
+        <AdSteps campaign={publicId} current="edit" />
+      )}
 
       {missing.length > 0 && (
         <p className="notice notice-info">
@@ -72,10 +83,11 @@ export default async function EditAdPage({
           facts={campaign.draftFacts ?? {}}
           images={images}
           readOnly={readOnly}
+          mode={resubmitting ? "resubmit" : "draft"}
         />
       </section>
 
-      {!readOnly && (
+      {!readOnly && !resubmitting && (
         <form action={discardAdAction} className="ad-discard">
           <input type="hidden" name="campaign" value={publicId} />
           <button type="submit" className="linklike">
