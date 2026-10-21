@@ -39,7 +39,7 @@ function delimiterOf(firstLine: string): "," | ";" | "\t" {
 
 /** RFC 4180, plus the semicolon and tab exports spreadsheet apps produce. */
 export function parseCsv(text: string): ParsedCsv {
-  const source = text.replace(/^﻿/, "");
+  const source = text.replace(/^\uFEFF/, "");
   const delimiter = delimiterOf(source.split(/\r?\n/, 1)[0] ?? "");
 
   const records: string[][] = [];

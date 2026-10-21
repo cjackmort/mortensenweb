@@ -24,7 +24,7 @@ describe("parseCsv", () => {
   });
 
   it("drops a byte-order mark and blank lines", () => {
-    const parsed = parseCsv("﻿Email\n\na@example.test\n\n");
+    const parsed = parseCsv("\uFEFFEmail\n\na@example.test\n\n");
     expect(parsed.headers).toEqual(["Email"]);
     expect(parsed.rows).toEqual([["a@example.test"]]);
   });

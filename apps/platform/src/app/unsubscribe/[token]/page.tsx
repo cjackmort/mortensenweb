@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import { describeUnsubscribe } from "@/db/repositories/admin/winback";
 import { verifyUnsubscribeToken } from "@/lib/winback/unsubscribe-token";
+import "@/app/dashboard/growth/winback/winback.css";
 
 /**
  * Where "Unsubscribe" in a win-back email lands: one question, one button.

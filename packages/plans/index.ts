@@ -101,7 +101,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Repeat work from people who already trust you — the cheapest job you will ever win.",
     addOnCents: 2500,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
   {
     key: "showcase",

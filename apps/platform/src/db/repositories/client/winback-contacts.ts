@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { eventBookings, leads, winbackContacts, winbackSuppressions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
@@ -277,22 +277,4 @@ export async function removeContact(db: Database, ctx: TenantContext, publicId: 
     .where(and(eq(winbackContacts.publicId, publicId), eq(winbackContacts.organizationId, ctx.organizationId)))
     .returning({ id: winbackContacts.id });
   if (removed.length === 0) throw new NotFoundError();
-}
-
-/** For the import preview: which of these addresses the list already holds. */
-export async function knownEmails(db: Database, ctx: TenantContext, emails: string[]): Promise<Set<string>> {
-  const known = new Set<string>();
-  for (let i = 0; i < emails.length; i += INSERT_CHUNK) {
-    const rows = await db
-      .select({ email: winbackContacts.email })
-      .from(winbackContacts)
-      .where(
-        and(
-          eq(winbackContacts.organizationId, ctx.organizationId),
-          inArray(winbackContacts.email, emails.slice(i, i + INSERT_CHUNK)),
-        ),
-      );
-    for (const row of rows) known.add(row.email);
-  }
-  return known;
 }
