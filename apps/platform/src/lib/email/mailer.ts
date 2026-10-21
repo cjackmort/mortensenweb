@@ -25,12 +25,28 @@ export interface EmailMessage {
   from?: string;
   /** A silent copy, so the sender has a record of what went out. */
   bcc?: string;
+  /** Extra headers, such as `List-Unsubscribe` on a marketing email. */
+  headers?: Record<string, string>;
+  /**
+   * Resend's own dedupe key, kept for 24 hours: a retry carrying the same key
+   * is answered with the first email's id instead of sending a second.
+   */
+  idempotencyKey?: string;
+  /** Echoed back on Resend's webhooks. ASCII letters, digits, `_` and `-`. */
+  tags?: Array<{ name: string; value: string }>;
 }
 
 export type SendResult =
   | { status: "sent"; id: string }
   | { status: "skipped"; reason: "no_api_key" }
-  | { status: "failed"; error: string };
+  | {
+      status: "failed";
+      error: string;
+      /** Resend's HTTP status, when it answered: 429 means slow down, not give up. */
+      httpStatus?: number;
+      /** From `Retry-After`, when Resend sent one. */
+      retryAfterSeconds?: number;
+    };
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -60,6 +76,7 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...(message.idempotencyKey ? { "Idempotency-Key": message.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -68,6 +85,8 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        ...(message.headers ? { headers: message.headers } : {}),
+        ...(message.tags ? { tags: message.tags } : {}),
         ...(message.replyTo
           ? { reply_to: message.replyTo }
           : process.env.RESEND_REPLY_TO
@@ -78,7 +97,13 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
 
     if (!response.ok) {
       // Body may contain the address; status text alone is safe to log.
-      return { status: "failed", error: `Resend responded ${response.status}` };
+      const retryAfter = Number(response.headers.get("retry-after"));
+      return {
+        status: "failed",
+        error: `Resend responded ${response.status}`,
+        httpStatus: response.status,
+        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
+      };
     }
 
     const body = (await response.json()) as { id?: string };
