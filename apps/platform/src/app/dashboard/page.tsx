@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { ADS_AVAILABLE } from "@mortensenweb/plans";
 import { currentUser } from "@/auth";
+import { CreateAdButton } from "@/components/ads/create-ad-button";
 import { DemoBanner, StatRow } from "@/components/analytics-summary";
 import { BarList, SeriesTable } from "@/components/charts";
 import { TimeSeriesChart } from "@/components/time-series-chart";
@@ -118,6 +120,8 @@ export default async function ClientDashboard({
         </div>
 
         <MakeARequest waiting={awaitingApproval.map((p) => p.requestTitle)} />
+
+        {ADS_AVAILABLE && !ctx.impersonating && <CreateAnAd />}
 
         <Suspense fallback={<VisitorsSkeleton />}>
           <VisitorPanels analytics={analytics} days={days} filters={filters} />
@@ -364,6 +368,27 @@ function MakeARequest({ waiting }: { waiting: string[] }) {
             Look at {waiting.length === 1 ? "it" : "them"}
           </Link>
         )}
+      </div>
+    </section>
+  );
+}
+
+/** The other thing a client can start from here: an ad. On every plan. */
+function CreateAnAd() {
+  return (
+    <section className="card request-cta">
+      <div className="request-cta-copy">
+        <h2>Want more customers?</h2>
+        <p className="muted">
+          Run an ad on Google, Facebook or Instagram. We write the first draft from your business information, and
+          you pay per campaign.
+        </p>
+      </div>
+      <div className="request-cta-actions">
+        <CreateAdButton />
+        <Link className="button secondary" href="/dashboard/growth/ads">
+          Your ads
+        </Link>
       </div>
     </section>
   );

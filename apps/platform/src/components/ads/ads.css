@@ -1,0 +1,607 @@
+/*
+ * Ads: the client's create-pay-watch screens and the operator's queue.
+ *
+ * Its own file rather than a block in globals.css, so the features being built
+ * alongside it do not all edit the end of one stylesheet. Tokens only, from
+ * globals.css; nothing here sets a colour of its own. Mobile first, like the
+ * rest of the client surface.
+ */
+
+/* ------------------------------------------------------------ steps */
+
+.ad-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 var(--stack);
+  padding: 0;
+  list-style: none;
+  font: 500 0.78rem/1.2 var(--mono);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ad-steps-n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.ad-steps li[aria-current="step"] {
+  color: var(--text);
+}
+
+.ad-steps li[aria-current="step"] .ad-steps-n {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.ad-steps li[data-done] .ad-steps-n {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ----------------------------------------------------------- intro */
+
+.ad-intro {
+  display: grid;
+  gap: var(--stack);
+}
+
+.ad-intro-points {
+  margin: 0 0 1.25rem;
+  padding-left: 1.1rem;
+  color: var(--text-soft);
+}
+
+.ad-intro-points li + li {
+  margin-top: 0.4rem;
+}
+
+.ad-intro-channels {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ad-intro-channels li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+  font-size: 0.9rem;
+}
+
+.ad-intro-channels span {
+  color: var(--muted);
+}
+
+@media (min-width: 900px) {
+  .ad-intro {
+    grid-template-columns: 1.3fr 1fr;
+    align-items: start;
+  }
+}
+
+/* ------------------------------------------------------------ list */
+
+.ad-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ad-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.ad-list-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem 1rem;
+  align-items: center;
+  padding: 0.9rem 0;
+  color: inherit;
+  text-decoration: none;
+  min-height: var(--tap);
+}
+
+.ad-list-row:hover .ad-list-name strong {
+  color: var(--accent);
+}
+
+.ad-list-name {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.ad-list-name small,
+.ad-list-money small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.ad-list-money {
+  display: grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-list-row .pill {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (min-width: 700px) {
+  .ad-list-row {
+    grid-template-columns: 1fr 8rem 10rem;
+  }
+
+  .ad-list-row .pill {
+    grid-column: auto;
+    justify-self: end;
+  }
+}
+
+/* ---------------------------------------------------------- editor */
+
+.ad-editor {
+  display: grid;
+  gap: var(--stack);
+}
+
+.ad-editor fieldset,
+.ad-channels fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.ad-editor legend,
+.ad-channels legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.ad-lines {
+  margin-bottom: 1.1rem !important;
+}
+
+.ad-line {
+  position: relative;
+}
+
+.ad-line input,
+.ad-line textarea {
+  padding-right: 4.2rem;
+  margin-bottom: 0.6rem;
+}
+
+.ad-count {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font: 500 0.75rem/1 var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.ad-count[data-over] {
+  color: var(--danger);
+}
+
+.ad-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+
+.ad-image-choice {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+  cursor: pointer;
+}
+
+.ad-image-choice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.ad-image-choice img,
+.ad-image-none {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  background: var(--surface-sunk);
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.ad-image-choice input:checked + img,
+.ad-image-choice input:checked + .ad-image-none {
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 2px var(--accent-wash);
+}
+
+.ad-image-choice input:focus-visible + img,
+.ad-image-choice input:focus-visible + .ad-image-none {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ad-editor-side {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.ad-editor-side .notice ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.ad-discard {
+  margin-top: -0.5rem;
+  text-align: right;
+}
+
+@media (min-width: 960px) {
+  .ad-editor {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ad-editor-side {
+    position: sticky;
+    top: 7rem;
+  }
+}
+
+/* --------------------------------------------------------- preview */
+
+.ad-preview {
+  display: grid;
+  gap: 1rem;
+}
+
+.ad-preview figure {
+  margin: 0;
+}
+
+.ad-preview figcaption {
+  margin-bottom: 0.4rem;
+  font: 500 0.72rem/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-preview-card {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere;
+}
+
+.ad-preview-sponsored {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.ad-preview-sponsored span {
+  color: var(--muted);
+}
+
+.ad-preview-headline {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--accent);
+}
+
+.ad-preview-body {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.ad-preview-social .ad-preview-card {
+  padding: 0;
+}
+
+.ad-preview-page {
+  display: grid;
+  margin: 0;
+  padding: 0.75rem 1rem 0.4rem;
+  font-size: 0.88rem;
+}
+
+.ad-preview-page span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.ad-preview-social .ad-preview-body {
+  padding: 0 1rem 0.75rem;
+}
+
+.ad-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.91 / 1;
+  object-fit: cover;
+  background: var(--surface-sunk);
+}
+
+.ad-preview-image--empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ad-preview-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: var(--surface-sunk);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ad-preview-foot span:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.ad-preview-foot small {
+  font-weight: 400;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-preview-cta {
+  flex: none;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 0.82rem;
+}
+
+/* -------------------------------------------------------- channels */
+
+.ad-channels {
+  display: grid;
+  gap: var(--stack);
+}
+
+.ad-channels-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ad-channel {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.ad-channel[data-on] {
+  border-color: var(--accent-fill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-channel-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin-bottom: 0.4rem;
+}
+
+.ad-channel-head span {
+  display: grid;
+}
+
+.ad-channel-head small {
+  font: 500 0.72rem/1.4 var(--mono);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-channel-summary {
+  margin: 0 0 0.4rem;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.ad-channel-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin: 0.6rem 0 0.8rem;
+}
+
+.ad-channel-facts div {
+  display: grid;
+}
+
+.ad-channel-facts dt {
+  font: 500 0.7rem/1.4 var(--mono);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-channel-facts dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-money-input {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ad-money-input > span {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ad-money-input input {
+  max-width: 9rem;
+  margin-bottom: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-channel .error {
+  margin: 0.5rem 0 0;
+}
+
+.ad-channels-side {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.ad-channels-side h3 {
+  margin: 0.5rem 0 0;
+}
+
+@media (min-width: 960px) {
+  .ad-channels {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ad-channels-side {
+    position: sticky;
+    top: 7rem;
+  }
+}
+
+/* ------------------------------------------------------------ bill */
+
+.ad-bill {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-bill caption {
+  margin-bottom: 0.4rem;
+  text-align: left;
+  font: 500 0.75rem/1 var(--mono);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-bill th,
+.ad-bill td {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.ad-bill th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.ad-bill td {
+  text-align: right;
+  white-space: nowrap;
+  padding-left: 1rem;
+}
+
+.ad-bill-fee th {
+  color: var(--text);
+}
+
+.ad-bill tfoot th,
+.ad-bill tfoot td {
+  border-bottom: 0;
+  padding-top: 0.75rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+/* -------------------------------------------------------- checkout */
+
+.ad-checkout {
+  display: grid;
+  gap: 0 var(--stack);
+}
+
+@media (min-width: 960px) {
+  .ad-checkout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.ad-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+.ad-next {
+  margin: 0 0 1.25rem;
+  padding-left: 1.2rem;
+  color: var(--text-soft);
+}
+
+.ad-next li + li {
+  margin-top: 0.35rem;
+}
+
+.ad-pay {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.ad-review-note {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-wash);
+}

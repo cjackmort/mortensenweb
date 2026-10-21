@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AD_CHANNELS,
+  AD_MANAGEMENT_FEE,
+  ADS_AVAILABLE,
   BUILDS,
   GROWTH_FEATURES,
   OVERAGE_CENTS,
@@ -34,6 +37,13 @@ describe("GET /api/plans", () => {
     expect(body.overageCents).toBe(OVERAGE_CENTS);
     expect(body.growthFeatures).toEqual(GROWTH_FEATURES);
     expect(body.builds).toEqual(BUILDS);
+  });
+
+  it("returns the ads fee from the one place it is set, and whether ads exist yet", async () => {
+    const body = await GET().json();
+    expect(body.ads.fee).toEqual(AD_MANAGEMENT_FEE);
+    expect(body.ads.available).toBe(ADS_AVAILABLE);
+    expect(body.ads.channels.map((c: { key: string }) => c.key)).toEqual(AD_CHANNELS.map((c) => c.key));
   });
 
   it("never lists the complimentary plan", async () => {
