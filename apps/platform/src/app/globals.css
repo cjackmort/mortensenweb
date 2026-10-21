@@ -4476,3 +4476,91 @@ form + .field-hint {
   font-size: 0.92rem;
   flex: 1;
 }
+
+/* ------------------------------------------------------- onboarding */
+
+/* Demo sent → login sent → password set → paid, on the client overview. */
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.onboarding-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.onboarding-steps li.is-done {
+  background: var(--success-wash);
+  border-color: var(--success);
+}
+
+.onboarding-steps li.is-next {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+}
+
+.onboarding-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid currentColor;
+  font: 600 0.8rem / 1 var(--mono);
+  color: var(--muted);
+}
+
+.is-done .onboarding-mark {
+  color: var(--success);
+}
+
+.is-next .onboarding-mark {
+  color: var(--accent);
+}
+
+.onboarding-step-text {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.9rem;
+}
+
+.onboarding-next {
+  margin: 0 0 1.1rem;
+}
+
+.onboarding-next .button {
+  margin-left: 0.5rem;
+}
+
+.onboarding-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.onboarding-row input {
+  margin: 0;
+}
+
+.onboarding-row button {
+  flex: none;
+}
+
+.onboarding-demo-url {
+  margin-bottom: 1rem;
+}
+
+.onboarding-invite summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
