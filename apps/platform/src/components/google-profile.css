@@ -1,0 +1,325 @@
+/*
+ * Google profile management — the client's page and the operator workspace.
+ * Built from the global tokens; nothing here introduces a colour of its own
+ * except Google's star yellow, which is how people recognise a rating.
+ */
+
+.gp-stars {
+  color: #b7791f;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.gp-stars-off {
+  color: var(--border-strong);
+}
+
+.gp-facts dd {
+  min-width: 0;
+}
+
+.gp-hours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.gp-hours li {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) 1fr;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-description {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.gp-checklist-count {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.gp-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.gp-checklist li {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.gp-check {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid var(--border-strong);
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 0.1rem;
+}
+
+.gp-checklist .is-done .gp-check {
+  background: var(--success-wash);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.gp-check-label {
+  display: block;
+  font-weight: 600;
+}
+
+.gp-checklist .is-done .gp-check-label {
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.gp-check-detail {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.gp-range {
+  margin-top: 0;
+}
+
+.gp-figures {
+  margin-bottom: 0;
+}
+
+.gp-searches h3 {
+  margin-top: 0;
+}
+
+/* ----------------------------------------------------------------- reviews */
+
+.gp-reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gp-review {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.gp-review:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.gp-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
+}
+
+.gp-review-name {
+  font-weight: 600;
+}
+
+.gp-review-when {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.gp-review-head .pill {
+  margin-left: auto;
+}
+
+.gp-review-text {
+  margin: 0.4rem 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.gp-reply {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-sunk);
+  font-size: 0.925rem;
+  white-space: pre-line;
+}
+
+.gp-reply-label {
+  display: block;
+  font: 500 0.68rem / 1.3 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+/* ------------------------------------------------------------- asks */
+
+.gp-asks {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+}
+
+.gp-asks li {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.gp-ask-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.gp-ask-body {
+  margin: 0.3rem 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.gp-ask-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+/* --------------------------------------------------------- operator */
+
+.gp-steps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.gp-setup li.is-done {
+  color: var(--text-soft);
+}
+
+.gp-setup code,
+.gp-steps code {
+  overflow-wrap: anywhere;
+}
+
+.gp-hours-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.gp-day {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 46rem) {
+  .gp-day {
+    grid-template-columns: 7rem 10rem 1fr;
+    align-items: center;
+  }
+}
+
+.gp-day-label {
+  font-weight: 600;
+}
+
+.gp-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+.gp-range-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gp-range-pair input,
+.gp-special-row input {
+  width: auto;
+}
+
+.gp-special-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.gp-special-row select,
+.gp-day select {
+  width: auto;
+}
+
+.gp-photo-choice {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.gp-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gp-queue-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.gp-queue-list li:first-child {
+  border-top: none;
+}
+
+.gp-queue-what {
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.gp-queue-what p {
+  margin: 0.2rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.gp-change-failed {
+  color: var(--danger);
+}
+
+.gp-reply-form textarea {
+  margin-top: 0.5rem;
+}
+
+.gp-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

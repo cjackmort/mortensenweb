@@ -32,6 +32,7 @@ export const metadata = {
 /** Where an owned, built feature opens. */
 const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
   leads: "/dashboard/growth/leads",
+  "google-profile": "/dashboard/growth/google",
 };
 
 const VIA_LABEL = {
