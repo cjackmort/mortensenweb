@@ -52,15 +52,17 @@ export function formatSpec(key: GraphicFormat): GraphicFormatSpec {
   return ALL.find((f) => f.key === key)!;
 }
 
+const FILENAME_SLUG_MAX = 60;
+
 /** "riverton-furnace-square.jpg" — safe in a download header and a zip. */
 export function graphicFilename(title: string, format: GraphicFormat): string {
+  const full = title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  // Cut back to the last whole word, so a long title does not end "unit-i".
   const slug =
-    title
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60)
-      .replace(/-+$/, "") || "showcase";
-  return `${slug}-${format}.jpg`;
+    full.length <= FILENAME_SLUG_MAX ? full : full.slice(0, FILENAME_SLUG_MAX + 1).replace(/-[^-]*$/, "");
+  return `${slug || "showcase"}-${format}.jpg`;
 }

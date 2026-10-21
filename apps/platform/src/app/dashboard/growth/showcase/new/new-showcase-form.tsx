@@ -148,9 +148,15 @@ export function NewShowcaseForm({
               </label>
               {pairing && (
                 <div className="showcase-pair-pick">
-                  <label>
-                    Before
-                    <select name="before" value={before} onChange={(e) => setBefore(e.target.value)} required>
+                  <div>
+                    <label htmlFor="showcase-before">Before</label>
+                    <select
+                      id="showcase-before"
+                      name="before"
+                      value={before}
+                      onChange={(e) => setBefore(e.target.value)}
+                      required
+                    >
                       <option value="">Choose…</option>
                       {chosen.map((id) => (
                         <option key={id} value={id} disabled={id === after}>
@@ -158,10 +164,16 @@ export function NewShowcaseForm({
                         </option>
                       ))}
                     </select>
-                  </label>
-                  <label>
-                    After
-                    <select name="after" value={after} onChange={(e) => setAfter(e.target.value)} required>
+                  </div>
+                  <div>
+                    <label htmlFor="showcase-after">After</label>
+                    <select
+                      id="showcase-after"
+                      name="after"
+                      value={after}
+                      onChange={(e) => setAfter(e.target.value)}
+                      required
+                    >
                       <option value="">Choose…</option>
                       {chosen.map((id) => (
                         <option key={id} value={id} disabled={id === before}>
@@ -169,7 +181,7 @@ export function NewShowcaseForm({
                         </option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               )}
             </fieldset>

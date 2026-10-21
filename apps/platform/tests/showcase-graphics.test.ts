@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { crc32 } from "node:zlib";
 import sharp from "sharp";
 import { brandColours } from "@/lib/showcase/brand";
-import { GRAPHIC_FORMATS, isGraphicFormat } from "@/lib/showcase/formats";
+import { GRAPHIC_FORMATS, graphicFilename, isGraphicFormat } from "@/lib/showcase/formats";
 import { renderGraphic } from "@/lib/showcase/graphics";
 import { storeZip } from "@/lib/showcase/zip";
 import { jpegFixture } from "./helpers/images";
@@ -114,6 +114,14 @@ describe("renderGraphic", () => {
   it("knows its formats", () => {
     expect(isGraphicFormat("square")).toBe(true);
     expect(isGraphicFormat("../etc/passwd")).toBe(false);
+  });
+
+  it("names files after the title, cut at a word rather than mid-word", () => {
+    expect(graphicFilename("Replaced a furnace in Riverton", "square")).toBe("replaced-a-furnace-in-riverton-square.jpg");
+    expect(
+      graphicFilename("Replaced a 20-year-old furnace with a high-efficiency unit in Riverton", "story"),
+    ).toBe("replaced-a-20-year-old-furnace-with-a-high-efficiency-unit-story.jpg");
+    expect(graphicFilename("¡¡¡", "google")).toBe("showcase-google.jpg");
   });
 });
 
