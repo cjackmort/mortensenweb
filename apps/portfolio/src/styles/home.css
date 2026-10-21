@@ -2,19 +2,17 @@
  * The home page — direction: "The Square".
  *
  * The premise: the blue square that serves as the period in the "M." monogram
- * is the only accent on the page, and it recurs down it as the caret in a
- * request field, the preview panel, the approve button and the live dot — the
- * same shape doing a different job at each step of the change loop. That is
- * why there is no second accent colour: a second blue thing would break the
- * only rule the design has.
+ * is the only accent on the page. That is why there is no second accent
+ * colour: a second blue thing would break the only rule the design has.
  *
- * An earlier version flew one square between those four shapes on scroll.
- * That is gone; the four squares are static and the steps are read, not
- * watched.
+ * Until 2026-10-21 the square also recurred down a pinned four-step stage —
+ * the caret in a request field, the preview panel, the approve button, the
+ * live dot. The operator kept the opening screen and asked for the rest to be
+ * as plain as Wasatch Web's, so this file is now the hero and the motion of
+ * the sections under it; the steps are a row of cells in global.css.
  *
  * Construction follows the monogram: squares, right angles, zero radius, and a
- * geometric sans whose bowls are drawn with the same compass. Sections are
- * planes of colour running to the viewport edge, not cards inside a container.
+ * geometric sans whose bowls are drawn with the same compass.
  *
  * Scoped to `.home` rather than :root so the rest of the site keeps the Swiss
  * design system in global.css untouched — /pricing/ and /services/ are unchanged
@@ -234,369 +232,6 @@
   from { opacity: 0; letter-spacing: 0.58em; }
 }
 
-/* =================================================================== stage
- *
- * The four steps of the change loop. Each one owns a "slot" — a shape built
- * around the blue square: a request field, a preview panel, an approve button,
- * a live dot. Four static squares in four different shapes, which reads as a
- * Bauhaus poster sequence and states the four steps.
- *
- * The steps used to be four planes of 100svh each — four screens of scrolling
- * to deliver four short paragraphs, which was most of why the page below the
- * hero felt empty. They are now one dark plane, separated by hairlines, with a
- * sticky rail on the left that says which step you are on. The rail is what
- * lets each step be short: the sequence is legible from the rail, so the steps
- * no longer have to hold a whole screen each to read as a sequence.
- *
- * No JavaScript in this section. The rail's progress, the type and the shapes
- * all run on scroll-driven timelines further down this file.
- */
-
-.sq-stage {
-  position: relative;
-  background: var(--sq-ink);
-  color: var(--on-dark);
-  /* The card lights bleed wider than the card, and at narrow desktop widths
-     that put the page into horizontal scroll. `clip` rather than `hidden`:
-     hidden makes this a scroll container, which would leave the sticky rail
-     with nothing to stick to. */
-  overflow-x: clip;
-  /* Named so the rail's fill can be driven by this element's progress rather
-     than by its own — the rail is sticky, so its own view() timeline would
-     measure the wrong thing. */
-  view-timeline-name: --stage;
-  /* The per-step timelines are defined on the steps, which are not ancestors
-     of the rail labels that read them. */
-  timeline-scope: --step-1, --step-2, --step-3, --step-4;
-}
-
-.stage__inner {
-  width: min(var(--container), 100%);
-  margin: 0 auto;
-  padding-inline: var(--gutter);
-}
-
-/* "Rail mode" — 76rem, not the 60rem the rest of the page turns two-column at.
-   The rail takes a quarter of the width and the card inside the remainder is
-   itself two-column, so at 60rem the step text ended up in a 230px trench.
-   Below this the rail is hidden and the steps run full width instead. */
-@media (min-width: 76rem) {
-  .stage__inner {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
-    gap: var(--space-7);
-  }
-}
-
-/* ---------------------------------------------------------------- the rail */
-
-.rail {
-  display: none;
-}
-
-@media (min-width: 76rem) {
-  .rail {
-    display: block;
-    position: sticky;
-    /* Sits down the page rather than against the masthead, so it reads as
-       sitting beside the step being read instead of labelling the whole dark
-       band from its top edge. */
-    top: clamp(9rem, 28vh, 18rem);
-    align-self: start;
-    /* Pushes the rail's resting place down on first sight too, so it does not
-       appear pinned to the very top of the stage as the stage arrives. */
-    margin-top: clamp(2rem, 9vh, 6rem);
-    /* Deliberately NOT 100svh: a sticky box unsticks once its own bottom
-       reaches its container's, so a full-height rail let go a third of the way
-       through the stage and step 04 was read with no rail beside it at all.
-       Content height keeps it alongside every step. */
-    padding-bottom: var(--space-6);
-    /* Sits above the steps so the hairline between them runs behind it. */
-    z-index: 1;
-  }
-}
-
-.rail__title {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--sq-muted);
-  margin: 0 0 var(--space-6);
-}
-
-/* The track is the 1px rule the steps are pinned to; the fill is the same rule
-   in blue, drawn over it as you move through the stage. */
-.rail__track {
-  position: relative;
-  padding-left: var(--space-5);
-}
-
-.rail__track::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: #2a313a;
-}
-
-.rail__fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--blue);
-  transform: scaleY(0);
-  transform-origin: top;
-}
-
-.rail__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-5);
-}
-
-.rail__step {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-  letter-spacing: 0.08em;
-  color: var(--sq-muted);
-  /* Dim until its step is the one on screen. Without scroll-driven animation
-     support they simply all read as a legible list, which is correct. */
-  opacity: 0.45;
-}
-
-/* The number stays brighter than its label at every state, so the rail reads
-   as numbered even where every entry is dim. */
-.rail__step b {
-  font-weight: 500;
-  color: var(--on-dark);
-}
-
-/* --------------------------------------------------------------- the steps */
-
-.dock {
-  position: relative;
-  display: grid;
-  align-content: center;
-  gap: var(--space-5);
-  padding-block: clamp(var(--space-5), 5vh, var(--space-7));
-  border: 0;
-  /* Own perspective per step rather than one on the list: a single perspective
-     origin sits at the centre of a 2000px-tall container, so the first and last
-     cards would be viewed from far off-axis and skew badly. */
-  perspective: 1400px;
-}
-
-/* The light behind the card. Painted before .dock__inner in DOM order and both
-   are z-index auto, so it sits behind the card and only its spill is visible.
-   Off-white, never blue: a blue bloom this size would be a large blue surface
-   that is not the square, which is the one rule the page has. */
-.dock::before {
-  content: "";
-  position: absolute;
-  inset: -2% -9%;
-  /* Centred slightly above the card, so the falloff reads as a source behind
-     and above it rather than a symmetrical halo. */
-  background: radial-gradient(
-    56% 52% at 50% 42%,
-    rgba(237, 239, 234, 0.3),
-    rgba(237, 239, 234, 0.1) 42%,
-    transparent 72%
-  );
-  filter: blur(52px);
-  pointer-events: none;
-}
-
-/* Each step publishes its own timeline so the matching rail label can light up
-   when that step is the one on screen. Declared unconditionally: naming a
-   timeline costs nothing if nothing reads it, and `timeline-scope` on the
-   stage has to find these names whether or not motion is enabled. */
-.dock[data-dock="1"] { view-timeline-name: --step-1; }
-.dock[data-dock="2"] { view-timeline-name: --step-2; }
-.dock[data-dock="3"] { view-timeline-name: --step-3; }
-.dock[data-dock="4"] { view-timeline-name: --step-4; }
-
-@media (min-width: 76rem) {
-  .dock {
-    /* Tall enough that one step is what you are looking at, short enough that
-       four of them are not four screens of scrolling. */
-    min-height: 52svh;
-  }
-}
-
-/* Each step is a card lifted off the plane. Square corners — the construction
-   rule is zero radius everywhere, and a rounded card here would be the only
-   curve on the page. The lift comes from the light behind it, a one-pixel edge
-   that catches at the top, and a shadow that grounds it. */
-.dock__inner {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-5);
-  background: linear-gradient(180deg, #191f27 0%, #12171d 100%);
-  border: 1px solid #262e38;
-  /* Catches the light from above, the way a raised face would. */
-  box-shadow:
-    inset 0 1px 0 rgba(237, 239, 234, 0.07),
-    0 24px 50px -20px rgba(0, 0, 0, 0.8),
-    0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-@media (min-width: 60rem) {
-  .dock__inner {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    align-items: center;
-    gap: var(--space-7);
-    padding: var(--space-7) var(--space-6);
-  }
-}
-
-/* The rail carries the numbering once there is room for it. */
-@media (min-width: 76rem) {
-  .dock > .dock__inner > div > .dock__n {
-    display: none;
-  }
-}
-
-.dock__n {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.28em;
-  opacity: 0.7;
-  margin: 0 0 var(--space-4);
-}
-
-.dock__h {
-  font-family: var(--sq-display);
-  font-weight: 400;
-  /* Was capped at 5rem, sized for a step that owned a whole screen. The step
-     is now two thirds of one and shares it with the rail. */
-  font-size: clamp(2rem, 0.9rem + 3.2vw, 3.75rem);
-  line-height: 1;
-  letter-spacing: -0.03em;
-  margin: 0 0 var(--space-4);
-}
-
-.dock__p {
-  font-size: var(--text-base);
-  line-height: 1.55;
-  max-width: 46ch;
-  margin: 0;
-  opacity: 0.86;
-}
-
-.dock--blue .dock__p { opacity: 0.95; }
-
-/* ------------------------------------------------------------- the slots */
-
-.dock__slot {
-  display: grid;
-  place-items: center;
-  justify-self: center;
-  width: 100%;
-}
-
-.dock__square {
-  background: var(--blue);
-  display: block;
-}
-
-/* 01 — the caret sitting in a request field the client types into. */
-.dock__field {
-  width: 100%;
-  max-width: 34rem;
-  border: 1px solid #2a313a;
-  background: #0b0e12;
-  padding: var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-  color: var(--sq-muted);
-  min-height: 5.5rem;
-}
-
-.dock--ask .dock__square { width: 12px; height: 30px; }
-
-/* 02 — the preview panel. The square fills it, then hollows out to an
-   outline and the preview underneath is what you were looking at all along. */
-.dock__panel {
-  position: relative;
-  width: 100%;
-  max-width: 34rem;
-  aspect-ratio: 16 / 10;
-  border: 1px solid #2a313a;
-  background: #0b0e12;
-  overflow: hidden;
-}
-
-/* Hollow at rest, so that with no JavaScript this reads as a preview panel
-   with a blue border rather than a solid blue block covering its own label.
-   The travelling square arrives filled and hollows out to match. */
-.dock--build .dock__square {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-  background: transparent;
-  border: 2px solid var(--blue);
-}
-
-/* 03 — the square at its largest. The button has no background of its own:
-   the blue behind the word is the travelling square, docked. */
-.dock--approve .dock__slot { max-width: 34rem; }
-
-.dock__approve {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  min-width: 13rem;
-  min-height: 3.5rem;
-  padding: 0 var(--space-5);
-  font-family: var(--sq-display);
-  font-size: var(--text-lg);
-}
-
-.dock--approve .dock__square {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-}
-
-.dock__approve-label {
-  position: relative;
-  z-index: 6;
-  color: var(--on-dark);
-}
-
-/* 04 — the live dot, at the size it will keep forever once it reaches the
-   masthead and becomes the period in the small mark. */
-.dock--live .dock__slot { max-width: 34rem; }
-
-.dock__live {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-}
-
-.dock--live .dock__square { width: 10px; height: 10px; }
-
 /* ============================================================ the field */
 
 /* The canvas sits exactly where the CSS grid is. When it mounts it fades the
@@ -622,155 +257,40 @@
   transition: opacity 700ms linear;
 }
 
-/* ==================================================== scroll-driven type
+/* ===================================================== the hero recedes
  *
- * Headings and copy arrive as the section does, driven by a view timeline
- * rather than an observer. Browsers without scroll-driven animations skip the
- * whole block and render everything at rest, which is the composition anyway.
+ * The lockup hands the page over: it recedes as you scroll, rather than
+ * simply scrolling off the top. Browsers without scroll timelines skip it and
+ * the hero simply scrolls away, which is the composition anyway.
  */
 
 @media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .dock__n {
-      animation: dock-label linear both;
-      animation-timeline: view();
-      animation-range: entry 8% cover 26%;
+  @supports (animation-timeline: scroll()) {
+    /* The button recedes with the lockup rather than staying put while the
+       thing above it retreats. The animation is on this wrapper, not on the
+       <a>, so the magnetic-hover script in Base.astro can still set an
+       inline transform on the button itself without the two fighting. */
+    .lockup--hero,
+    .hero-sq__cta {
+      animation: hero-recede linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 88vh;
     }
 
-    /* Per word, so the line assembles instead of sliding in as one block.
-       `pre` because the space that separates the words is the last character
-       *inside* each span, and an inline-block trims its own trailing
-       whitespace — without this the heading renders as "Inyourownwords." */
-    .dock__h .w {
-      display: inline-block;
-      white-space: pre;
-      animation: dock-word linear both;
-      animation-timeline: view();
-      animation-range: entry calc(6% + var(--w) * 3%) cover calc(24% + var(--w) * 3%);
-    }
-
-    .dock__p {
-      animation: dock-body linear both;
-      animation-timeline: view();
-      animation-range: entry 14% cover 34%;
-    }
-
-    /* The shape arrives after the sentence that names it, and overshoots
-       slightly on the way in so it lands rather than simply appears. */
-    .dock__slot {
-      animation: slot-in linear both;
-      animation-timeline: view();
-      animation-range: entry 10% cover 38%;
-    }
-
-    /* The card tips back as it comes up from below, lies flat while it is the
-       one you are reading, and tips away as it leaves — so the four of them
-       read as panels on a turning surface rather than four boxes in a column.
-       Runs the whole pass, entry to exit, which is why it is a percentage
-       keyframe set rather than a from/to. */
-    .dock__inner {
-      animation: card-turn linear both;
-      animation-timeline: view();
-      animation-range: entry 0% exit 100%;
-    }
-
-    /* The light blooms as its card arrives and fades as it goes, so only the
-       step being read is lit. */
-    .dock::before {
-      animation: card-light linear both;
-      animation-timeline: view();
-      animation-range: entry 0% exit 100%;
-    }
-
-    /* The rail's rule fills as you move through the four steps. `contain`
-       rather than `cover`: the stage is taller than the viewport, so contain
-       runs from "stage top reached the top" to "stage bottom left the
-       bottom" — which is exactly the span the steps occupy. */
-    .rail__fill {
-      animation: rail-fill linear both;
-      animation-timeline: --stage;
-      animation-range: contain 0% contain 100%;
-    }
-
-    /* Each label lights while its own step is on screen and dims again after,
-       so the rail reads as a position, not a checklist. */
-    .rail__step {
-      animation: rail-step linear both;
-    }
-    .rail__step[data-step="1"] { animation-timeline: --step-1; }
-    .rail__step[data-step="2"] { animation-timeline: --step-2; }
-    .rail__step[data-step="3"] { animation-timeline: --step-3; }
-    .rail__step[data-step="4"] { animation-timeline: --step-4; }
-
-    /* The lockup hands the page over: it recedes as the first step arrives,
-       rather than simply scrolling off the top. */
-    @supports (animation-timeline: scroll()) {
-      /* The button recedes with the lockup rather than staying put while the
-         thing above it retreats. The animation is on this wrapper, not on the
-         <a>, so the magnetic-hover script in Base.astro can still set an
-         inline transform on the button itself without the two fighting. */
-      .lockup--hero,
-      .hero-sq__cta {
-        animation: hero-recede linear both;
-        animation-timeline: scroll(root);
-        animation-range: 0 88vh;
-      }
-
-      .hero-sq__path {
-        animation: hero-path linear both;
-        animation-timeline: scroll(root);
-        animation-range: 0 60vh;
-      }
+    .hero-sq__path {
+      animation: hero-path linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 60vh;
     }
   }
 }
 
-@keyframes dock-label {
+@keyframes label-in {
   from { opacity: 0; transform: translateX(-14px); }
 }
 
-@keyframes dock-word {
-  from { opacity: 0; transform: translateY(0.5em) rotate(1.5deg); }
-}
-
-@keyframes dock-body {
+@keyframes body-in {
   from { opacity: 0; transform: translateY(22px); }
-}
-
-@keyframes slot-in {
-  from { opacity: 0; transform: translateY(30px) scale(0.96); }
-}
-
-@keyframes card-turn {
-  0% {
-    transform: rotateX(8deg) translateY(26px) scale(0.965);
-  }
-  42%,
-  58% {
-    transform: rotateX(0deg) translateY(0) scale(1);
-  }
-  100% {
-    transform: rotateX(-7deg) translateY(-22px) scale(0.972);
-  }
-}
-
-@keyframes card-light {
-  0% { opacity: 0; }
-  42%, 58% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-@keyframes rail-fill {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
-
-/* Held at full strength across the middle of the step's pass, so the label
-   does not flicker on and straight back off. */
-@keyframes rail-step {
-  0% { opacity: 0.45; }
-  28%, 72% { opacity: 1; }
-  100% { opacity: 0.45; }
 }
 
 @keyframes hero-recede {
@@ -781,35 +301,7 @@
   to { opacity: 0; transform: scaleY(1.8); }
 }
 
-/* ========================================================= leaving the stage
- *
- * A paper plane that wipes up over the dark as the last step scrolls away.
- * With no scroll-driven animation support it is simply drawn — a paper band
- * between the dark stage and the light page, which is the composition anyway.
- */
-.stage-out {
-  /* Was 46svh — half a screen of blank paper doing nothing but existing. It
-     only has to be tall enough for the wipe to read as a wipe. */
-  height: 16svh;
-  background: var(--paper);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .stage-out {
-      clip-path: inset(100% 0 0 0);
-      animation: stage-out linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 62%;
-    }
-  }
-}
-
-@keyframes stage-out {
-  to { clip-path: inset(0 0 0 0); }
-}
-
-/* ================================================ rhythm below the stage
+/* ================================================= rhythm below the hero
  *
  * global.css sizes the section rhythm for the other four pages, which are
  * mostly text and want the air. The home page is a sequence, and at 144px of
@@ -832,14 +324,14 @@
 }
 
 
-/* ============================================== the page below the stage
+/* =============================================== the page below the hero
  *
- * Under the dark stage the page used to go flat: every section, every row
- * and every card shared one 26px fade, all arriving at once. These carry
- * the stage's own grammar downward instead — the label slides in, the rule
- * draws itself, the heading wipes up, each row's hairline draws across as
- * the row lands, and the rows arrive one after another rather than as a
- * block.
+ * The sections below the hero are plain on purpose — the operator's brief of
+ * 2026-10-21 was Wasatch Web's simplicity under this site's own opening
+ * screen, so the pinned four-step stage that used to sit here is now one row
+ * of four cells. What motion is left is small: the label slides in, the rule
+ * draws itself, the heading wipes up, and cells and cards arrive one after
+ * another rather than as a block.
  *
  * Scroll-driven, so there is no observer and no JavaScript. A browser
  * without view timelines, or a reader who prefers reduced motion, skips the
@@ -875,7 +367,7 @@
     }
 
     .section .section-head .eyebrow {
-      animation: dock-label linear both;
+      animation: label-in linear both;
       animation-timeline: view();
       animation-range: entry 4% entry 32%;
     }
@@ -890,25 +382,30 @@
     }
 
     .section .section-head .lede {
-      animation: dock-body linear both;
+      animation: body-in linear both;
       animation-timeline: view();
       animation-range: entry 12% entry 44%;
     }
 
-    /* Rows and plan cards already carry .reveal, so only the keyframes and
-       the range change — the timeline and fill come from that rule. */
+    /* Rows, cells and work cards already carry .reveal, so only the keyframes
+       and the range change — the timeline and fill come from that rule. */
     .rows > li.reveal,
-    .plans > .plan.reveal {
+    .cells > li.reveal,
+    .work-grid > .work.reveal {
       animation-name: settle-in;
     }
 
     .rows > li.reveal:nth-child(1),
-    .plans > .plan.reveal:nth-child(1) { animation-range: entry 2% entry 32%; }
+    .cells > li.reveal:nth-child(1),
+    .work-grid > .work.reveal:nth-child(1) { animation-range: entry 2% entry 32%; }
     .rows > li.reveal:nth-child(2),
-    .plans > .plan.reveal:nth-child(2) { animation-range: entry 9% entry 39%; }
+    .cells > li.reveal:nth-child(2),
+    .work-grid > .work.reveal:nth-child(2) { animation-range: entry 9% entry 39%; }
     .rows > li.reveal:nth-child(3),
-    .plans > .plan.reveal:nth-child(3) { animation-range: entry 16% entry 46%; }
-    .rows > li.reveal:nth-child(4) { animation-range: entry 23% entry 53%; }
+    .cells > li.reveal:nth-child(3),
+    .work-grid > .work.reveal:nth-child(3) { animation-range: entry 16% entry 46%; }
+    .rows > li.reveal:nth-child(4),
+    .cells > li.reveal:nth-child(4) { animation-range: entry 23% entry 53%; }
 
     /* Each row's own hairline draws across as the row lands, so a list of
        four arrives as four separate events rather than one block of text. */
@@ -951,13 +448,6 @@
       animation-range: entry 12% entry 48%;
     }
 
-    /* "Most chosen" arrives after the card it sits on. */
-    .home .plan__badge {
-      animation: row-lead linear both;
-      animation-timeline: view();
-      animation-range: entry 18% entry 50%;
-    }
-
     .cta.reveal {
       animation-name: cta-in;
       animation-range: entry 4% entry 40%;
@@ -965,7 +455,7 @@
 
     /* The buttons land after the sentence that argues for them. */
     .cta.reveal .btn-row {
-      animation: dock-body linear both;
+      animation: body-in linear both;
       animation-timeline: view();
       animation-range: entry 16% entry 50%;
     }

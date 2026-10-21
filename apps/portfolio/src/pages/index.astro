@@ -2,48 +2,119 @@
 import Base from "../layouts/Base.astro";
 import Marquee from "../components/Marquee.astro";
 import Lockup from "../components/Lockup.astro";
+import WorkCard from "../components/WorkCard.astro";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
-import PlanCard from "../components/PlanCard.astro";
-import { PLANS, dollars, BUILDS, CHEAPEST_BUILD, CHEAPEST_PLAN, GROWTH_FEATURES } from "@mortensenweb/plans";
-import { SITE } from "../data/site";
+import { BUILD, CHEAPEST_PLAN, FREE_PORTAL, GROWTH_FEATURES, PLANS, dollars, isFree, type Plan } from "@mortensenweb/plans";
+import { LOOP, SITE } from "../data/site";
+import { WORK } from "../data/work";
 
 /*
- * Copy on this page names what we do and stops. One line per item, no
- * explaining the process — the operator's brief of 2026-10-14, after
- * comparing with wasatchweb.net.
+ * The operator's brief of 2026-10-21: keep this opening screen, and make the
+ * rest as simple as wasatchweb.net — what we do, the work, the steps, the
+ * price. One line per item, no explaining the process.
  *
- * The Growth tools are read from `@mortensenweb/plans` rather than written
- * out, so the day one switches on in the portal it stops saying "coming".
+ * Every price is read from `@mortensenweb/plans`, and the Growth tools by
+ * name, so the day one switches on in the portal it stops saying "coming".
  */
-const comingTools = GROWTH_FEATURES.filter((f) => !f.available);
-const liveTools = GROWTH_FEATURES.filter((f) => f.available);
-const growthTools = GROWTH_FEATURES.filter((f) => f.key !== "leads");
+const growthTools = GROWTH_FEATURES.filter((f) => !isFree(f));
+const growthSoon = growthTools.some((f) => !f.available);
+const growthFrom = PLANS.find((p) => growthTools.some((f) => f.includedFrom === p.key))!;
+const [lite, care] = PLANS as [Plan, Plan];
+const featuredWork = WORK.slice(0, 3);
+
+/**
+ * The four things we do. Each card under "What we do" is one line and a
+ * "Learn more" link down to the same item under "About", which says it in
+ * full and links out to the page that covers it — the operator's ask of
+ * 2026-10-21.
+ */
+const services = [
+  {
+    id: "websites",
+    n: "01",
+    label: "Websites",
+    title: "Websites",
+    summary: `Designed, built and launched on your domain. Phone first. ${dollars(BUILD.priceCents)}, one time.`,
+    detail:
+      "A website designed around your business, not a template. We write it with you, build it for phones first, and launch it on your domain. It is yours, with or without a plan.",
+    points: [
+      ...BUILD.includes.slice(1),
+      "Fast pages, real titles and structured data, so Google and AI assistants can find you",
+    ],
+    links: [
+      { href: "/work/", label: "See sites we've built" },
+      { href: "/pricing/", label: "What it costs" },
+    ],
+  },
+  {
+    id: "performance-tracking",
+    n: "02",
+    label: "Tracking",
+    title: "Performance tracking",
+    summary: "See who visits your site, how they found you, and every enquiry it brings in. Free with every site.",
+    detail:
+      "Know what your website is doing for you. Your client portal shows how many people visit, which pages they open and how they found you. Every enquiry from your contact form lands in a leads inbox, where you can reply to the customer and mark it contacted, won or lost.",
+    points: [
+      "Visitors, top pages and where they came from",
+      "Every contact-form enquiry in one inbox",
+      "Reply to customers from your portal",
+      "You still get the usual email for every enquiry",
+      "Free with every site, with or without a plan",
+    ],
+    links: [{ href: "/growth/#leads", label: "How the leads inbox works" }],
+  },
+  {
+    id: "hosting-and-changes",
+    n: "03",
+    label: "Care",
+    title: "Hosting and changes",
+    summary: `Hosting, security updates and changes on request, in one monthly plan from ${dollars(CHEAPEST_PLAN.monthlyCents)}.`,
+    detail:
+      "We keep your site online, secure and up to date, and make the changes you ask for. Ask in your portal, check the preview, approve it, and it goes live — the same four steps every time.",
+    points: [
+      "Hosting, SSL, domain and DNS",
+      "Security and dependency updates",
+      `One change a month on ${lite.name}, unlimited from ${care.name}`,
+      `Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)} a month, with no contract`,
+    ],
+    links: [{ href: "/pricing/", label: "Compare plans" }],
+  },
+  {
+    id: "growth-tools",
+    n: "04",
+    label: "Growth",
+    title: "Growth tools",
+    summary: `${growthTools.map((f) => f.name).join(", ")}.`,
+    soon: growthSoon,
+    detail: `Tools that turn visitors into customers. Each one is included from ${growthFrom.name} up, or can be added to any plan on its own.${
+      growthSoon ? " They are being built now: each switches on in your portal the day it is ready, and is never charged for before then." : ""
+    }`,
+    points: growthTools.map((f) => `${f.name}${f.available ? "" : " (coming soon)"} — ${f.summary}`),
+    links: [{ href: "/growth/", label: "Every Growth tool, in detail" }],
+  },
+];
 
 const faq = [
+  {
+    q: "What does a website cost?",
+    a: `${dollars(BUILD.priceCents)}, one time, designed and built for your business and launched on your domain. A monthly plan is optional; without one, the site is handed over at launch.`,
+  },
+  {
+    q: "What is free?",
+    a: "Performance tracking: visitor analytics and a leads inbox for every enquiry, in your client portal. It comes with every site we build, with or without a plan.",
+  },
   {
     q: "How fast does a change happen?",
     a: "Small changes are usually ready to approve within the hour. Bigger ones take a day.",
   },
   {
-    q: "What if the change isn't right?",
-    a: "Say so on the preview and we fix it. It still counts as one change.",
+    q: "Do I have to sign a contract?",
+    a: "No. Plans are month to month. Your domain stays yours.",
   },
   {
     q: "Where is Mortensen Web Co. based?",
     a: `${SITE.locality}, ${SITE.region}. We work with small businesses across the Salt Lake Valley and anywhere online. ${SITE.phone} · ${SITE.email}.`,
-  },
-  {
-    q: "What are Growth tools?",
-    a: `Tools that turn your website into more customers. Live now: ${liveTools.map((f) => f.name).join(", ")}.${comingTools.length ? ` Coming: ${comingTools.map((f) => f.name).join(", ")}.` : ""} Included from ${PLANS[1]!.name}, or added one at a time.`,
-  },
-  {
-    q: "Do I have to sign a contract?",
-    a: "No. Month to month. Your domain stays yours.",
-  },
-  {
-    q: "What does the build cost?",
-    a: `${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name}`).join(", ")}. A plan is optional; without one, the site is handed over at launch.`,
   },
 ];
 
@@ -110,187 +181,90 @@ const schema = [
         </div>
       </div>
 
-      <ul class="rows">
-        <li class="reveal">
-          <h3><span class="n">A</span> Websites</h3>
-          <p>Designed, built and launched on your domain. Phone first.</p>
-        </li>
-        <li class="reveal">
-          <h3><span class="n">B</span> Hosting and care</h3>
-          <p>Hosting, SSL, domain and security updates in one monthly plan.</p>
-        </li>
-        <li class="reveal">
-          <h3><span class="n">C</span> Changes</h3>
-          <p>Ask in your portal. Live when you approve it.</p>
-        </li>
-        <li class="reveal">
-          <h3><span class="n">D</span> Leads inbox</h3>
-          <p>Every enquiry in one place. Reply from there.</p>
-        </li>
-        <li class="reveal">
-          <h3><span class="n">E</span> Growth tools</h3>
-          <p>
-            {growthTools.map((f) => f.name).join(", ")}.
-            {" "}<a class="link" href="/growth/">What each one does</a>
-            {growthTools.some((f) => !f.available) && <span class="soon">Rolling out</span>}
-          </p>
-        </li>
-        <li class="reveal">
-          <h3><span class="n">F</span> Ads</h3>
-          <p>
-            Google, Facebook and Instagram, made from your business details. You pick where and set the budget.
-            <span class="soon">Coming soon</span>
-          </p>
-        </li>
+      <ul class="cells">
+        {services.map((item) => (
+          <li class="reveal">
+            <p class="n">{item.n} / {item.label}</p>
+            <h3>{item.title}</h3>
+            <p>
+              {item.summary}
+              {item.soon && <span class="soon">Rolling out</span>}
+            </p>
+            <a class="link cell__more" href={`#${item.id}`}>Learn more →</a>
+          </li>
+        ))}
       </ul>
     </div>
   </section>
 
-  {/* ------------------------------------------------------ the loop */}
-  <section class="sq-stage sq" aria-label="How a change happens">
-   <div class="stage__inner">
-    {/* The rail duplicates the step names that are already in each step, so
-        it is hidden from assistive tech and from narrow screens; there the
-        steps carry their own `01 ·` labels instead. */}
-    <aside class="rail" aria-hidden="true">
-      <p class="rail__title">How a change happens</p>
-      <div class="rail__track">
-        <span class="rail__fill"></span>
-        <ol class="rail__list">
-          <li class="rail__step" data-step="1"><b>01</b> You ask</li>
-          <li class="rail__step" data-step="2"><b>02</b> We build it</li>
-          <li class="rail__step" data-step="3"><b>03</b> You approve</li>
-          <li class="rail__step" data-step="4"><b>04</b> It's live</li>
-        </ol>
-      </div>
-    </aside>
-
-    <div class="stage__steps">
-    {/* 01 */}
-    <div class="dock dock--ask" data-dock="1">
-      <div class="dock__inner">
-        <div>
-          <p class="dock__n">01 · You ask</p>
-          <h2 class="dock__h">
-            {
-              "In your own words.".split(" ").map((w, i) => (
-                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
-              ))
-            }
-          </h2>
-          <p class="dock__p">Type it in your portal. Add a photo if it helps.</p>
-        </div>
-        <div class="dock__slot">
-          <div class="dock__field">
-            <span>Swap the hero photo for the one from Saturday</span>
-            <span class="dock__square"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* 02 */}
-    <div class="dock dock--build" data-dock="2">
-      <div class="dock__inner">
-        <div>
-          <p class="dock__n">02 · We build it</p>
-          <h2 class="dock__h">
-            {
-              "On a copy, not your live site.".split(" ").map((w, i) => (
-                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
-              ))
-            }
-          </h2>
-          <p class="dock__p">Ready to check, usually within the hour.</p>
-        </div>
-        <div class="dock__slot">
-          <div class="dock__panel">
-            <p class="dock__n" style="padding: 1rem 1.25rem; margin: 0">
-              preview · a private address
-            </p>
-            <span class="dock__square"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* 03 — the square at its largest: it *is* the approve button. The stage
-        stays dark the whole way through, because a blue plane here would be a
-        blue surface that is not the square, and the page only has one rule. */}
-    <div class="dock dock--approve" data-dock="3">
-      <div class="dock__inner">
-        <div>
-          <p class="dock__n">03 · You approve</p>
-          <h2 class="dock__h">
-            {
-              "One tap, on your phone.".split(" ").map((w, i) => (
-                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
-              ))
-            }
-          </h2>
-          <p class="dock__p">Not right? Say so. A redo is free.</p>
-        </div>
-        <div class="dock__slot">
-          <span class="dock__approve">
-            <span class="dock__square"></span>
-            <span class="dock__approve-label">Approve</span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    {/* 04 */}
-    <div class="dock dock--live" data-dock="4">
-      <div class="dock__inner">
-        <div>
-          <p class="dock__n">04 · It's live</p>
-          <h2 class="dock__h">
-            {
-              "And we check that it is.".split(" ").map((w, i) => (
-                <span class="w" style={`--w:${i}`}>{w}&#32;</span>
-              ))
-            }
-          </h2>
-          <p class="dock__p">We load your site to make sure, then tell you.</p>
-        </div>
-        <div class="dock__slot">
-          <span class="dock__live">
-            <span class="dock__square"></span> Live
-          </span>
-        </div>
-      </div>
-    </div>
-
-    </div>
-   </div>
-
-    {/* The stage ends by handing the page back to daylight: paper wipes up
-        over the dark as you leave the last step, so the change in ground
-        reads as a deliberate act rather than a seam between two designs. */}
-    <div class="stage-out" aria-hidden="true"></div>
-  </section>
-
-
-  {/* ------------------------------------------------------- numbers */}
+  {/* ------------------------------------------------------------ work */}
   <section class="section section--sunk">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">In your portal</p></div>
-        <h2>The numbers, every month.</h2>
+        <div><p class="eyebrow">Our work</p></div>
+        <div>
+          <h2>Sites we have built.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Each one is linked, and labelled: client site, demo, or our own.
+          </p>
+        </div>
+      </div>
+      <div class="work-grid">
+        {featuredWork.map((work, i) => <WorkCard work={work} index={i + 1} heading="h3" />)}
+      </div>
+      <p class="eyebrow" style="margin-top: var(--space-5)">
+        <a class="link" href="/work/">See all our work →</a>
+      </p>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------- the steps */}
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">How it works</p></div>
+        <div>
+          <h2>Website changes, made easy.</h2>
+          <p class="lede" style="margin-top: 1rem">Every change to your site goes through the same four steps.</p>
+        </div>
+      </div>
+      <ol class="cells">
+        {LOOP.map((step) => (
+          <li class="reveal">
+            <p class="n">Step {step.n}</p>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  {/* ----------------------------------------------------------- about */}
+  {/* Each "Learn more" under What we do lands on its own row here. */}
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">About</p></div>
+        <div>
+          <h2>What each one does, in more detail.</h2>
+        </div>
       </div>
       <ul class="rows">
-        <li class="reveal">
-          <h3>Visitors</h3>
-          <p>Who came, what they opened, how they found you.</p>
-        </li>
-        <li class="reveal">
-          <h3>Calls and enquiries</h3>
-          <p>What the site brought in, beside the visitor numbers.</p>
-        </li>
-        <li class="reveal">
-          <h3>Every change</h3>
-          <p>Asked, built, approved, live. On the record.</p>
-        </li>
+        {services.map((item) => (
+          <li class="reveal" id={item.id}>
+            <h3><span class="n">{item.n}</span> {item.title}</h3>
+            <div>
+              <p>{item.detail}</p>
+              <ul class="ticks">
+                {item.points.map((point) => <li>{point}</li>)}
+              </ul>
+              <p class="more-links">
+                {item.links.map((l) => <a class="link" href={l.href}>{l.label} →</a>)}
+              </p>
+            </div>
+          </li>
+        ))}
       </ul>
     </div>
   </section>
@@ -301,19 +275,30 @@ const schema = [
       <div class="section-head reveal">
         <div><p class="eyebrow">Pricing</p></div>
         <div>
-          <h2>Priced so you can plan for it.</h2>
+          <h2>One price for the site. Performance tracking is free.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Sites from {dollars(CHEAPEST_BUILD.priceCents)}. Plans from
-            {" "}{dollars(CHEAPEST_PLAN.monthlyCents)} a month. No contracts.
+            Then a monthly plan if you want us to host it and keep it current. No contracts.
           </p>
         </div>
       </div>
-      <div class="plans">
-        {PLANS.map((plan) => <PlanCard plan={plan} compact />)}
-      </div>
-      <p class="eyebrow" style="margin-top: 1rem">
-        <a class="link" href="/pricing/">See all three build prices and compare every plan</a>
-      </p>
+      <ul class="cells">
+        <li class="reveal">
+          <p class="n">{BUILD.name}</p>
+          <p class="cell__price">{dollars(BUILD.priceCents)}<small>one time</small></p>
+          <p>Designed, built and launched on your domain. No plan required.</p>
+        </li>
+        <li class="reveal">
+          <p class="n">{FREE_PORTAL.name}</p>
+          <p class="cell__price">Free</p>
+          <p>Visitor analytics and a leads inbox, with or without a plan.</p>
+        </li>
+        <li class="reveal">
+          <p class="n">Plans</p>
+          <p class="cell__price">{dollars(CHEAPEST_PLAN.monthlyCents)}<small>/month and up</small></p>
+          <p>{PLANS.map((p) => `${p.name} ${dollars(p.monthlyCents)}`).join(" · ")}. Month to month.</p>
+          <a class="link cell__more" href="/pricing/">Compare plans →</a>
+        </li>
+      </ul>
     </div>
   </section>
 
@@ -321,8 +306,8 @@ const schema = [
   <section class="section section--sunk">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">Straight answers</p></div>
-        <h2>The questions people ask before they get in touch.</h2>
+        <div><p class="eyebrow">Questions</p></div>
+        <h2>What people ask before they get in touch.</h2>
       </div>
       <ul class="rows">
         {
@@ -334,25 +319,6 @@ const schema = [
           ))
         }
       </ul>
-    </div>
-  </section>
-
-  {/* --------------------------------------------- existing clients */}
-  <section class="section">
-    <div class="wrap">
-      <div class="cta reveal">
-        <div>
-          <p class="eyebrow" style="margin-bottom: 1rem">Already a client?</p>
-          <h2>Your portal is here.</h2>
-          <p class="lede" style="margin-top: 1rem">
-            Requests, previews, visitor numbers and invoices.
-          </p>
-        </div>
-        <div class="btn-row">
-          <a class="btn btn--primary" href={SITE.portalUrl}>Go to the client portal <span class="arrow">→</span></a>
-          <a class="btn btn--ghost" href={`${SITE.portalUrl}/get-started`}>First time signing in</a>
-        </div>
-      </div>
     </div>
   </section>
 

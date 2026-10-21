@@ -1,9 +1,18 @@
+import { BUILD, CHEAPEST_PLAN, dollars } from "@mortensenweb/plans";
+
 /**
  * Site-wide constants.
  *
  * The portal URL is the one link on this site that leaves it. Getting it
  * wrong sends an existing client somewhere that does not have their session.
+ *
+ * The two descriptions quote prices, so they read them from
+ * `@mortensenweb/plans` like every page does: these were typed in once and
+ * went on saying "from $100" after the build price changed.
  */
+const build = dollars(BUILD.priceCents);
+const plansFrom = dollars(CHEAPEST_PLAN.monthlyCents);
+
 export const SITE = {
   name: "Mortensen Web Co.",
   shortName: "MortensenWeb",
@@ -31,9 +40,9 @@ export const SITE = {
    */
   /** The meta description: the same facts, inside the ~160 characters a result shows. */
   metaDescription:
-    "Web design in Riverton, Utah for small businesses: websites from $100, unlimited changes, and a leads inbox for every enquiry. Plans from $25 a month.",
+    `Web design in Riverton, Utah for small businesses: a website for ${build}, free performance tracking with a leads inbox, and plans from ${plansFrom} a month.`,
   description:
-    "Mortensen Web Co. is a web design company in Riverton, Utah that builds, hosts and looks after websites for small businesses — with unlimited changes, a leads inbox for every enquiry, and Growth tools that bring in more customers. Sites from $100; plans from $25 a month.",
+    `Mortensen Web Co. is a web design company in Riverton, Utah that builds, hosts and looks after websites for small businesses — with free performance tracking (visitor analytics and every enquiry in one place), unlimited changes, and Growth tools that bring in more customers. Websites ${build}; plans from ${plansFrom} a month.`,
   // Umami Cloud website id for this site. Public by nature (it is in the
   // page); the API key that reads the figures never leaves the portal.
   umamiWebsiteId: "e71828c7-4b0e-4e06-8049-bd108a3b6fab",
@@ -56,28 +65,30 @@ export const NAV = [
 /**
  * The four steps a change goes through. A real sequence — which is why it is
  * numbered everywhere it appears — and the same four stages the portal shows
- * a client on their progress track.
+ * a client on their progress track. Each title says the whole step in plain
+ * words (the operator's ask of 2026-10-21: "make it easy to read"), and the
+ * line under it says what happens.
  */
 export const LOOP = [
   {
     n: "01",
-    title: "You ask",
-    body: "In your portal, in your own words. Attach a photo if it helps — a picture of the thing you mean is usually faster than describing it.",
+    title: "You request a change to your site",
+    body: "Type what you want changed in your portal, in your own words. Add a photo if it helps.",
   },
   {
     n: "02",
-    title: "We build it",
-    body: "The change is made on a copy of your site, checked — every link, every image — and put up at a private address. Usually within the hour.",
+    title: "We build it on a private preview and send it to you",
+    body: "The change is made on a copy of your site, not the live one. You get the link, usually within the hour.",
   },
   {
     n: "03",
-    title: "You approve",
-    body: "You get an email with the preview and a picture of the change. Looks right? One tap. Not quite? Say what's off — it doesn't cost another change.",
+    title: "You approve the change",
+    body: "Looks right? Approve it in one tap. Not quite? Tell us what's off and we fix it, free.",
   },
   {
     n: "04",
-    title: "It's live",
-    body: "We publish, check your live site actually serves it, and tell you. Then it shows up in your visitor numbers like everything else.",
+    title: "We push it live",
+    body: "We publish it, check that your live site shows it, and let you know it's done.",
   },
 ] as const;
 
