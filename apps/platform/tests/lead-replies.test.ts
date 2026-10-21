@@ -135,6 +135,17 @@ describe("sending a reply", () => {
     expect(row!.status).toBe("won");
   });
 
+  it("marks an archived enquiry contacted, and leaves it archived", async () => {
+    const archivedAt = new Date("2026-10-20T09:00:00Z");
+    const lead = await addLead(acme, { archivedAt });
+    await sendLeadReply(db, acme.ctx, lead, "Sorry for the slow answer.", { send: delivered });
+    const [row] = await db
+      .select({ status: leads.status, archivedAt: leads.archivedAt })
+      .from(leads)
+      .where(eq(leads.publicId, lead));
+    expect(row).toEqual({ status: "contacted", archivedAt });
+  });
+
   it("records a failed send, says so, and does not mark the lead contacted", async () => {
     const lead = await addLead(acme);
     const result = await sendLeadReply(db, acme.ctx, lead, "Hello", {

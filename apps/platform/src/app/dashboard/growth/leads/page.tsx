@@ -200,7 +200,7 @@ export default async function LeadsPage({
       {view === "open" && leads.length > 0 && (
         <p className="panel-note lead-inbox-note">
           Your inbox keeps the newest {INBOX_SIZE}. Older enquiries move to{" "}
-          <Link href={href("archived")}>Archived</Link> on their own.
+          <Link href={href("archived")}>Archived</Link> on their own, still marked as you left them.
         </p>
       )}
     </section>
