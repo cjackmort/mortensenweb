@@ -142,7 +142,8 @@ export const draftReviewReply: ReplyDrafter = (review, business) => {
       ? "If there's anything we could have done better, we'd like to hear it."
       : pick(
           [
-            business.name ? `Thanks for choosing ${business.name}.` : "Thanks for choosing us.",
+            // "Riverton Plumbing Co." already ends the sentence.
+            business.name ? `Thanks for choosing ${business.name.replace(/\.$/, "")}.` : "Thanks for choosing us.",
             "We hope to see you again.",
           ],
           seed,

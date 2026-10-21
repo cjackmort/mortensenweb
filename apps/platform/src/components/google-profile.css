@@ -28,8 +28,8 @@
 
 .gp-hours li {
   display: grid;
-  grid-template-columns: minmax(6.5rem, auto) 1fr;
-  gap: 1rem;
+  grid-template-columns: minmax(4.5rem, auto) 1fr;
+  gap: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -276,6 +276,10 @@
 .gp-photo-choice {
   display: grid;
   gap: 0.25rem;
+}
+
+.gp-queue-group + .gp-queue-group {
+  margin-top: 1.75rem;
 }
 
 .gp-queue-list {

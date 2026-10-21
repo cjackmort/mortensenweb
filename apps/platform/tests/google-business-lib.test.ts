@@ -444,6 +444,14 @@ describe("reply drafts", () => {
     ).toContain("get in touch");
   });
 
+  it("never doubles the full stop after a business name ending in one", () => {
+    const voice = { ...business, name: "Riverton Plumbing Co." };
+    for (const reviewId of ["a", "b", "c", "d", "e", "f"]) {
+      const reply = draftReviewReply({ reviewId, reviewerName: "Dana", starRating: 5, comment: "Great." }, voice);
+      expect(reply).not.toContain("..");
+    }
+  });
+
   it("strips Google's machine translation and keeps the original", () => {
     expect(originalReviewText("Great work (Translated by Google) Buen trabajo")).toBe("Great work");
     expect(originalReviewText("(Translated by Google) Great work (Original) Buen trabajo")).toBe("Buen trabajo");

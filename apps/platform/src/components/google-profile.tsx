@@ -170,8 +170,8 @@ export function MetricsPanel({
           <p>No figures from Google yet. They arrive with the first daily sync after the profile is linked.</p>
         </div>
       ) : (
-        <>
-          <p className="panel-note gp-range">
+        <div className="panel-body">
+          <p className="hint gp-range">
             {formatDate(`${metrics.range.start}T12:00:00Z`)} – {formatDateWithYear(`${metrics.range.end}T12:00:00Z`)}
             {metrics.daysReported < metrics.window ? ` · Google has figures for ${metrics.daysReported} of these days` : ""}
             {" · Google's figures run a few days behind"}
@@ -186,7 +186,7 @@ export function MetricsPanel({
             <Figure label="Website clicks" value={metrics.totals.websiteClicks} />
             <Figure label="Directions" value={metrics.totals.directionRequests} note="Requests for directions" />
           </div>
-        </>
+        </div>
       )}
 
       <div className="panel-body gp-searches">

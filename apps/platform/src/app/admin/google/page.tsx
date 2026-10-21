@@ -6,6 +6,7 @@ import { adminContextFrom } from "@/db/repositories/context";
 import { getGoogleConnectionStatus, type GoogleConnectionStatus } from "@/db/repositories/admin/google-connection";
 import { getGoogleQueue, listGoogleClients, listLinkableLocations, type LinkableLocations } from "@/db/repositories/admin/google-profile";
 import { Stars } from "@/components/google-profile";
+import { expectedRedirectUri } from "@/lib/google-business/config";
 import { describeGoogleError } from "@/lib/google-business/errors";
 import { formatDateTime, formatDateWithYear } from "@/lib/time";
 import { ActionForm } from "./action-form";
@@ -166,7 +167,9 @@ function Step({ done, children }: { done: boolean | null; children: React.ReactN
 
 function SetupChecklist({ status }: { status: GoogleConnectionStatus }) {
   const missing = status.state === "not_configured" ? status.missing : [];
-  const redirectUri = status.state === "not_configured" ? status.redirectUri : "redirectUri" in status ? status.redirectUri : null;
+  // From the configuration rather than the status: it is the value to
+  // register with Google whatever state the connection is in.
+  const redirectUri = expectedRedirectUri();
   const connected = status.state !== "not_configured" && status.state !== "not_connected";
   const hasAccess = status.state === "connected";
 
@@ -238,80 +241,92 @@ function ConnectionPanel({ status }: { status: GoogleConnectionStatus }) {
     status.state === "connected" ? "pill-success" : status.state === "no_access" || status.state === "needs_reconnect" ? "pill-warning" : "pill-neutral";
 
   return (
-    <section className="panel" aria-labelledby="gp-connection">
-      <div className="panel-head">
-        <h2 id="gp-connection">Google connection</h2>
-        <span className={`pill ${pill}`}>{heading}</span>
-      </div>
-      <div className="panel-body">
-        {status.state === "not_configured" && (
-          <p>
-            Google is not set up on this server. Missing: {status.missing.map((name) => <code key={name}>{name} </code>)}. Nothing
-            is synced and clients see &ldquo;setting up&rdquo;.
-          </p>
-        )}
-        {status.state === "not_connected" && (
-          <>
-            <p>The server is set up. Connect the agency&rsquo;s Google account — the one clients will add as a Manager.</p>
-            <a className="button" href="/api/google/oauth/start">
-              Connect Google account
-            </a>
-          </>
-        )}
-        {status.state === "needs_reconnect" && (
-          <>
+    <>
+      <section className="panel" aria-labelledby="gp-connection">
+        <div className="panel-head">
+          <h2 id="gp-connection">Google connection</h2>
+          <span className={`pill ${pill}`}>{heading}</span>
+        </div>
+        <div className="panel-body">
+          {status.state === "not_configured" && (
             <p>
-              Google no longer accepts the sign-in for <strong>{status.email}</strong> (revoked, or expired — a Testing-mode
-              consent screen expires it after 7 days). Syncing has stopped.
+              Google is not set up on this server. Missing:{" "}
+              {status.missing.map((name, i) => (
+                <span key={name}>
+                  {i > 0 ? ", " : ""}
+                  <code>{name}</code>
+                </span>
+              ))}
+              . Nothing is synced, and clients are told the connection is being set up.
             </p>
-            <a className="button" href="/api/google/oauth/start">
-              Reconnect
-            </a>
-          </>
-        )}
-        {status.state === "no_access" && (
-          <>
-            <p>
-              Signed in as <strong>{status.email}</strong>, but{" "}
-              {status.reason === "quota"
-                ? "Google refuses every Business Profile call for quota: the project's API access has not been approved yet, so its quota is 0."
-                : "a Business Profile API is not enabled in the Google Cloud project."}
-            </p>
-            <p className="hint">
-              {status.message ? <>Google said: &ldquo;{status.message}&rdquo; </> : null}
-              {status.checkedAt ? <>Last checked {formatDateTime(status.checkedAt)}. </> : null}
-              The portal checks again every six hours and switches on by itself once Google allows it.
-            </p>
-            <div className="gp-inline-actions">
-              <ActionForm action={checkAccessAction} buttons={[{ label: "Check again now", value: "check", pendingLabel: "Checking…" }]} />
-              <ActionForm action={disconnectAction} buttons={[{ label: "Disconnect", value: "disconnect", secondary: true, confirm: "Disconnect the agency's Google account?" }]} />
-            </div>
-          </>
-        )}
-        {status.state === "connected" && (
-          <>
-            <p>
-              As <strong>{status.email}</strong>, since {formatDateWithYear(status.connectedAt)}.
-              {status.lastSuccessAt ? <> Last answered {formatDateTime(status.lastSuccessAt)}.</> : null}
-            </p>
-            {status.pausedUntil && (
-              <p className="notice notice-info">Google is limiting requests. Syncing and edits resume after {formatDateTime(status.pausedUntil)}.</p>
-            )}
-            {status.lastError && <p className="notice notice-danger">Last failure: {status.lastError}</p>}
-            <ActionForm action={disconnectAction} buttons={[{ label: "Disconnect", value: "disconnect", secondary: true, confirm: "Disconnect the agency's Google account? Syncing stops until it is connected again." }]} />
-          </>
-        )}
-      </div>
+          )}
+          {status.state === "not_connected" && (
+            <>
+              <p>The server is set up. Connect the agency&rsquo;s Google account — the one clients will add as a Manager.</p>
+              <a className="button" href="/api/google/oauth/start">
+                Connect Google account
+              </a>
+            </>
+          )}
+          {status.state === "needs_reconnect" && (
+            <>
+              <p>
+                Google no longer accepts the sign-in for <strong>{status.email}</strong> (revoked, or expired — a Testing-mode
+                consent screen expires it after 7 days). Syncing has stopped.
+              </p>
+              <a className="button" href="/api/google/oauth/start">
+                Reconnect
+              </a>
+            </>
+          )}
+          {status.state === "no_access" && (
+            <>
+              <p>
+                Signed in as <strong>{status.email}</strong>, but{" "}
+                {status.reason === "quota"
+                  ? "Google refuses every Business Profile call for quota: the project's API access has not been approved yet, so its quota is 0."
+                  : "a Business Profile API is not enabled in the Google Cloud project."}
+              </p>
+              <p className="hint">
+                {status.message ? <>Google said: &ldquo;{status.message}&rdquo; </> : null}
+                {status.checkedAt ? <>Last checked {formatDateTime(status.checkedAt)}. </> : null}
+                The portal checks again every six hours and switches on by itself once Google allows it.
+              </p>
+              <div className="gp-inline-actions">
+                <ActionForm action={checkAccessAction} buttons={[{ label: "Check again now", value: "check", pendingLabel: "Checking…" }]} />
+                <ActionForm action={disconnectAction} buttons={[{ label: "Disconnect", value: "disconnect", secondary: true, confirm: "Disconnect the agency's Google account?" }]} />
+              </div>
+            </>
+          )}
+          {status.state === "connected" && (
+            <>
+              <p>
+                As <strong>{status.email}</strong>, since {formatDateWithYear(status.connectedAt)}.
+                {status.lastSuccessAt ? <> Last answered {formatDateTime(status.lastSuccessAt)}.</> : null}
+              </p>
+              {status.pausedUntil && (
+                <p className="notice notice-info">Google is limiting requests. Syncing and edits resume after {formatDateTime(status.pausedUntil)}.</p>
+              )}
+              {status.lastError && <p className="notice notice-danger">Last failure: {status.lastError}</p>}
+              <ActionForm action={disconnectAction} buttons={[{ label: "Disconnect", value: "disconnect", secondary: true, confirm: "Disconnect the agency's Google account? Syncing stops until it is connected again." }]} />
+            </>
+          )}
+        </div>
+      </section>
 
       {status.state !== "connected" && (
-        <details className="panel-fold" open={status.state === "not_configured" || status.state === "not_connected" || status.state === "no_access"}>
-          <summary>Setup checklist</summary>
+        // Its own panel, open: until Google works this list is the page.
+        <details className="panel panel-fold" open>
+          <summary className="panel-head">
+            <h2>Setup checklist</h2>
+            <span className="panel-sub">What Google profile management needs, in order</span>
+          </summary>
           <div className="panel-body">
             <SetupChecklist status={status} />
           </div>
         </details>
       )}
-    </section>
+    </>
   );
 }
 
@@ -383,7 +398,7 @@ function Queue({ queue }: { queue: Awaited<ReturnType<typeof getGoogleQueue>> })
                 <li key={g.clientPublicId}>
                   <span className="gp-queue-what">
                     <Link href={`/admin/google/${g.clientPublicId}`}>{g.organizationName}</Link>
-                    <p>{g.items.map((item) => item.detail).join(" ")}</p>
+                    <p>{g.items.map((item) => `${item.label}: ${item.detail}`).join(" · ")}</p>
                   </span>
                 </li>
               ))}

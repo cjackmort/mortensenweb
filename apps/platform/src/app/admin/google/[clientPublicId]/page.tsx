@@ -152,7 +152,7 @@ export default async function GoogleWorkspacePage({ params }: { params: Promise<
                   >
                     <label>
                       Note for the client
-                      <input name="note" maxLength={1000} placeholder="Set to closed on Thanksgiving." />
+                      <input name="note" maxLength={1000} placeholder="What you changed, in a line. The client sees this." />
                     </label>
                   </ActionForm>
                 </li>
