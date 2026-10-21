@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   await db.insert(clientAddOns).values({ clientId: sagebrush.id, featureKey: PREVIEW.paying.addOnKey, source: "stripe", stripeSubscriptionItemId: PREVIEW.paying.addOnItem, monthlyPriceCents: 1500 });
   await db.insert(payments).values({ publicId: newPublicId(), clientId: sagebrush.id, subscriptionId: sub!.id, amountCents: build.priceCents + 4000, method: "stripe", provider: "stripe", receivedOn: ago(30).toISOString().slice(0, 10), isDemo: true });
 
-  await client({
+  const redRock = await client({
     name: "Red Rock Plumbing",
     slug: SLUGS[2]!,
     email: EMAILS[3]!,
@@ -146,7 +146,12 @@ async function main(): Promise<void> {
     record: { buildKey: build.key, demoUrl: "https://red-rock-plumbing-demo.netlify.app/", demoSentAt: ago(3) },
   });
 
-  console.log(JSON.stringify({ admin: EMAILS[0], cart: EMAILS[1], plan: EMAILS[2], onboarding: EMAILS[3], juniper: juniper.publicId }));
+  console.log(
+    JSON.stringify({
+      accounts: { admin: EMAILS[0], cart: EMAILS[1], plan: EMAILS[2], onboarding: EMAILS[3] },
+      clients: { juniper: juniper.publicId, sagebrush: sagebrush.publicId, redRock: redRock.publicId },
+    }),
+  );
   process.exit(0);
 }
 
