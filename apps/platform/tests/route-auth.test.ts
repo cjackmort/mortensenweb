@@ -67,6 +67,22 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "Netlify form webhook",
     checks: "verifyNetlifySignature(",
   },
+  "api/webhooks/resend/route.ts": {
+    reason: "Resend delivery webhook (bounces, complaints, opens)",
+    checks: "verifySvixSignature(",
+  },
+
+  // Unsubscribe links in a win-back email, opened by the business's customer,
+  // who has no account. The signed token is checked before any query; the
+  // POST also rate-limits by hashed IP.
+  "unsubscribe/[token]/page.tsx": {
+    reason: "unsubscribe page reached from a customer's email",
+    checks: "verifyUnsubscribeToken(",
+  },
+  "api/unsubscribe/[token]/route.ts": {
+    reason: "one-click unsubscribe, POSTed by mail providers",
+    checks: "verifyUnsubscribeToken(",
+  },
 
   // Fetched by GitHub Actions runners, which have no session. The handler
   // 404s on any token it did not mint.

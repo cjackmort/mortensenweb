@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { leads, sites, winbackContacts, winbackSuppressions } from "@/db/schema";
+import { eventBookings, leads, sites, winbackContacts, winbackSuppressions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import {
+  forgetDeletedLead,
   importContacts,
   listContacts,
   recordLeadOutcome,
@@ -90,6 +91,30 @@ describe("won enquiries", () => {
     const emails = (await listContacts(db, acme.ctx)).contacts.map((c) => c.email);
     expect(emails).toContain("pat@example.test");
     expect(emails).not.toContain("lee@example.test");
+  });
+
+  it("never include a performer whose booking enquiry was approved", async () => {
+    const lead = await addLead(acme, { email: "band@example.test", status: "won", formName: "booking" });
+    const [row] = await db.select({ id: leads.id, siteId: leads.siteId }).from(leads).where(eq(leads.publicId, lead));
+    await db.insert(eventBookings).values({
+      publicId: newPublicId(),
+      organizationId: acme.organizationId,
+      siteId: row!.siteId,
+      leadId: row!.id,
+      decision: "approved",
+      actName: "The Band",
+      eventDate: "2026-11-07",
+    });
+    await recordLeadOutcome(db, acme.ctx, lead, "won");
+    await syncWonLeads(db, acme.ctx);
+    expect((await listContacts(db, acme.ctx)).contacts.map((c) => c.email)).not.toContain("band@example.test");
+  });
+
+  it("leave with the enquiry when it is deleted", async () => {
+    const lead = await addLead(acme, { email: "gone-lead@example.test", status: "won" });
+    await recordLeadOutcome(db, acme.ctx, lead, "won");
+    await forgetDeletedLead(db, acme.ctx, lead);
+    expect((await listContacts(db, acme.ctx)).contacts.map((c) => c.email)).not.toContain("gone-lead@example.test");
   });
 
   it("are skipped when the enquiry left no email", async () => {

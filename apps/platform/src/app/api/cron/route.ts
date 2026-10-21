@@ -15,6 +15,7 @@ import { reconcileStorageReservations } from "@/db/repositories/client/media-quo
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
+import { runWinbackSends } from "@/db/repositories/admin/winback-sender";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -209,6 +210,11 @@ export async function POST(request: Request): Promise<Response> {
     // The same kind of net, for contact-form submissions. Self-gated to every
     // six hours; one Netlify call per connected site.
     ["leadsImported", () => runScheduledLeadImport(db)],
+    // Approved win-back emails, a batch at a time: spaced under Resend's rate
+    // limit and stopped after twenty seconds, so this tick's other jobs keep
+    // their budget. While a campaign has customers left it keeps the
+    // scheduler awake, so the rest go out over the next ticks.
+    ["winbackSent", () => runWinbackSends(db)],
     // After the Stripe reconciliation, so a payment it recovered this tick can
     // have its fee recorded in the same one. Self-gated to at most hourly.
     ["ledgerAutomated", () => runScheduledLedger(db)],

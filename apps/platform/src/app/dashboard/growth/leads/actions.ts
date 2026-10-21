@@ -8,6 +8,7 @@ import { NotFoundError, tenantContextFrom, type TenantContext } from "@/db/repos
 import { deleteLead, isLeadStatus, isLeadView, setLeadStatus } from "@/db/repositories/client/leads";
 import { sendLeadReply } from "@/db/repositories/client/lead-replies";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
+import { forgetDeletedLead, recordLeadOutcome } from "@/db/repositories/client/winback-contacts";
 import {
   approveBooking,
   declineBooking,
@@ -57,6 +58,10 @@ export async function setLeadStatusAction(
 
   try {
     await setLeadStatus(session.db, session.ctx, publicId, status);
+    // Won is when someone becomes a past customer for win-back emails —
+    // recorded now, because the inbox later archives old enquiries and that
+    // overwrites "won".
+    await recordLeadOutcome(session.db, session.ctx, publicId, status);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { ok: false, message: "That enquiry no longer exists." };
@@ -74,6 +79,7 @@ export async function deleteLeadAction(formData: FormData): Promise<void> {
 
   const publicId = String(formData.get("lead") ?? "");
   try {
+    await forgetDeletedLead(session.db, session.ctx, publicId);
     await deleteLead(session.db, session.ctx, publicId);
   } catch (error) {
     // Already gone is the outcome they asked for.

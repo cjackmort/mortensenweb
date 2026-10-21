@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { leads, winbackContacts, winbackSuppressions } from "@/db/schema";
+import { eventBookings, leads, winbackContacts, winbackSuppressions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { isEmailAddress } from "@/lib/growth/lead-reply";
 import { normaliseEmail, type ImportedContact } from "@/lib/winback/csv";
@@ -107,6 +107,15 @@ export async function countReachable(db: Database, organizationId: string): Prom
   return row?.n ?? 0;
 }
 
+/**
+ * Enquiries that became a booking — a band a venue booked — are marked won
+ * too, but the performer is not the business's customer and must never get
+ * its offers. Qualified on both sides, for the reason `suppressionFor` gives.
+ */
+const NOT_A_BOOKING = sql`not exists (
+  select 1 from "event_bookings" where "event_bookings"."lead_id" = "leads"."id"
+)`;
+
 function wonNote(receivedAt: Date): string {
   return `Won enquiry from your website, ${formatDateWithYear(receivedAt)}`;
 }
@@ -137,6 +146,8 @@ export async function recordLeadOutcome(
     )
     .limit(1);
   if (!lead) return;
+  const [booking] = await db.select({ id: eventBookings.id }).from(eventBookings).where(eq(eventBookings.leadId, lead.id)).limit(1);
+  if (booking) return;
 
   if (status !== "won") {
     await forgetLead(db, ctx, lead.id);
@@ -160,6 +171,17 @@ export async function recordLeadOutcome(
     .onConflictDoNothing();
 }
 
+/** Called before an enquiry is deleted, while its id can still be found. */
+export async function forgetDeletedLead(db: Database, ctx: TenantContext, leadPublicId: string): Promise<void> {
+  assertMutable(ctx);
+  const [lead] = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.publicId, leadPublicId), eq(leads.organizationId, ctx.organizationId)))
+    .limit(1);
+  if (lead) await forgetLead(db, ctx, lead.id);
+}
+
 /** A deleted enquiry takes the customer it made with it: "remove this person" means removed. */
 export async function forgetLead(db: Database, ctx: TenantContext, leadId: string): Promise<void> {
   assertMutable(ctx);
@@ -180,7 +202,9 @@ export async function syncWonLeads(db: Database, ctx: TenantContext): Promise<{ 
   const won = await db
     .select({ id: leads.id, email: leads.email, name: leads.name, receivedAt: leads.receivedAt })
     .from(leads)
-    .where(and(eq(leads.organizationId, ctx.organizationId), eq(leads.status, "won"), isNull(leads.deletedAt)));
+    .where(
+      and(eq(leads.organizationId, ctx.organizationId), eq(leads.status, "won"), isNull(leads.deletedAt), NOT_A_BOOKING),
+    );
 
   const seen = new Set<string>();
   const values = won.flatMap((lead) => {
