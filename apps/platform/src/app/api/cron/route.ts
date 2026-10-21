@@ -17,6 +17,7 @@ import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
 import { runReviewReminders } from "@/db/repositories/admin/reviews";
 import { runScheduledGoogleSync } from "@/db/repositories/admin/google-sync";
+import { runScheduledMonthlyReports } from "@/db/repositories/admin/report-delivery";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -27,11 +28,11 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Fourteen jobs that have to run whether or not anyone is looking. The first
+ * Fifteen jobs that have to run whether or not anyone is looking. The first
  * six are the loop's own; jobs 7-9 keep the media library's storage honest,
  * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, job 12
- * keeps the books, job 13 sends review reminders, and job 14 keeps Google
- * profiles current:
+ * keeps the books, job 13 sends review reminders, job 14 sends the monthly
+ * reports, and job 15 keeps Google profiles current:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -71,7 +72,10 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *  13. **Review reminders.** The one reminder a customer gets when they did
  *      not click a review request's link. Days away when it is created, so it
  *      does not nudge; it runs only between 9am and 8pm business time.
- *  14. **Google profiles.** Each linked profile every six hours, a few per
+ *  14. **Monthly reports.** Only in the first week of a month; builds and
+ *      emails last month's report for each client on Care or above, a few per
+ *      tick, holding the scheduler awake while any are left.
+ *  15. **Google profiles.** Each linked profile every six hours, a few per
  *      tick, with per-profile backoff and a project-wide pause on a 429.
  *      Costs nothing on a server without Google configured.
  *
@@ -225,6 +229,10 @@ export async function POST(request: Request): Promise<Response> {
     // it, and a reminder an hour late is no worse. Bounded at 25 a run; the
     // query is one partial-index scan when nothing is due.
     ["reviewReminders", () => runReviewReminders(db)],
+    // Near the end: nobody is waiting on it minute by minute, and it is the
+    // heaviest job on the 1st (a dozen analytics calls per client). Does
+    // nothing after the first week of the month, without querying anything.
+    ["monthlyReports", () => runScheduledMonthlyReports(db)],
     // Last: the only job here whose quota is shared with an operator's
     // edits, so it takes whatever budget the tick has left and stops itself
     // on Google's first 429. See `admin/google-sync.ts`.

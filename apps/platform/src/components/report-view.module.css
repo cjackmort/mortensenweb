@@ -1,0 +1,225 @@
+/*
+ * The monthly report page. A module rather than more of globals.css: the
+ * report is one self-contained document, and its print rules have to reach
+ * outside it (to hide the portal's chrome) only while it is on the page.
+ */
+
+.report {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.head {
+  display: grid;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1.1;
+}
+
+.headline {
+  margin: 0;
+  max-width: 40rem;
+  font-size: clamp(1.125rem, 3.2vw, 1.375rem);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.glance {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+}
+
+.glance dt {
+  color: var(--muted);
+}
+
+.glance dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* On a phone the label sits above its figure rather than squeezing it. */
+@media (max-width: 30rem) {
+  .glance {
+    grid-template-columns: 1fr;
+    gap: 0.125rem;
+  }
+
+  .glance dd {
+    margin-bottom: 0.625rem;
+  }
+}
+
+.glance dd.missing,
+.missingNote {
+  color: var(--muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.missingNote {
+  margin: 0;
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.figure {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.figureValue {
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figureLabel {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.up {
+  color: var(--success);
+}
+
+.down {
+  color: var(--warning);
+}
+
+.columns {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 48rem) {
+  .columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.columns h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.explain {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.rows {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.rows li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.rowValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.when {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/*
+ * Print: "Save as PDF" from the browser should give a clean document, not a
+ * screenshot of the portal. The chrome goes, panels lose their shadows, and a
+ * section is never split across pages if it fits on one.
+ */
+@media print {
+  :global(.topbar),
+  :global(.nav),
+  :global(.no-print),
+  .actions {
+    display: none !important;
+  }
+
+  :global(body) {
+    background: #fff !important;
+    color: #000;
+  }
+
+  :global(.shell) {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .report :global(.panel) {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    background: #fff;
+    break-inside: avoid;
+  }
+
+  .report {
+    gap: 0.75rem;
+  }
+
+  .title {
+    font-size: 24pt;
+  }
+
+  .headline {
+    font-size: 14pt;
+  }
+
+  .report a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

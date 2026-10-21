@@ -15,3 +15,4 @@ export * from "./media";
 export * from "./growth";
 export * from "./google-business";
 export * from "./reviews";
+export * from "./reports";

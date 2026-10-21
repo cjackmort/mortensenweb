@@ -41,6 +41,7 @@ const jobs = {
   runScheduledLeadImport: job("runScheduledLeadImport"),
   runScheduledLedger: job("runScheduledLedger"),
   runReviewReminders: job("runReviewReminders"),
+  runScheduledMonthlyReports: job("runScheduledMonthlyReports"),
   runScheduledGoogleSync: job("runScheduledGoogleSync"),
 };
 
@@ -110,6 +111,9 @@ vi.mock("@/db/repositories/admin/ledger-automation", () => ({
 vi.mock("@/db/repositories/admin/reviews", () => ({
   runReviewReminders: (...a: unknown[]) => jobs.runReviewReminders(...a),
 }));
+vi.mock("@/db/repositories/admin/report-delivery", () => ({
+  runScheduledMonthlyReports: (...a: unknown[]) => jobs.runScheduledMonthlyReports(...a),
+}));
 vi.mock("@/db/repositories/admin/google-sync", () => ({
   runScheduledGoogleSync: (...a: unknown[]) => jobs.runScheduledGoogleSync(...a),
 }));
@@ -131,6 +135,7 @@ const STRIPE_KEYS = ["stripeReconciled"];
 const LEAD_KEYS = ["leadsImported"];
 const LEDGER_KEYS = ["ledgerAutomated"];
 const REVIEW_KEYS = ["reviewReminders"];
+const REPORT_KEYS = ["monthlyReports"];
 const GOOGLE_KEYS = ["googleProfilesSynced"];
 const ALL_KEYS = [
   ...LOOP_KEYS,
@@ -139,6 +144,7 @@ const ALL_KEYS = [
   ...LEAD_KEYS,
   ...LEDGER_KEYS,
   ...REVIEW_KEYS,
+  ...REPORT_KEYS,
   ...GOOGLE_KEYS,
 ];
 
