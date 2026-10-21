@@ -45,6 +45,11 @@ import { clients } from "./clients";
  * `quota_paused_until` is set when Google answers 429: every sync stops until
  * then. One project-wide quota covers every client, so one client's backlog
  * must not be allowed to spend everyone's.
+ *
+ * `last_success_at` is what tells "Google has not granted this project API
+ * access" from "Google is rate-limiting us for a minute". An unapproved
+ * project has a quota of zero, so both answer 429; only a connection that has
+ * never had a call succeed is the first.
  */
 export const googleConnections = pgTable(
   "google_connections",
@@ -61,6 +66,8 @@ export const googleConnections = pgTable(
     /** The last failure talking to Google with this account, shown to the operator. */
     lastError: text("last_error"),
     lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    /** The last call to Google with this account that succeeded. */
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
     quotaPausedUntil: timestamp("quota_paused_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
