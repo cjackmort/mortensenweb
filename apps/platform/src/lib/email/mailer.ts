@@ -13,6 +13,18 @@ export interface EmailMessage {
   text: string;
   html: string;
   /**
+   * Resend's own dedupe key, kept for 24 hours: a retry carrying the same key
+   * is answered with the first email's id instead of sending a second.
+   */
+  idempotencyKey?: string;
+  /**
+   * Echoed back on Resend's webhooks, which is how `/api/webhooks/resend`
+   * knows which feature and organization an event belongs to. Names and
+   * values: ASCII letters, digits, `_` and `-`. See `lib/email/tags.ts`.
+   */
+  tags?: Array<{ name: string; value: string }>;
+
+  /**
    * Overrides `RESEND_REPLY_TO` for this message. A reply to a lead sets it
    * to the client, so the customer's answer reaches the business rather than
    * us.
@@ -25,15 +37,12 @@ export interface EmailMessage {
   from?: string;
   /** A silent copy, so the sender has a record of what went out. */
   bcc?: string;
-  /** Extra headers, such as `List-Unsubscribe` on a marketing email. */
-  headers?: Record<string, string>;
   /**
-   * Resend's own dedupe key, kept for 24 hours: a retry carrying the same key
-   * is answered with the first email's id instead of sending a second.
+   * Extra headers. A review request sets `List-Unsubscribe` and
+   * `List-Unsubscribe-Post`, which Gmail and Yahoo require for one-click
+   * unsubscribe from anything sent in bulk.
    */
-  idempotencyKey?: string;
-  /** Echoed back on Resend's webhooks. ASCII letters, digits, `_` and `-`. */
-  tags?: Array<{ name: string; value: string }>;
+  headers?: Record<string, string>;
 }
 
 export type SendResult =
@@ -82,10 +91,10 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
         from,
         to: [message.to],
         ...(message.bcc ? { bcc: [message.bcc] } : {}),
+        ...(message.headers ? { headers: message.headers } : {}),
         subject: message.subject,
         text: message.text,
         html: message.html,
-        ...(message.headers ? { headers: message.headers } : {}),
         ...(message.tags ? { tags: message.tags } : {}),
         ...(message.replyTo
           ? { reply_to: message.replyTo }

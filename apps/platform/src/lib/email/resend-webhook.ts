@@ -1,4 +1,5 @@
 import { constantTimeEqual } from "@/lib/webhooks/signature";
+import { readTags } from "./tags";
 
 /**
  * Resend's webhooks: what happened to an email after it left.
@@ -87,7 +88,7 @@ export async function svixSignatureFor(id: string, timestamp: string, body: stri
   return `v1,${bytesToBase64(await hmac(key, `${id}.${timestamp}.${body}`))}`;
 }
 
-/** The events win-back records. Everything else Resend sends is acknowledged and ignored. */
+/** The events a feature can act on. Everything else Resend sends is acknowledged and ignored. */
 export type ResendEventType = "delivered" | "opened" | "clicked" | "bounced" | "complained";
 
 const TYPES: Record<string, ResendEventType> = {
@@ -101,25 +102,17 @@ const TYPES: Record<string, ResendEventType> = {
 export interface ResendEvent {
   type: ResendEventType;
   emailId: string;
-  /** From the tag we set when sending, when Resend echoed it. */
-  recipientPublicId: string | null;
+  /** Who it was addressed to, lowercased. */
+  to: string[];
+  /** Every tag we set when sending; see `lib/email/tags.ts`. */
+  tags: Record<string, string>;
   at: Date;
 }
 
-function tagValue(tags: unknown, name: string): string | null {
-  if (Array.isArray(tags)) {
-    const hit = tags.find((t) => t && typeof t === "object" && (t as { name?: unknown }).name === name);
-    const value = hit ? (hit as { value?: unknown }).value : null;
-    return typeof value === "string" ? value : null;
-  }
-  if (tags && typeof tags === "object") {
-    const value = (tags as Record<string, unknown>)[name];
-    return typeof value === "string" ? value : null;
-  }
-  return null;
-}
-
-/** Only after the signature has been verified. Null for anything win-back does not record. */
+/**
+ * Only after the signature has been verified. Null for events nothing here
+ * records (sent, delivery delays, contact changes) and for anything malformed.
+ */
 export function parseResendEvent(body: string): ResendEvent | null {
   let payload: unknown;
   try {
@@ -131,15 +124,15 @@ export function parseResendEvent(body: string): ResendEvent | null {
   const { type, created_at: createdAt, data } = payload as { type?: unknown; created_at?: unknown; data?: unknown };
   const mapped = typeof type === "string" ? TYPES[type] : undefined;
   if (!mapped || !data || typeof data !== "object") return null;
-  const emailId = (data as { email_id?: unknown }).email_id;
+  const { email_id: emailId, to, tags } = data as { email_id?: unknown; to?: unknown; tags?: unknown };
   if (typeof emailId !== "string" || !emailId) return null;
 
   const at = typeof createdAt === "string" ? new Date(createdAt) : new Date();
-  const recipient = tagValue((data as { tags?: unknown }).tags, "winback_recipient");
   return {
     type: mapped,
     emailId,
-    recipientPublicId: recipient && /^[0-9A-Z]{26}$/.test(recipient) ? recipient : null,
+    to: (Array.isArray(to) ? to : [to]).filter((v): v is string => typeof v === "string").map((v) => v.trim().toLowerCase()),
+    tags: readTags(tags),
     at: Number.isNaN(at.getTime()) ? new Date() : at,
   };
 }

@@ -1,5 +1,6 @@
 import type { EmailMessage } from "@/lib/email/mailer";
 import { fromHeader } from "@/lib/growth/lead-reply";
+import { featureTags } from "@/lib/email/tags";
 import { formatDateWithYear } from "@/lib/time";
 
 /**
@@ -27,6 +28,9 @@ import { formatDateWithYear } from "@/lib/time";
 
 export const LIMITS = { name: 80, subject: 120, body: 5000, offer: 200 } as const;
 
+/** The tag that names the recipient row an email was for. */
+export const RECIPIENT_TAG = "winback_recipient";
+
 /** `{first_name}` in a draft becomes this, per customer. */
 export const FIRST_NAME_TOKEN = "{first_name}";
 
@@ -44,6 +48,8 @@ export interface CampaignText {
 export interface WinbackEmailInput {
   campaign: CampaignText;
   recipient: { publicId: string; email: string; name: string | null };
+  /** For the tags that route Resend's webhooks back to this business. */
+  organizationId: string;
   senderAddress: string;
   /** The page with the button: the footer link. */
   unsubscribeUrl: string;
@@ -137,7 +143,7 @@ ${escapeHtml(why)}<br>
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     },
     idempotencyKey: `winback-${recipient.publicId}`,
-    tags: [{ name: "winback_recipient", value: recipient.publicId }],
+    tags: featureTags("winback", input.organizationId, { [RECIPIENT_TAG]: recipient.publicId }),
   };
 }
 

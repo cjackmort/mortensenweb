@@ -27,6 +27,7 @@ const input: WinbackEmailInput = {
     postalAddress: "123 Main St\nRiverton, UT 84065",
   },
   recipient: { publicId: "01HRECIPIENT0000000000000A", email: "dana@example.test", name: "Dana Reyes" },
+  organizationId: "6f1c2a7e-0000-4000-8000-000000000001",
   senderAddress: "hello@mortensenweb.example",
   unsubscribeUrl: "https://portal.example/unsubscribe/tok",
   oneClickUrl: "https://portal.example/api/unsubscribe/tok",
@@ -68,7 +69,11 @@ describe("buildWinbackEmail", () => {
   it("is idempotent per recipient and tagged so webhooks can find it", () => {
     const message = buildWinbackEmail(input);
     expect(message.idempotencyKey).toBe("winback-01HRECIPIENT0000000000000A");
-    expect(message.tags).toEqual([{ name: "winback_recipient", value: "01HRECIPIENT0000000000000A" }]);
+    expect(message.tags).toEqual([
+      { name: "feature", value: "winback" },
+      { name: "organization", value: "6f1c2a7e-0000-4000-8000-000000000001" },
+      { name: "winback_recipient", value: "01HRECIPIENT0000000000000A" },
+    ]);
   });
 
   it("shows the offer and when it ends", () => {

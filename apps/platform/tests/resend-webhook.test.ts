@@ -4,7 +4,7 @@ import {
   svixSignatureFor,
   verifySvixSignature,
   WEBHOOK_TOLERANCE_SECONDS,
-} from "@/lib/winback/resend-webhook";
+} from "@/lib/email/resend-webhook";
 
 /**
  * Resend's delivery webhooks, which Resend signs with Svix.
@@ -75,11 +75,12 @@ describe("verifySvixSignature", () => {
 });
 
 describe("parseResendEvent", () => {
-  it("reads the event, the email and the recipient tag", () => {
+  it("reads the event, the email, who it went to and its tags", () => {
     expect(parseResendEvent(BODY)).toEqual({
       type: "opened",
       emailId: "re_abc",
-      recipientPublicId: "01HRECIPIENT0000000000000A",
+      to: ["dana@example.test"],
+      tags: { winback_recipient: "01HRECIPIENT0000000000000A" },
       at: new Date("2026-10-20T16:00:00.000Z"),
     });
   });
@@ -90,7 +91,7 @@ describe("parseResendEvent", () => {
       created_at: "2026-10-20T16:00:00.000Z",
       data: { email_id: "re_abc", tags: [{ name: "winback_recipient", value: "01HRECIPIENT0000000000000A" }] },
     });
-    expect(parseResendEvent(body)?.recipientPublicId).toBe("01HRECIPIENT0000000000000A");
+    expect(parseResendEvent(body)?.tags).toEqual({ winback_recipient: "01HRECIPIENT0000000000000A" });
     expect(parseResendEvent(body)?.type).toBe("bounced");
   });
 
