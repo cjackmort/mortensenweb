@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
 import {
   GROWTH_FEATURES,
   PLANS,
@@ -23,10 +23,9 @@ import { getEntitlements } from "./entitlements";
  * The Growth tab and the Plan tab, from the client's side.
  *
  * Reads: what they have and why (`lib/growth/access.ts` decides), and the
- * state of their subscription. Writes: add or remove a Growth add-on, move
- * to another plan, and schedule or undo a cancellation — each on the caller's
- * own Stripe subscription, found from the session's organization and never
- * from anything the browser sent.
+ * state of their subscription. Writes: add a Growth add-on and move to
+ * another plan, each on the caller's own Stripe subscription, found from the
+ * session's organization and never from anything the browser sent.
  *
  * Every write takes effect at Stripe first and is mirrored here second, the
  * same order the webhook would apply it in; the webhook arriving afterwards
@@ -38,6 +37,8 @@ import { getEntitlements } from "./entitlements";
  * the rule the operator's own plan changes already follow. A client who adds
  * a feature mid-month gets it now and starts paying for it at the next
  * charge, rather than receiving a confusing part-month invoice for $3.17.
+ *
+ * Cancelling, and undoing it, is in `cancellation.ts`.
  */
 
 export type GrowthBilling =
@@ -59,12 +60,19 @@ export interface GrowthState {
   /** A Stripe cancellation is scheduled: the plan ends on this date. */
   cancelsOn: Date | null;
   renewsOn: Date | null;
-  addOns: Array<{ featureKey: GrowthFeatureKey; source: string; monthlyPriceCents: number | null; startedAt: Date }>;
+  addOns: Array<{
+    featureKey: GrowthFeatureKey;
+    source: string;
+    monthlyPriceCents: number | null;
+    startedAt: Date;
+    /** Cancelled: it keeps working until this date. */
+    cancelsAt: Date | null;
+  }>;
   /** Open enquiries — shown on a locked inbox as a reason to unlock it. */
   waitingLeads: number;
 }
 
-interface StripeSubscriptionRow {
+export interface StripeSubscriptionRow {
   id: string;
   clientId: string;
   providerSubscriptionId: string;
@@ -72,7 +80,24 @@ interface StripeSubscriptionRow {
   currentPeriodEnd: Date | null;
 }
 
-async function clientIdFor(db: Database, ctx: TenantContext): Promise<string | null> {
+/** A row that still gives the feature: not ended, and not past a cancellation. */
+function liveAddOn(now: Date) {
+  return and(isNull(clientAddOns.endedAt), or(isNull(clientAddOns.cancelsAt), gt(clientAddOns.cancelsAt, now)));
+}
+
+/**
+ * Close the rows whose cancellation date has passed, so the one live row per
+ * feature the unique index allows is free for buying it again.
+ */
+export async function endLapsedAddOns(db: Database, clientId: string): Promise<void> {
+  const now = new Date();
+  await db
+    .update(clientAddOns)
+    .set({ endedAt: now, updatedAt: now })
+    .where(and(eq(clientAddOns.clientId, clientId), isNull(clientAddOns.endedAt), lte(clientAddOns.cancelsAt, now)));
+}
+
+export async function clientIdFor(db: Database, ctx: TenantContext): Promise<string | null> {
   const [row] = await db
     .select({ id: clients.id })
     .from(clients)
@@ -97,7 +122,7 @@ async function activeSubscription(db: Database, clientId: string) {
   return row ?? null;
 }
 
-async function stripeSubscriptionFor(
+export async function stripeSubscriptionFor(
   db: Database,
   ctx: TenantContext,
 ): Promise<StripeSubscriptionRow | null> {
@@ -119,9 +144,10 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
           source: clientAddOns.source,
           monthlyPriceCents: clientAddOns.monthlyPriceCents,
           startedAt: clientAddOns.startedAt,
+          cancelsAt: clientAddOns.cancelsAt,
         })
         .from(clientAddOns)
-        .where(and(eq(clientAddOns.clientId, clientId), isNull(clientAddOns.endedAt)))
+        .where(and(eq(clientAddOns.clientId, clientId), liveAddOn(new Date())))
     : [];
   const addOns = addOnRows.filter((r): r is typeof r & { featureKey: GrowthFeatureKey } =>
     GROWTH_FEATURES.some((f) => f.key === r.featureKey),
@@ -178,12 +204,12 @@ export async function requireGrowthFeature(
 
 export type ChangeResult = { ok: true; message: string } | { ok: false; message: string };
 
-const NOT_SELF_SERVE: ChangeResult = {
+export const NOT_SELF_SERVE: ChangeResult = {
   ok: false,
   message: "Changes to your plan go through us for now — reply to any of our emails and we'll sort it.",
 };
 
-async function audit(
+export async function audit(
   db: Database,
   ctx: TenantContext,
   action: string,
@@ -221,6 +247,8 @@ export async function addGrowthAddOn(
   const price = await priceForAddOn(feature.key);
   if (!price) return { ok: false, message: `${feature.name} cannot be bought just yet. Please contact us.` };
 
+  await endLapsedAddOns(db, sub.clientId);
+
   try {
     const item = await requireStripe().subscriptionItems.create({
       subscription: sub.providerSubscriptionId,
@@ -248,45 +276,6 @@ export async function addGrowthAddOn(
     ok: true,
     message: `${feature.name} is on. It is added to your monthly payment from your next one.`,
   };
-}
-
-/** Remove a Growth add-on the caller bought through Stripe. */
-export async function removeGrowthAddOn(
-  db: Database,
-  ctx: TenantContext,
-  featureKey: string,
-): Promise<ChangeResult> {
-  assertMutable(ctx);
-  const clientId = await clientIdFor(db, ctx);
-  if (!clientId) return NOT_SELF_SERVE;
-  const [row] = await db
-    .select({ id: clientAddOns.id, source: clientAddOns.source, item: clientAddOns.stripeSubscriptionItemId })
-    .from(clientAddOns)
-    .where(
-      and(
-        eq(clientAddOns.clientId, clientId),
-        eq(clientAddOns.featureKey, featureKey),
-        isNull(clientAddOns.endedAt),
-      ),
-    )
-    .limit(1);
-  if (!row) return { ok: false, message: "You do not have that add-on." };
-  // One the operator granted is theirs to take away, not a line on the
-  // client's card the client can cancel.
-  if (row.source !== "stripe" || !row.item) return NOT_SELF_SERVE;
-
-  try {
-    await requireStripe().subscriptionItems.del(row.item, { proration_behavior: "none" });
-  } catch (error) {
-    console.error("[growth] add-on removal failed", { message: error instanceof Error ? error.message : "unknown" });
-    return { ok: false, message: "We could not remove that just now. Please try again." };
-  }
-  const now = new Date();
-  await db.update(clientAddOns).set({ endedAt: now, updatedAt: now }).where(eq(clientAddOns.id, row.id));
-  await audit(db, ctx, "growth.add_on_removed", { feature: featureKey, item: row.item });
-
-  const name = GROWTH_FEATURES.find((f) => f.key === featureKey)?.name ?? "That add-on";
-  return { ok: true, message: `${name} is removed. You will not be charged for it again.` };
 }
 
 /** Move the caller to another published plan, priced from their next payment. */
@@ -336,35 +325,4 @@ export async function changeMyPlan(
     ok: true,
     message: `You are on ${plan.name} now. Your next payment is at the new price.`,
   };
-}
-
-/** Schedule a cancellation at the end of the paid period, or undo one. */
-export async function setPlanCancellation(
-  db: Database,
-  ctx: TenantContext,
-  cancel: boolean,
-): Promise<ChangeResult> {
-  assertMutable(ctx);
-  if (!stripeConfigured()) return NOT_SELF_SERVE;
-  const sub = await stripeSubscriptionFor(db, ctx);
-  if (!sub) return NOT_SELF_SERVE;
-
-  try {
-    await requireStripe().subscriptions.update(sub.providerSubscriptionId, {
-      cancel_at_period_end: cancel,
-    });
-  } catch (error) {
-    console.error("[growth] cancellation change failed", { message: error instanceof Error ? error.message : "unknown" });
-    return { ok: false, message: "We could not change that just now. Please try again." };
-  }
-  await db.update(subscriptions).set({ cancelAtPeriodEnd: cancel }).where(eq(subscriptions.id, sub.id));
-  await audit(db, ctx, cancel ? "growth.plan_cancel_scheduled" : "growth.plan_cancel_undone", {});
-
-  return cancel
-    ? {
-        ok: true,
-        message:
-          "Your plan will end at the close of the period you have paid for. Your website stays online; changes and Growth tools stop then.",
-      }
-    : { ok: true, message: "Cancellation undone. Your plan carries on as before." };
 }

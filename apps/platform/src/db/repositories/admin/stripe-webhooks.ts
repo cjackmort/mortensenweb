@@ -1,4 +1,4 @@
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import {
@@ -886,6 +886,12 @@ export async function processStripeEvent(
  * subscription is an add-on the client has, and a line that has gone — or a
  * subscription that has ended — is one they no longer have. Rows the operator
  * granted by hand are left alone; this only manages its own.
+ *
+ * Except a line the client cancelled (`cancels_at`, see
+ * `client/cancellation.ts`): it is gone from Stripe at once but paid for to
+ * the end of the period, so it stays until that date unless the whole
+ * subscription has ended. A line present on a subscription that is not
+ * ending is not cancelled, whatever the row says, so its `cancels_at` clears.
  */
 export async function syncStripeAddOns(
   db: Database,
@@ -896,6 +902,13 @@ export async function syncStripeAddOns(
   const present = live ? addOnItemsOf(subscription) : [];
   const now = new Date();
 
+  // A row past its cancellation date is ended first, so it is never matched
+  // below as the live row for a line bought again since.
+  await db
+    .update(clientAddOns)
+    .set({ endedAt: now, updatedAt: now })
+    .where(and(eq(clientAddOns.clientId, clientId), isNull(clientAddOns.endedAt), lte(clientAddOns.cancelsAt, now)));
+
   for (const { item, feature } of present) {
     const [existing] = await db
       .select({ id: clientAddOns.id, source: clientAddOns.source, item: clientAddOns.stripeSubscriptionItemId })
@@ -905,6 +918,12 @@ export async function syncStripeAddOns(
     if (existing) {
       if (existing.source === "stripe" && existing.item !== item.id) {
         await db.update(clientAddOns).set({ stripeSubscriptionItemId: item.id, updatedAt: now }).where(eq(clientAddOns.id, existing.id));
+      }
+      if (existing.source === "stripe" && !subscription.cancel_at_period_end) {
+        await db
+          .update(clientAddOns)
+          .set({ cancelsAt: null })
+          .where(and(eq(clientAddOns.id, existing.id), sql`${clientAddOns.cancelsAt} IS NOT NULL`));
       }
       continue;
     }
@@ -929,6 +948,7 @@ export async function syncStripeAddOns(
         eq(clientAddOns.clientId, clientId),
         eq(clientAddOns.source, "stripe"),
         isNull(clientAddOns.endedAt),
+        ...(live ? [or(isNull(clientAddOns.cancelsAt), lte(clientAddOns.cancelsAt, now))] : []),
         ...(keep.length ? [notInArray(clientAddOns.stripeSubscriptionItemId, keep)] : []),
       ),
     );

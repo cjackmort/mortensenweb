@@ -4,13 +4,12 @@ import { revalidatePath } from "next/cache";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
+import { addGrowthAddOn, changeMyPlan, type ChangeResult } from "@/db/repositories/client/growth";
 import {
-  addGrowthAddOn,
-  changeMyPlan,
-  removeGrowthAddOn,
+  cancelGrowthAddOn,
   setPlanCancellation,
-  type ChangeResult,
-} from "@/db/repositories/client/growth";
+  undoAddOnCancellation,
+} from "@/db/repositories/client/cancellation";
 
 /**
  * Plan and add-on changes a client makes themselves. Each re-derives the
@@ -39,10 +38,19 @@ export async function addAddOnAction(_p: ChangeResult | null, form: FormData): P
   return result;
 }
 
-export async function removeAddOnAction(_p: ChangeResult | null, form: FormData): Promise<ChangeResult> {
+/** One click, no confirm: see `cancellation.ts`. The page then shows "Ends <date> · Undo". */
+export async function cancelAddOnAction(_p: ChangeResult | null, form: FormData): Promise<ChangeResult> {
   const s = await context();
   if (!s) return SIGN_IN;
-  const result = await removeGrowthAddOn(s.db, s.ctx, String(form.get("feature") ?? ""));
+  const result = await cancelGrowthAddOn(s.db, s.ctx, String(form.get("feature") ?? ""));
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function undoAddOnCancelAction(_p: ChangeResult | null, form: FormData): Promise<ChangeResult> {
+  const s = await context();
+  if (!s) return SIGN_IN;
+  const result = await undoAddOnCancellation(s.db, s.ctx, String(form.get("feature") ?? ""));
   if (result.ok) refresh();
   return result;
 }

@@ -185,7 +185,8 @@ describe("self-serve changes", () => {
   });
 
   it("schedules a cancellation at period end, and undoes it", async () => {
-    const { setPlanCancellation, getGrowthState } = await import("@/db/repositories/client/growth");
+    const { getGrowthState } = await import("@/db/repositories/client/growth");
+    const { setPlanCancellation } = await import("@/db/repositories/client/cancellation");
     await setPlanCancellation(db, lite.ctx, true);
     expect(stripeCalls.at(-1)).toMatchObject({ op: "sub.update", args: { cancel_at_period_end: true } });
     const [row] = await db.select({ c: subscriptions.cancelAtPeriodEnd }).from(subscriptions).where(eq(subscriptions.clientId, lite.clientId));
@@ -195,7 +196,8 @@ describe("self-serve changes", () => {
   });
 
   it("refuses every change while an operator is viewing as the client", async () => {
-    const { addGrowthAddOn, setPlanCancellation } = await import("@/db/repositories/client/growth");
+    const { addGrowthAddOn } = await import("@/db/repositories/client/growth");
+    const { setPlanCancellation } = await import("@/db/repositories/client/cancellation");
     const operator = tenantContextFrom(
       { userId: lite.userId, organizationId: lite.organizationId, role: "admin", status: "active", sessionEpoch: 0 },
       lite.organizationId,
@@ -205,13 +207,13 @@ describe("self-serve changes", () => {
     await expect(setPlanCancellation(db, operator, true)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
-  it("removes a card add-on at Stripe, but never one the operator granted", async () => {
-    const { removeGrowthAddOn } = await import("@/db/repositories/client/growth");
-    expect((await removeGrowthAddOn(db, lite.ctx, "leads")).ok).toBe(true);
-    expect(stripeCalls.at(-1)).toMatchObject({ op: "item.del", args: { id: "si_new" } });
+  it("cancels a card add-on at Stripe, but never one the operator granted", async () => {
+    const { cancelGrowthAddOn } = await import("@/db/repositories/client/cancellation");
+    expect((await cancelGrowthAddOn(db, lite.ctx, "leads")).ok).toBe(true);
+    expect(stripeCalls.at(-1)).toMatchObject({ op: "item.del", args: { id: "si_new", proration_behavior: "none" } });
 
     await db.insert(clientAddOns).values({ clientId: invoiced.clientId, featureKey: "leads", source: "operator" });
-    expect((await removeGrowthAddOn(db, invoiced.ctx, "leads")).ok).toBe(false);
+    expect((await cancelGrowthAddOn(db, invoiced.ctx, "leads")).ok).toBe(false);
   });
 
   it("counts waiting enquiries for a client whose plan does not include the inbox", async () => {

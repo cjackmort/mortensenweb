@@ -4391,7 +4391,24 @@ form + .field-hint {
 }
 
 .plan-cancelling p {
-  margin: 0 0 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+/* "Ends Nov 21 · Undo": a cancelled plan or add-on, in place of its Cancel. */
+.plan-ends {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.plan-action--inline {
+  display: inline-flex;
+}
+
+.plan-action--inline button.link {
+  font-weight: 600;
 }
 
 .plan-includes {

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { GROWTH_FEATURES, type GrowthFeatureKey } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
 import { auditLog, clientAddOns, clients, servicePlans, subscriptions } from "@/db/schema";
@@ -46,7 +46,14 @@ export async function getClientGrowth(
   const addOns = await db
     .select({ featureKey: clientAddOns.featureKey, source: clientAddOns.source, startedAt: clientAddOns.startedAt })
     .from(clientAddOns)
-    .where(and(eq(clientAddOns.clientId, client.id), isNull(clientAddOns.endedAt)));
+    .where(
+      and(
+        eq(clientAddOns.clientId, client.id),
+        isNull(clientAddOns.endedAt),
+        // A cancelled add-on counts until the end of the period it was paid for.
+        or(isNull(clientAddOns.cancelsAt), gt(clientAddOns.cancelsAt, new Date())),
+      ),
+    );
 
   return {
     access: growthAccess({
