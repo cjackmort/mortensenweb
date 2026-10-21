@@ -17,3 +17,4 @@ export * from "./ads";
 export * from "./campaigns";
 export * from "./reviews";
 export * from "./winback";
+export * from "./showcase";

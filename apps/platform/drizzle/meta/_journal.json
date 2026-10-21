@@ -239,6 +239,13 @@
       "when": 1790300000000,
       "tag": "0032_winback_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790400000000,
+      "tag": "0033_job_showcase",
+      "breakpoints": true
     }
   ]
 }
