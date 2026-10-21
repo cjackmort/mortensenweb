@@ -15,6 +15,7 @@ import { reconcileStorageReservations } from "@/db/repositories/client/media-quo
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
+import { runScheduledGoogleSync } from "@/db/repositories/admin/google-sync";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -25,10 +26,10 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Twelve jobs that have to run whether or not anyone is looking. The first six
- * are the loop's own; jobs 7-9 keep the media library's storage honest,
- * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, and
- * job 12 keeps the books:
+ * Thirteen jobs that have to run whether or not anyone is looking. The first
+ * six are the loop's own; jobs 7-9 keep the media library's storage honest,
+ * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, job 12
+ * keeps the books, and job 13 keeps Google profiles current:
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -65,6 +66,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      reaches the client's inbox.
  *  12. **Ledger.** Self-gated to at most hourly; records Stripe's fee on each
  *      card payment and adds this month's row of every monthly expense.
+ *  13. **Google profiles.** Each linked profile every six hours, a few per
+ *      tick, with per-profile backoff and a project-wide pause on a 429.
+ *      Costs nothing on a server without Google configured.
  *
  * ## Not every call runs them
  *
@@ -212,6 +216,10 @@ export async function POST(request: Request): Promise<Response> {
     // After the Stripe reconciliation, so a payment it recovered this tick can
     // have its fee recorded in the same one. Self-gated to at most hourly.
     ["ledgerAutomated", () => runScheduledLedger(db)],
+    // Last: the only job here whose quota is shared with an operator's
+    // edits, so it takes whatever budget the tick has left and stops itself
+    // on Google's first 429. See `admin/google-sync.ts`.
+    ["googleProfilesSynced", () => runScheduledGoogleSync(db)],
   ];
 
   const failed: string[] = [];

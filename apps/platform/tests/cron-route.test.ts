@@ -40,6 +40,7 @@ const jobs = {
   runScheduledReconcile: job("runScheduledReconcile"),
   runScheduledLeadImport: job("runScheduledLeadImport"),
   runScheduledLedger: job("runScheduledLedger"),
+  runScheduledGoogleSync: job("runScheduledGoogleSync"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -105,6 +106,9 @@ vi.mock("@/db/repositories/admin/leads", () => ({
 vi.mock("@/db/repositories/admin/ledger-automation", () => ({
   runScheduledLedger: (...a: unknown[]) => jobs.runScheduledLedger(...a),
 }));
+vi.mock("@/db/repositories/admin/google-sync", () => ({
+  runScheduledGoogleSync: (...a: unknown[]) => jobs.runScheduledGoogleSync(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -122,7 +126,8 @@ const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"
 const STRIPE_KEYS = ["stripeReconciled"];
 const LEAD_KEYS = ["leadsImported"];
 const LEDGER_KEYS = ["ledgerAutomated"];
-const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS, ...LEDGER_KEYS];
+const GOOGLE_KEYS = ["googleProfilesSynced"];
+const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS, ...LEDGER_KEYS, ...GOOGLE_KEYS];
 
 function request(
   secret: string | null = SECRET,
