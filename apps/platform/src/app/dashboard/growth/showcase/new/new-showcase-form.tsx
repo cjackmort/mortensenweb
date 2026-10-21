@@ -126,7 +126,7 @@ export function NewShowcaseForm({
                   Upload new photos
                 </button>
               )}
-              <p className="field-hint">New photos go into your media library too.</p>
+              <p className="hint">New photos go into your media library too.</p>
             </div>
           )}
 

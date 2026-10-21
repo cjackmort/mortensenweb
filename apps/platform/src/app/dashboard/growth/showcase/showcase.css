@@ -124,9 +124,14 @@
   font-weight: 500;
 }
 
+/* Sized outright, as the media picker's are: the global input rule gives
+   every input a 44px tap height, which draws a box around a checkbox. */
 .showcase-check input {
-  width: auto;
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
   margin: 0;
+  padding: 0;
 }
 
 .showcase-pair-pick {
