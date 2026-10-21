@@ -4,7 +4,15 @@ import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import { clientAddOns, clients, leads, servicePlans, sites, subscriptions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { GROWTH_FEATURES } from "@mortensenweb/plans";
 import { growthAccess, hasFeature } from "@/lib/growth/access";
+
+/**
+ * A feature that is not built yet, whichever that is today. The Growth
+ * features are being built one by one; naming a particular one here would
+ * break this file every time another ships.
+ */
+const UNBUILT = GROWTH_FEATURES.find((f) => !f.available)?.key;
 import { AuthorizationError, adminContextFrom, tenantContextFrom } from "@/db/repositories/context";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
@@ -102,8 +110,9 @@ describe("who has what", () => {
     const access = growthAccess({ planKey: "lite", comped: false, addOns: [] });
     expect(access.every((a) => a.via === null)).toBe(true);
     expect(access.find((a) => a.feature.key === "leads")!.canAdd).toBe(true);
+    expect(access.find((a) => a.feature.key === "reviews")!.canAdd).toBe(true);
     // Not built yet: never offered for sale.
-    expect(access.find((a) => a.feature.key === "reviews")!.canAdd).toBe(false);
+    if (UNBUILT) expect(access.find((a) => a.feature.key === UNBUILT)!.canAdd).toBe(false);
   });
 
   it("includes the leads inbox from Care up, through the plan", () => {
@@ -162,7 +171,7 @@ describe("self-serve changes", () => {
 
   it("refuses an unbuilt feature, one they already have, and changes for an invoiced client", async () => {
     const { addGrowthAddOn } = await import("@/db/repositories/client/growth");
-    expect((await addGrowthAddOn(db, lite.ctx, "reviews")).ok).toBe(false);
+    if (UNBUILT) expect((await addGrowthAddOn(db, lite.ctx, UNBUILT)).ok).toBe(false);
     expect((await addGrowthAddOn(db, lite.ctx, "leads")).ok).toBe(false);
     expect((await addGrowthAddOn(db, invoiced.ctx, "campaigns")).ok).toBe(false);
     expect(stripeCalls).toHaveLength(0);
