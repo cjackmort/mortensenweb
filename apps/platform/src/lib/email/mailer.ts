@@ -25,6 +25,12 @@ export interface EmailMessage {
   from?: string;
   /** A silent copy, so the sender has a record of what went out. */
   bcc?: string;
+  /**
+   * Extra headers. A review request sets `List-Unsubscribe` and
+   * `List-Unsubscribe-Post`, which Gmail and Yahoo require for one-click
+   * unsubscribe from anything sent in bulk.
+   */
+  headers?: Record<string, string>;
 }
 
 export type SendResult =
@@ -65,6 +71,7 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
         from,
         to: [message.to],
         ...(message.bcc ? { bcc: [message.bcc] } : {}),
+        ...(message.headers ? { headers: message.headers } : {}),
         subject: message.subject,
         text: message.text,
         html: message.html,

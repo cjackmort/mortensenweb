@@ -174,10 +174,11 @@ export default async function LeadPage({
   }
 
   const isBooking = isBookingForm(lead.formName);
-  const [replies, identity, booking] = await Promise.all([
+  const [replies, identity, booking, hasReviews] = await Promise.all([
     listLeadReplies(db, ctx, publicId),
     replyIdentity(db, ctx),
     isBooking ? findBookingState(db, ctx, publicId) : Promise.resolve(null),
+    requireGrowthFeature(db, ctx, "reviews"),
   ]);
 
   // The rest of what they filled in. Name, email, phone and message are
@@ -306,6 +307,12 @@ export default async function LeadPage({
             Only you set this. Marking enquiries won is how your monthly report can say
             how much work your website brought in.
           </p>
+          {hasReviews && !isBooking && lead.email && (
+            <p className="panel-note">
+              Finished the job?{" "}
+              <Link href={`/dashboard/growth/reviews?lead=${lead.publicId}`}>Ask them for a Google review</Link>.
+            </p>
+          )}
         </div>
       </section>
 
