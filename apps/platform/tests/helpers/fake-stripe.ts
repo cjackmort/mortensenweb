@@ -281,7 +281,7 @@ export const fakeStripe = {
           percent_off: params.percent_off ?? null,
           amount_off: params.amount_off ?? null,
           currency: params.currency ?? null,
-          duration: params.duration ?? "once",
+          duration: (params.duration ?? "once") as FakeCoupon["duration"],
           name: params.name ?? null,
           applies_to: params.applies_to?.products ? { products: params.applies_to.products } : undefined,
           metadata: (params.metadata ?? {}) as Record<string, string>,
