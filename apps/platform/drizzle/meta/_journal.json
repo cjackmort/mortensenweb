@@ -211,6 +211,13 @@
       "when": 1789900000000,
       "tag": "0028_event_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0036_cart_checkout",
+      "breakpoints": true
     }
   ]
 }
