@@ -200,6 +200,17 @@ export async function connectFormsInboxAction(
   if (!result.ok) return result;
 
   revalidatePath(`/admin/clients/${clientPublicId}`);
+  if (result.redeployNeeded) {
+    // Said instead of the usual message, not after it: until the redeploy,
+    // "new enquiries will appear" is untrue, and nothing else would show it.
+    return {
+      ok: true,
+      message:
+        "Connected, but Netlify had form detection switched off, so this site's forms have been " +
+        "collecting nothing. It is on now and takes effect from the next deploy: redeploy the " +
+        "site before expecting enquiries.",
+    };
+  }
   return {
     ok: true,
     message:

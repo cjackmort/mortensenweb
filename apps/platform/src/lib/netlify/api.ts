@@ -51,7 +51,7 @@ export function isNetlifyConfigured(): boolean {
 async function netlifyRequest<T>(
   path: string,
   options: {
-    method?: "GET" | "POST" | "PUT" | "DELETE";
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
     allowStatuses?: number[];
   } = {},
@@ -158,12 +158,19 @@ export function previewUrlFor(
 // Sites
 // ---------------------------------------------------------------------------
 
+/** Only the fields acted on here; Netlify returns more, and they are passed back untouched. */
+export interface NetlifyProcessingSettings {
+  html?: { pretty_urls?: boolean };
+  ignore_html_forms?: boolean;
+}
+
 export interface NetlifySite {
   id: string;
   name: string;
   url: string;
   ssl_url: string;
   admin_url: string;
+  processing_settings?: NetlifyProcessingSettings;
 }
 
 /**
@@ -187,11 +194,33 @@ export async function createSite(input: {
     method: "POST",
     body: {
       name: input.name,
-      // Deploy previews are the whole mechanism behind client approval, so they
-      // are switched on explicitly rather than left to the account default.
-      processing_settings: { skip: false },
+      processing_settings: {
+        // Deploy previews are the whole mechanism behind client approval, so
+        // they are switched on explicitly rather than left to the account
+        // default.
+        skip: false,
+        // A site created through the API starts with form detection off, and
+        // then a `data-netlify` form posts successfully while Netlify keeps
+        // nothing: the leads inbox connects and stays empty for good.
+        ignore_html_forms: false,
+        // Netlify replaces this object rather than merging it, so sending it
+        // without `html` would turn pretty URLs off as a side effect.
+        html: { pretty_urls: true },
+      },
     },
   });
+
+  // Netlify's published schema does not list `ignore_html_forms` for a create,
+  // so whether it was honoured is read back rather than assumed.
+  if (data.processing_settings?.ignore_html_forms === true) {
+    try {
+      return await enableFormDetection(data.id, data.processing_settings);
+    } catch {
+      // The site exists by now, and throwing would lose its id and orphan it.
+      // Connecting the leads inbox checks again and says what to do.
+      return data;
+    }
+  }
 
   return data;
 }
@@ -202,6 +231,35 @@ export async function getSite(siteId: string): Promise<NetlifySite | null> {
     { allowStatuses: [404] },
   );
   return status === 404 ? null : data;
+}
+
+/**
+ * Switch on Netlify's form detection for a site.
+ *
+ * Takes effect from the next deploy, not now: Netlify finds forms while it
+ * processes a deploy's HTML, so a site that is already live keeps collecting
+ * nothing until it is deployed again.
+ */
+export async function enableFormDetection(
+  siteId: string,
+  current: NetlifyProcessingSettings = {},
+): Promise<NetlifySite> {
+  const { data } = await netlifyRequest<NetlifySite>(
+    `/sites/${encodeURIComponent(siteId)}`,
+    {
+      method: "PATCH",
+      body: {
+        // Replaced rather than merged, so everything else the site already
+        // has set is sent back with the change.
+        processing_settings: {
+          ...current,
+          html: current.html ?? { pretty_urls: true },
+          ignore_html_forms: false,
+        },
+      },
+    },
+  );
+  return data;
 }
 
 // ---------------------------------------------------------------------------
