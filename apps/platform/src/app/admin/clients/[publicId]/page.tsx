@@ -38,6 +38,8 @@ import { WebsiteSection } from "./website-section";
 import { AnalyticsSection } from "./analytics-section";
 import { CampaignsPanel } from "./campaigns-panel";
 import { BriefsSection, RequestsSection } from "./work-sections";
+import { ReviewsSection } from "./reviews-section";
+import { getClientReviews, type ClientReviewsView } from "@/db/repositories/admin/reviews";
 import {
   SECTIONS,
   SectionGrid,
@@ -89,13 +91,14 @@ export default async function ClientDetailPage({
   }
 
   const { client, organization, requests } = detail;
-  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews] = await Promise.all([
     listOrganizationUsers(ctx, db, organization.id),
     listSitesWithAnalytics(ctx, db, organization.id),
     listClientPaymentRequests(ctx, db, organization.id),
     listBriefs(ctx, db, organization.id),
     getBusinessProfile(db, organization.id),
     getBillingPlan(db, client.id),
+    getClientReviews(ctx, db, client.publicId),
   ]);
 
   const summaries = summarise({
@@ -105,6 +108,7 @@ export default async function ClientDetailPage({
     sites: siteRows,
     briefs,
     requests,
+    reviews,
   });
 
   return (
@@ -146,6 +150,7 @@ export default async function ClientDetailPage({
             profile={profile}
             sites={siteRows}
             requests={requests}
+            reviews={reviews}
           />
         </>
       ) : (
@@ -287,6 +292,7 @@ async function Section(props: {
   profile: Profile;
   sites: Sites;
   requests: Requests;
+  reviews: ClientReviewsView;
 }) {
   const { section, clientPublicId, sites } = props;
 
@@ -343,6 +349,8 @@ async function Section(props: {
       );
     case "requests":
       return <RequestsSection requests={props.requests} />;
+    case "reviews":
+      return <ReviewsSection reviews={props.reviews} />;
   }
 }
 
@@ -404,8 +412,9 @@ function summarise(input: {
   sites: Sites;
   briefs: Briefs;
   requests: Requests;
+  reviews: ClientReviewsView;
 }): SectionSummaries {
-  const { billingPlan: plan, sites, briefs, requests } = input;
+  const { billingPlan: plan, sites, briefs, requests, reviews } = input;
   const connected = sites.filter((site) => site.umamiWebsiteId).length;
   const open = requests.filter((request) => isOpen(request.status)).length;
   const drafts = briefs.filter((brief) => brief.status === "draft").length;
@@ -438,6 +447,9 @@ function summarise(input: {
     },
     requests: {
       status: requests.length === 0 ? "None yet" : `${open} in progress · ${requests.length} recent`,
+    },
+    reviews: {
+      status: reviews.setup ? `${reviews.sent} sent · ${reviews.clicked} clicked` : "Not set up",
     },
   };
 }

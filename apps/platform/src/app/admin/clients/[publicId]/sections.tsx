@@ -17,6 +17,7 @@ export const SECTIONS = [
   { key: "analytics", title: "Analytics", blurb: "Visitors over the last 30 days" },
   { key: "briefs", title: "What they asked for", blurb: "Call notes for the agent" },
   { key: "requests", title: "Requests", blurb: "Changes they've sent" },
+  { key: "reviews", title: "Review requests", blurb: "Google reviews they've asked for" },
 ] as const;
 
 export type SectionKey = (typeof SECTIONS)[number]["key"];

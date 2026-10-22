@@ -94,6 +94,21 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "QR code short link, scanned by the public",
     checks: "findCampaignForRedirect(",
   },
+  // Links in a review request, opened by the business's customer, who has no
+  // account. Each checks a token signed for its own purpose before any query,
+  // and rate-limits by address.
+  "review/[token]/route.ts": {
+    reason: "tracked review link in a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/stop/page.tsx": {
+    reason: "unsubscribe page reached from a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/unsubscribe/route.ts": {
+    reason: "one-click unsubscribe, POSTed by mail providers",
+    checks: "verifyReviewToken(",
+  },
 
   // Read by client websites in their visitors' browsers, where no session can
   // exist. Each returns only what the client chose to publish, and 404s on a

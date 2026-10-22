@@ -35,6 +35,7 @@ export const metadata = {
 const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
   leads: "/dashboard/growth/leads",
   campaigns: "/dashboard/growth/campaigns",
+  reviews: "/dashboard/growth/reviews",
 };
 
 const VIA_LABEL = {

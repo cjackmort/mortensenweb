@@ -16,6 +16,7 @@ import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile"
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
 import { runScheduledAdSync } from "@/db/repositories/admin/ad-sync";
+import { runReviewReminders } from "@/db/repositories/admin/reviews";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -69,6 +70,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *  13. **Ad results.** Ends campaigns past their last day on every run, and
  *      at most every six hours reads Google Ads and Meta results into
  *      `ad_stats_daily`. Does nothing more until their credentials are set.
+ *  14. **Review reminders.** The one reminder a customer gets when they did
+ *      not click a review request's link. Days away when it is created, so it
+ *      does not nudge; it runs only between 9am and 8pm business time.
  *
  * ## Not every call runs them
  *
@@ -219,6 +223,10 @@ export async function POST(request: Request): Promise<Response> {
     // Ads: ending campaigns whose dates have passed is one cheap query; the
     // platform reads are self-gated to six-hourly and skipped without keys.
     ["adStatsSynced", () => runScheduledAdSync(db)],
+    // Emails and texts to customers, so last: nothing else waits on it, and a
+    // reminder an hour late is no worse. Bounded at 25 a run; the query is one
+    // partial-index scan when nothing is due.
+    ["reviewReminders", () => runReviewReminders(db)],
   ];
 
   const failed: string[] = [];

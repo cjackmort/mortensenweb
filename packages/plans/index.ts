@@ -92,7 +92,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "More recent reviews push you up the Google map, where most local calls come from.",
     addOnCents: 3500,
     includedFrom: "growth",
-    available: false,
+    available: true,
   },
   {
     key: "winback",
