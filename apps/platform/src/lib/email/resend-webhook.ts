@@ -107,6 +107,19 @@ export interface ResendEvent {
   /** Every tag we set when sending; see `lib/email/tags.ts`. */
   tags: Record<string, string>;
   at: Date;
+  /** On a bounce, Resend's `bounce.type` as sent ("Permanent", "Temporary"). */
+  bounceType?: string;
+}
+
+/**
+ * A bounce that means the address will not take mail. Resend documents
+ * `email.bounced` as a permanent rejection, yet lists "Temporary" among its
+ * `bounce.type` values; that (or SES's "Transient") is a full mailbox or a
+ * server having a bad day, not a reason to stop writing to someone. A bounce
+ * with no readable type counts as hard: fewer emails is the safe direction.
+ */
+export function isHardBounce(event: ResendEvent): boolean {
+  return event.type === "bounced" && !/^(temporary|transient)$/i.test(event.bounceType ?? "");
 }
 
 /**
@@ -124,8 +137,9 @@ export function parseResendEvent(body: string): ResendEvent | null {
   const { type, created_at: createdAt, data } = payload as { type?: unknown; created_at?: unknown; data?: unknown };
   const mapped = typeof type === "string" ? TYPES[type] : undefined;
   if (!mapped || !data || typeof data !== "object") return null;
-  const { email_id: emailId, to, tags } = data as { email_id?: unknown; to?: unknown; tags?: unknown };
+  const { email_id: emailId, to, tags, bounce } = data as { email_id?: unknown; to?: unknown; tags?: unknown; bounce?: unknown };
   if (typeof emailId !== "string" || !emailId) return null;
+  const bounceType = bounce && typeof bounce === "object" ? (bounce as { type?: unknown }).type : undefined;
 
   const at = typeof createdAt === "string" ? new Date(createdAt) : new Date();
   return {
@@ -134,5 +148,6 @@ export function parseResendEvent(body: string): ResendEvent | null {
     to: (Array.isArray(to) ? to : [to]).filter((v): v is string => typeof v === "string").map((v) => v.trim().toLowerCase()),
     tags: readTags(tags),
     at: Number.isNaN(at.getTime()) ? new Date() : at,
+    ...(typeof bounceType === "string" ? { bounceType } : {}),
   };
 }

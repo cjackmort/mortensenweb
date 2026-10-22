@@ -82,12 +82,17 @@ async function suppressed(db: Database, ctx: TenantContext, email: string | null
   const matches: SQL[] = [];
   if (email) matches.push(and(eq(reviewSuppressions.channel, "email"), eq(reviewSuppressions.address, email))!);
   if (phone) matches.push(and(eq(reviewSuppressions.channel, "sms"), eq(reviewSuppressions.address, phone))!);
-  if (matches.length === 0) return { email: false, sms: false };
+  if (matches.length === 0) return { email: false, sms: false, emailBounced: false };
   const rows = await db
-    .select({ channel: reviewSuppressions.channel })
+    .select({ channel: reviewSuppressions.channel, reason: reviewSuppressions.reason })
     .from(reviewSuppressions)
     .where(and(eq(reviewSuppressions.organizationId, ctx.organizationId), or(...matches)));
-  return { email: rows.some((r) => r.channel === "email"), sms: rows.some((r) => r.channel === "sms") };
+  return {
+    email: rows.some((r) => r.channel === "email"),
+    sms: rows.some((r) => r.channel === "sms"),
+    // Not the customer's choice, so not worded as one: the address is wrong.
+    emailBounced: rows.some((r) => r.channel === "email" && r.reason === "bounced"),
+  };
 }
 
 async function askedRecently(db: Database, ctx: TenantContext, email: string | null, phone: string | null, now: Date) {
@@ -164,7 +169,13 @@ export async function sendReviewRequest(
   const blocked = await suppressed(db, ctx, email, phone);
   const useEmail = Boolean(email && !blocked.email);
   const useSms = wantsSms && !blocked.sms;
-  if (!useEmail && !useSms) return refuse(`${firstName(name)} asked not to get review requests from you.`);
+  if (!useEmail && !useSms) {
+    return refuse(
+      blocked.emailBounced && !wantsSms
+        ? `Email to ${email} bounced before. Check the address with ${firstName(name)}.`
+        : `${firstName(name)} asked not to get review requests from you.`,
+    );
+  }
 
   const previous = await askedRecently(db, ctx, email, phone, now);
   if (previous) {
@@ -207,6 +218,7 @@ export async function sendReviewRequest(
   const delivered = await deliverReviewRequest(
     {
       publicId,
+      organizationId: ctx.organizationId,
       customerName: name,
       email,
       phone,

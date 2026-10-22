@@ -1,6 +1,7 @@
 import type { Database } from "@/db/client";
 import type { ResendEvent } from "@/lib/email/resend-webhook";
 import { FEATURE_TAG } from "@/lib/email/tags";
+import { applyReviewDeliveryEvent } from "./reviews";
 import { applyWinbackEvent } from "./winback";
 
 /**
@@ -32,6 +33,7 @@ export type DeliveryEventHandler = (db: Database, event: ResendEvent) => Promise
 
 export const DELIVERY_EVENT_HANDLERS: Record<string, DeliveryEventHandler> = {
   winback: applyWinbackEvent,
+  reviews: applyReviewDeliveryEvent,
 };
 
 export async function routeDeliveryEvent(db: Database, event: ResendEvent): Promise<"handled" | "unrouted"> {

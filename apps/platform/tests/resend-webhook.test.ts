@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isHardBounce,
   parseResendEvent,
   svixSignatureFor,
   verifySvixSignature,
@@ -93,6 +94,24 @@ describe("parseResendEvent", () => {
     });
     expect(parseResendEvent(body)?.tags).toEqual({ winback_recipient: "01HRECIPIENT0000000000000A" });
     expect(parseResendEvent(body)?.type).toBe("bounced");
+  });
+
+  it("reads a bounce's type, and tells a hard bounce from a temporary one", () => {
+    const bounce = (bounceData: unknown) =>
+      parseResendEvent(
+        JSON.stringify({
+          type: "email.bounced",
+          created_at: "2026-10-20T16:00:00.000Z",
+          data: { email_id: "re_abc", to: ["dana@example.test"], bounce: bounceData },
+        }),
+      )!;
+    expect(bounce({ type: "Permanent", subType: "General", message: "Rejected." }).bounceType).toBe("Permanent");
+    expect(isHardBounce(bounce({ type: "Permanent", subType: "General" }))).toBe(true);
+    expect(isHardBounce(bounce({ type: "Temporary", subType: "MailboxFull" }))).toBe(false);
+    expect(isHardBounce(bounce({ type: "Transient" }))).toBe(false);
+    // Resend documents email.bounced as permanent: without a readable type it is one.
+    expect(isHardBounce(bounce(undefined))).toBe(true);
+    expect(isHardBounce(parseResendEvent(BODY)!)).toBe(false);
   });
 
   it("ignores events it has no use for, and anything malformed", () => {

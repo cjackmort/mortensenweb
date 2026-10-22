@@ -27,6 +27,8 @@ export const metadata = {
 const REASON: Record<ReviewSuppression["reason"], string> = {
   unsubscribed: "Unsubscribed",
   sms_opt_out: "Replied STOP",
+  bounced: "Email bounced",
+  complained: "Marked as spam",
   manual: "Added by you",
 };
 
@@ -95,8 +97,9 @@ export default async function ReviewSettingsPage() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0 }}>
-            Checked before every request and every reminder. Someone who unsubscribed or replied STOP stays here: only
-            they can change that.
+            Checked before every request and every reminder. Someone who unsubscribed, replied STOP or marked an
+            email as spam stays here: only they can change that. So does an address that bounced, because it will
+            bounce again.
           </p>
           {suppressions.length > 0 && (
             <ul className="review-suppressions">

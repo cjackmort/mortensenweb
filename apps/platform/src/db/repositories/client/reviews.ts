@@ -276,7 +276,7 @@ export async function listLeadsForReview(db: Database, ctx: TenantContext): Prom
 export interface ReviewSuppression {
   channel: "email" | "sms";
   address: string;
-  reason: "unsubscribed" | "sms_opt_out" | "manual";
+  reason: "unsubscribed" | "sms_opt_out" | "bounced" | "complained" | "manual";
   createdAt: Date;
 }
 
