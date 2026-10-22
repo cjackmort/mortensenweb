@@ -1,4 +1,5 @@
 ---
+import { Font } from "astro:assets";
 import "../styles/global.css";
 import { SITE, NAV } from "../data/site";
 import PromoBar from "../components/PromoBar.astro";
@@ -84,7 +85,9 @@ const organization = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
+    {/* A page that asks not to be indexed names no canonical: the two say
+        opposite things, and the 404 page's would point at a URL that 404s. */}
+    {!noindex && <link rel="canonical" href={canonical} />}
     <meta name="robots" content={noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large"} />
     <meta name="theme-color" content="#f4f5f2" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -96,16 +99,17 @@ const organization = {
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={`${SITE.url}/og.png`} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${SITE.name}: small-business websites, ${SITE.locality}, ${SITE.region}`} />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    {/* Two families, four files. Preconnected so the headline face is on its
-        way before the stylesheet has finished parsing. */}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
+    {/* Two families, self-hosted (see `fonts` in astro.config.mjs), each one
+        variable file for both weights. Both are preloaded: the body face and
+        the label face paint the first screen of every page. */}
+    <Font cssVariable="--font-schibsted" preload />
+    <Font cssVariable="--font-jetbrains-mono" preload />
 
     <script type="application/ld+json" set:html={JSON.stringify(organization)} />
     <slot name="head" />
@@ -119,8 +123,11 @@ const organization = {
 
     <header class="masthead">
       <div class="wrap masthead__inner">
-        <a href="/" class="brand" aria-label="Mortensen Web Co. home">
-          Mortensen<span class="brand__mark">Web</span>
+        {/* Named by its own text, which the hidden space makes "Mortensen Web
+            Co.". It had an aria-label ("… home") that did not contain the
+            visible words, so a voice user saying what they see missed it. */}
+        <a href="/" class="brand">
+          Mortensen<span class="visually-hidden"> </span><span class="brand__mark">Web</span>
           <span class="brand__co">Co.</span>
           {/* The period of the "M." mark. */}
           <span class="brand__dot" aria-hidden="true"></span>
@@ -162,7 +169,7 @@ const organization = {
       <div class="wrap">
         <div class="footer__grid">
           <div>
-            <a href="/" class="brand">Mortensen<span class="brand__mark">Web</span></a>
+            <a href="/" class="brand">Mortensen<span class="visually-hidden"> </span><span class="brand__mark">Web</span></a>
             <p class="measure" style="margin-top: 0.75rem; color: var(--ink-2); font-size: var(--text-sm); max-width: 32ch;">
               {SITE.tagline}
             </p>
@@ -193,10 +200,13 @@ const organization = {
             </ul>
           </div>
         </div>
-        <div class="footer__wordmark" aria-hidden="true">MortensenWeb</div>
+        {/* Drawn from CSS (`::before`), not text in the page: it is a
+            decorative logotype at 8% opacity, and as real text it was the one
+            contrast failure on every page. */}
+        <div class="footer__wordmark" aria-hidden="true"></div>
         <div class="footer__bottom">
           <span>© {new Date().getFullYear()} Mortensen Web Co.</span>
-          <span>Built and hosted in-house. No trackers beyond a visitor count.</span>
+          <span>Built in-house. No trackers beyond a visitor count.</span>
         </div>
       </div>
     </footer>

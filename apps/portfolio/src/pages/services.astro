@@ -1,28 +1,47 @@
 ---
 import Base from "../layouts/Base.astro";
 import { SITE } from "../data/site";
-import { GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
+import { ADS_AVAILABLE, GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
 
 /*
  * One line per service: what it is, not how we do it. The operator's brief of
  * 2026-10-14. Growth tools read their status from `@mortensenweb/plans`, so
  * this page stops saying "rolling out" the day the last one switches on.
+ *
+ * Ads are listed only while `ADS_AVAILABLE` is on. Switched off, the page says
+ * nothing about them rather than "coming soon": there is no date to promise.
  */
 const growthTools = GROWTH_FEATURES.filter((f) => !isFree(f));
 
-const included: Array<{ title: string; body: string; soon?: string }> = [
-  { title: "Design and build", body: "A custom site, written with you, built for phones first." },
-  { title: "Hosting and security", body: "Hosting, SSL, domain, DNS and updates. In every plan." },
+/** `link` points each row at the page that says it in full. */
+const included: Array<{ title: string; body: string; soon?: string; link?: { href: string; label: string } }> = [
+  {
+    title: "Design and build",
+    body: "A custom site, written with you, built for phones first.",
+    link: { href: "/work/", label: "See the work" },
+  },
+  {
+    title: "Hosting and security",
+    body: "Hosting, SSL, domain, DNS and updates. In every plan.",
+    link: { href: "/pricing/", label: "Compare plans" },
+  },
   { title: "Changes", body: "Ask in your portal. See a preview. Live when you approve." },
   { title: "Visitor analytics", body: "Visitors, top pages, sources and enquiries. No ad network. Free in your portal." },
   { title: "Search basics", body: "Fast pages, real titles, structured data and a sitemap, so Google and AI assistants can find you." },
-  { title: "Leads inbox", body: "Every contact-form enquiry in your portal. Reply from there. Free with every site." },
+  {
+    title: "Leads inbox",
+    body: "Every contact-form enquiry in your portal. Reply from there. Free with every site.",
+    link: { href: "/growth/#leads", label: "How it works" },
+  },
   {
     title: "Growth tools",
     body: `${growthTools.map((f) => f.name).join(", ")}. In Growth and Pro, or one at a time.`,
     soon: growthTools.some((f) => !f.available) ? "Rolling out" : undefined,
+    link: { href: "/growth/", label: "What each one does" },
   },
-  { title: "Ads", body: "Google, Facebook and Instagram ads, made from your business details. You pick where and set the budget.", soon: "Coming soon" },
+  ...(ADS_AVAILABLE
+    ? [{ title: "Ads", body: "Google, Facebook and Instagram ads, made from your business details. You pick where and set the budget." }]
+    : []),
 ];
 
 const notIncluded = [
@@ -45,12 +64,12 @@ const notIncluded = [
         </div>
       </div>
       <ul class="rows">
-        {included.map(({ title, body, soon }, i) => (
+        {included.map(({ title, body, soon, link }, i) => (
           <li class="reveal">
             <h2 class="h3"><span class="n">{String(i + 1).padStart(2, "0")}</span> {title}</h2>
             <p>
               {body}
-              {title === "Growth tools" && <>{" "}<a class="link" href="/growth/">What each one does</a></>}
+              {link && <>{" "}<a class="link" href={link.href}>{link.label}</a></>}
               {soon && <span class="soon">{soon}</span>}
             </p>
           </li>
