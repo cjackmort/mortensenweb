@@ -42,6 +42,7 @@ const jobs = {
   runScheduledLedger: job("runScheduledLedger"),
   runScheduledAdSync: job("runScheduledAdSync"),
   runReviewReminders: job("runReviewReminders"),
+  runWinbackSends: job("runWinbackSends"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -113,6 +114,9 @@ vi.mock("@/db/repositories/admin/ad-sync", () => ({
 vi.mock("@/db/repositories/admin/reviews", () => ({
   runReviewReminders: (...a: unknown[]) => jobs.runReviewReminders(...a),
 }));
+vi.mock("@/db/repositories/admin/winback-sender", () => ({
+  runWinbackSends: (...a: unknown[]) => jobs.runWinbackSends(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -130,9 +134,19 @@ const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"
 const STRIPE_KEYS = ["stripeReconciled"];
 const LEAD_KEYS = ["leadsImported"];
 const LEDGER_KEYS = ["ledgerAutomated"];
+const WINBACK_KEYS = ["winbackSent"];
 const ADS_KEYS = ["adStatsSynced"];
 const REVIEW_KEYS = ["reviewReminders"];
-const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS, ...LEDGER_KEYS, ...ADS_KEYS, ...REVIEW_KEYS];
+const ALL_KEYS = [
+  ...LOOP_KEYS,
+  ...MEDIA_KEYS,
+  ...STRIPE_KEYS,
+  ...LEAD_KEYS,
+  ...LEDGER_KEYS,
+  ...WINBACK_KEYS,
+  ...ADS_KEYS,
+  ...REVIEW_KEYS,
+];
 
 function request(
   secret: string | null = SECRET,
