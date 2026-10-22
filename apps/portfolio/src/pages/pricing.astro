@@ -147,13 +147,13 @@ const faq = [
       </div>
       <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tool prices, scrolls sideways">
         <table class="compare">
-          <caption class="sr-only">Growth tools with their monthly price on their own, the plan that includes them, and whether they are available yet.</caption>
+          <caption class="sr-only">Growth tools with their monthly price on their own{allLive ? " and" : ","} the plan that includes them{allLive ? "" : ", and whether they are available yet"}.</caption>
           <thead>
             <tr>
               <th scope="col">Tool</th>
               <th scope="col">On its own</th>
               <th scope="col">Included in</th>
-              <th scope="col">Status</th>
+              {!allLive && <th scope="col">Status</th>}
             </tr>
           </thead>
           <tbody>
@@ -162,7 +162,7 @@ const faq = [
                 <th scope="row"><span class="compare__plan">{f.name}</span></th>
                 <td class="compare__money">{dollars(f.addOnCents)}/month</td>
                 <td>{PLANS.find((p) => p.key === f.includedFrom)!.name} and up</td>
-                <td>{f.available ? "Live" : "Coming soon"}</td>
+                {!allLive && <td>{f.available ? "Live" : "Coming soon"}</td>}
               </tr>
             ))}
           </tbody>

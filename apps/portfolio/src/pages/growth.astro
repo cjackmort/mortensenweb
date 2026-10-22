@@ -151,14 +151,14 @@ const schema = [
       </div>
       <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tools comparison table, scrolls sideways">
         <table class="compare">
-          <caption class="sr-only">Growth tools by what they do, the plan that includes them, their price on their own, and whether they are available yet.</caption>
+          <caption class="sr-only">Growth tools by what they do, the plan that includes them{allLive ? " and" : ","} their price on their own{allLive ? "" : ", and whether they are available yet"}.</caption>
           <thead>
             <tr>
               <th scope="col">Tool</th>
               <th scope="col">What it does</th>
               <th scope="col">Included in</th>
               <th scope="col">On its own</th>
-              <th scope="col">Status</th>
+              {!allLive && <th scope="col">Status</th>}
             </tr>
           </thead>
           <tbody>
@@ -168,7 +168,7 @@ const schema = [
                 <td>{f.summary}</td>
                 <td>{isFree(f) ? "Every site, free" : `${planName(f.includedFrom)} and up`}</td>
                 <td class="compare__money">{isFree(f) ? "Free" : `${dollars(f.addOnCents)}/mo`}</td>
-                <td>{f.available ? "Live" : "Coming soon"}</td>
+                {!allLive && <td>{f.available ? "Live" : "Coming soon"}</td>}
               </tr>
             ))}
           </tbody>
