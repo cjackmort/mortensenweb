@@ -87,6 +87,14 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },
 
+  // A campaign's short link, scanned off a door hanger by someone with no
+  // account. It resolves only codes the portal minted and 404s on the rest,
+  // redirects only to the campaign's own site, and is rate-limited.
+  "q/[code]/route.ts": {
+    reason: "QR code short link, scanned by the public",
+    checks: "findCampaignForRedirect(",
+  },
+
   // Read by client websites in their visitors' browsers, where no session can
   // exist. Each returns only what the client chose to publish, and 404s on a
   // site or show it does not list.
