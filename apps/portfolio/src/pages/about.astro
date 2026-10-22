@@ -1,0 +1,133 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../data/site";
+
+/**
+ * About: Jack, not the business.
+ *
+ * The operator asked for this page to be about him alone — who he is, what he
+ * studies, how he got into building websites, what he does outside of it —
+ * with nothing about plans, prices or services. Every line is something he
+ * said; nothing here is filled in.
+ *
+ * Written as a few paragraphs of prose in one readable column, not a grid of
+ * facts: it is a personal introduction, and it should read like one.
+ *
+ * The photo is optional so the page is complete without it. Put the file at
+ * `public/about/jack.webp` and set `PHOTO` below; the layout already has room.
+ */
+
+const PHOTO = null as { src: string; alt: string } | null;
+
+const schema = [
+  {
+    "@type": "ProfilePage",
+    "@id": `${SITE.url}/about/#page`,
+    url: `${SITE.url}/about/`,
+    mainEntity: { "@id": `${SITE.url}/about/#founder` },
+  },
+  {
+    "@type": "Person",
+    "@id": `${SITE.url}/about/#founder`,
+    name: SITE.founder,
+    description:
+      "Mechanical engineering student at the University of Utah, graduating in spring 2027, focused on aerospace and defense.",
+    affiliation: { "@type": "CollegeOrUniversity", name: "University of Utah" },
+    knowsAbout: ["Mechanical engineering", "Aerospace engineering", "Web development"],
+    ...(PHOTO ? { image: `${SITE.url}${PHOTO.src}` } : {}),
+  },
+];
+---
+
+<Base
+  title={`About ${SITE.founder}`}
+  description={`${SITE.founder} is a mechanical engineering senior at the University of Utah, graduating in 2027, aiming for aerospace and defense — and the person behind this site.`}
+  path="/about/"
+  schema={schema}
+>
+  <section class="section about">
+    <div class="wrap">
+      <div class:list={["about__layout", { "about__layout--photo": PHOTO }]}>
+        {PHOTO && (
+          <figure class="about__photo">
+            <img src={PHOTO.src} alt={PHOTO.alt} width="640" height="800" loading="eager" />
+          </figure>
+        )}
+
+        <div class="about__text">
+          <p class="eyebrow">About</p>
+          <h1>Hi, I'm Jack.</h1>
+
+          <p class="about__lead">
+            I'm a senior studying mechanical engineering at the University of Utah, and I graduate in the spring
+            of 2027. The part of engineering I want to build a career in is aerospace and defense.
+          </p>
+
+          <p>
+            I got into building websites because my dad wanted one. So I figured out how to make it myself, and I
+            have been building them ever since.
+          </p>
+
+          <p>
+            Outside of school, you'll usually find me in the mountains — I love being outdoors. I'm also a big
+            sports fan, especially lacrosse and football.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* One readable column of prose; with a photo, it sits beside the text on
+     a wide screen and above it on a phone. Deliberately no boxes. */
+  .about__layout {
+    max-width: 44rem;
+  }
+
+  .about__layout--photo {
+    max-width: none;
+    display: grid;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  @media (min-width: 52rem) {
+    .about__layout--photo {
+      grid-template-columns: minmax(14rem, 22rem) minmax(0, 40rem);
+    }
+  }
+
+  .about__photo {
+    margin: 0;
+  }
+
+  .about__photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 22rem;
+  }
+
+  .about__text h1 {
+    font-size: var(--text-2xl);
+    margin: 0.5rem 0 1.5rem;
+  }
+
+  .about__text p {
+    font-size: var(--text-lg);
+    line-height: 1.65;
+    color: var(--ink-2);
+    margin: 0 0 1.25rem;
+    max-width: 62ch;
+  }
+
+  .about__text .about__lead {
+    color: var(--ink);
+  }
+
+  .about__text .eyebrow {
+    font-size: var(--text-xs);
+    margin: 0;
+  }
+</style>

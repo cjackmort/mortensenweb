@@ -1,6 +1,7 @@
 import {
   GROWTH_FEATURES,
   PLANS,
+  isFree,
   planIncludes,
   upgradeBeatsAddOns,
   type GrowthFeature,
@@ -12,21 +13,23 @@ import {
 /**
  * Which Growth features a client has, and why — the one place that decides.
  *
- * Three routes in, checked in this order:
+ * Four routes in, checked in this order:
  *
  *  1. **A comp.** An operator-granted plan is the operator saying "give them
  *     everything"; a complimentary client sees every feature as theirs.
- *  2. **Their plan.** Read from `@mortensenweb/plans` by the plan key, never
+ *  2. **Free.** A feature whose `includedFrom` is `"free"` — the leads inbox,
+ *     since 2026-10-21 — is every client's, plan or not.
+ *  3. **Their plan.** Read from `@mortensenweb/plans` by the plan key, never
  *     stored per client, so moving a client between plans cannot leave them
  *     holding a feature the new plan does not include.
- *  3. **An add-on** — a `client_add_ons` row, bought or granted.
+ *  4. **An add-on** — a `client_add_ons` row, bought or granted.
  *
  * A plan key the package does not know (the $1 test plan, a retired key)
- * includes nothing. That is the safe reading: a stray key never unlocks a
- * paid feature.
+ * includes nothing beyond the free features. That is the safe reading: a
+ * stray key never unlocks a paid feature.
  */
 
-export type AccessVia = "comp" | "plan" | "add-on";
+export type AccessVia = "comp" | "free" | "plan" | "add-on";
 
 export interface FeatureAccess {
   feature: GrowthFeature;
@@ -58,13 +61,15 @@ export function growthAccess(input: {
   return GROWTH_FEATURES.map((feature) => {
     const via: AccessVia | null = input.comped
       ? "comp"
-      : plan && planIncludes(plan, feature.includedFrom)
-        ? "plan"
-        : input.addOns.includes(feature.key)
-          ? "add-on"
-          : null;
+      : isFree(feature)
+        ? "free"
+        : plan && planIncludes(plan, feature.includedFrom)
+          ? "plan"
+          : input.addOns.includes(feature.key)
+            ? "add-on"
+            : null;
 
-    const upgradeTo = PLANS.find((p) => p.key === feature.includedFrom)!;
+    const upgradeTo = PLANS.find((p) => planIncludes(p.key, feature.includedFrom))!;
     let upgradeSavesCents: number | null = null;
     if (via === null && plan && plan !== upgradeTo.key) {
       const { saves } = upgradeBeatsAddOns(plan, upgradeTo.key);

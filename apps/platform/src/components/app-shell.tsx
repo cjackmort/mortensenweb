@@ -20,8 +20,12 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/clients", label: "Clients" },
   { href: "/admin/requests", label: "Requests" },
+  { href: "/admin/showcases", label: "Showcases" },
   { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/ads", label: "Ads" },
+  { href: "/admin/google", label: "Google" },
   { href: "/admin/mortensenweb", label: "MortensenWeb" },
+  { href: "/admin/winback", label: "Win-back" },
   // Prospects is hidden, not removed. Finding and pitching businesses moved out
   // of the portal to the `/pitch` command in the agency repo, which researches
   // keywords, rebuilds the site and previews it locally — so this tab duplicates
@@ -46,6 +50,8 @@ const CLIENT_NAV: NavItem[] = [
   // part of asking for a change — a client uploads photos and then refers to
   // them — while Billing is a place you go for its own reasons.
   { href: "/dashboard/media", label: "Media" },
+  // Looking back over a month, after the tabs for doing things this month.
+  { href: "/dashboard/reports", label: "Reports" },
   // What they get and changing it, beside what they have paid. Separate tabs
   // because "cancel my plan" and "where is my receipt" are different errands.
   { href: "/dashboard/plan", label: "Plan" },

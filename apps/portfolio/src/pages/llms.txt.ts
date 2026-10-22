@@ -1,6 +1,14 @@
 import type { APIRoute } from "astro";
-import { PLANS, OVERAGE_CENTS, dollars, BUILDS, GROWTH_FEATURES } from "@mortensenweb/plans";
+import { PLANS, OVERAGE_CENTS, dollars, BUILD, FREE_PORTAL, GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
+
+/** "; plus Review requests (coming soon), …" — the paid tools a plan includes. */
+const paidTools = (keys: string[]) => {
+  const names = GROWTH_FEATURES.filter((f) => keys.includes(f.key) && !isFree(f)).map((f) =>
+    f.available ? f.name : `${f.name} (coming soon)`,
+  );
+  return names.length ? `; plus ${names.join(", ")}` : "";
+};
 
 /** What the site is, for an AI assistant asked about it. Facts only. */
 export const GET: APIRoute = () =>
@@ -9,21 +17,33 @@ export const GET: APIRoute = () =>
       `# ${SITE.name}`,
       `> ${SITE.description}`,
       "",
+      "## Facts",
+      `- Business: ${SITE.name}, a web design company (category: website designer)`,
+      `- Location: ${SITE.locality}, ${SITE.region}, USA; serves ${SITE.areaServed}`,
+      `- Founder: ${SITE.founder}; founded ${SITE.founded}`,
+      `- Phone: ${SITE.phone} · Email: ${SITE.email}`,
+      `- Websites ${dollars(BUILD.priceCents)}, one time; performance tracking (${FREE_PORTAL.features.join(", ").toLowerCase()}) free; plans from ${dollars(Math.min(...PLANS.map((p) => p.monthlyCents)))} a month; no contracts`,
+      "",
       "## Key pages",
-      `- [Work](${SITE.url}/work/): live client sites and in-house work, each one linked and labelled`,
-      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; advertising and social media are not included`,
-      `- [Pricing](${SITE.url}/pricing/): the three build prices, the plans and a comparison table`,
-      `- [Contact](${SITE.url}/contact/): enquiry form; every enquiry is answered`,
+      `- [Work](${SITE.url}/work/): live client sites, demos and in-house work, each one linked and labelled`,
+      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request, a leads inbox, Growth tools, and Google, Facebook and Instagram ads (coming soon) — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; posting to social media is not included`,
+      `- [Growth](${SITE.url}/growth/): Growth tools that bring a small business more customers — what each does, which plan includes it, and its price on its own`,
+      `- [Pricing](${SITE.url}/pricing/): the build price, then the plans: free performance tracking and four monthly plans`,
+      `- [About](${SITE.url}/about/): ${SITE.founder}, the founder — a mechanical engineering senior at the University of Utah focused on aerospace and defense`,
+      `- [Contact](${SITE.url}/contact/): enquiry form and phone; every enquiry is answered, usually the same working day`,
       "",
       "## The build (US dollars, one-time, no plan required)",
-      ...BUILDS.map((b) => `- ${b.name}: ${dollars(b.priceCents)}. ${b.who} Includes: ${b.includes.join("; ")}.`),
+      `- ${BUILD.name}: ${dollars(BUILD.priceCents)}. ${BUILD.who} Includes: ${BUILD.includes.join("; ")}.`,
       "- Without a plan, the site is handed over at launch on the client's own hosting account, with no monthly cost.",
       "- The build is invoiced half to start and half at launch. Domain registration is not included and stays in the client's name.",
+      "",
+      `## ${FREE_PORTAL.name} (free)`,
+      `- ${FREE_PORTAL.description} In the client portal. Includes: ${FREE_PORTAL.features.join("; ")}. With or without a plan.`,
       "",
       "## Plans (monthly, US dollars, no minimum term)",
       ...PLANS.map(
         (p) =>
-          `- ${p.name}: ${dollars(p.monthlyCents)}/month, ${p.includedChangesPerMonth ?? "unlimited"} content change${p.includedChangesPerMonth === 1 ? "" : "s"} a month, hosting, SSL, security updates and visitor analytics${p.growthFeatures.length ? `; plus ${p.growthFeatures.map((k) => { const f = GROWTH_FEATURES.find((g) => g.key === k)!; return f.available ? f.name : `${f.name} (coming soon)`; }).join(", ")}` : ""}`,
+          `- ${p.name}: ${dollars(p.monthlyCents)}/month, ${p.includedChangesPerMonth ?? "unlimited"} content change${p.includedChangesPerMonth === 1 ? "" : "s"} a month, hosting, SSL and security updates${paidTools(p.growthFeatures)}`,
       ),
       `- On Lite, a change beyond the one included is ${dollars(OVERAGE_CENTS)}.`,
       "- Each Growth tool can also be added to a plan on its own for a monthly price.",
@@ -35,7 +55,14 @@ export const GET: APIRoute = () =>
       "3. The client is emailed the preview and a picture of the change, and approves it or asks for changes (which does not use another monthly change).",
       "4. It is published, the live site is checked, and the client is told.",
       "",
+      "## Growth tools (monthly, US dollars)",
+      ...GROWTH_FEATURES.map(
+        (f) =>
+          `- ${f.name}${f.available ? "" : " (coming soon)"}: ${f.summary} ${isFree(f) ? "Free with every site, with or without a plan." : `Included from the ${PLANS.find((p) => p.key === f.includedFrom)!.name} plan, or ${dollars(f.addOnCents)}/month on its own.`}`,
+      ),
+      "",
       "## Contact",
+      `- Phone: ${SITE.phone}`,
       `- Email: ${SITE.email}`,
       `- Client portal: ${SITE.portalUrl}`,
       "",

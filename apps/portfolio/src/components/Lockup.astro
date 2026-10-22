@@ -40,15 +40,22 @@ const { size = "hero", class: className = "" } = Astro.props;
   {
     size === "hero" && (
       <>
-        <p class="lockup__word">
-          <span style="--i:0">Mortensen</span><em style="--i:1">Web</em>
+        {/* The home page's one H1. It was a <p>, so the page had no main
+            heading at all — the first thing search engines and screen readers
+            look for. The visible wordmark is unchanged; the rest of the heading
+            is for them, and says what and where. */}
+        <h1 class="lockup__word">
+          {/* The invisible space keeps the heading's text "Mortensen Web Co."
+              for search engines; the wordmark itself is drawn joined. */}
+          <span style="--i:0">Mortensen</span><span class="visually-hidden"> </span><em style="--i:1">Web</em><span class="visually-hidden"> </span>
           <span class="lockup__co" style="--i:2">
             Co.
           </span>
-        </p>
+          <span class="visually-hidden"> — web design for small businesses in Riverton, Utah</span>
+        </h1>
         <hr class="lockup__rule" />
         <p class="lockup__tagline">
-          Small-business websites · Built, hosted, looked after
+          Small-business websites · Riverton, Utah · Built, hosted, looked after
         </p>
       </>
     )

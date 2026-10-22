@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { leads, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
@@ -13,11 +13,13 @@ import { recordLead, type FormsSite } from "@/db/repositories/admin/leads";
 import {
   countUnreadLeads,
   deleteLead,
+  isLeadOutcome,
   listLeads,
   openLead,
+  setLeadArchived,
   setLeadStatus,
 } from "@/db/repositories/client/leads";
-import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
+import { AuthorizationError, NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
 
@@ -242,6 +244,7 @@ describe("the client's inbox", () => {
 
     await expect(openLead(db, acme.ctx, row!.publicId)).rejects.toBeInstanceOf(NotFoundError);
     await expect(setLeadStatus(db, acme.ctx, row!.publicId, "won")).rejects.toBeInstanceOf(NotFoundError);
+    await expect(setLeadArchived(db, acme.ctx, row!.publicId, true)).rejects.toBeInstanceOf(NotFoundError);
     await expect(deleteLead(db, acme.ctx, row!.publicId)).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -272,7 +275,7 @@ describe("the client's inbox", () => {
     const [archivedRow] = await db.select({ publicId: leads.publicId }).from(leads).where(eq(leads.id, archived.leadId));
 
     await setLeadStatus(db, acme.ctx, wonRow!.publicId, "won");
-    await setLeadStatus(db, acme.ctx, archivedRow!.publicId, "archived");
+    await setLeadArchived(db, acme.ctx, archivedRow!.publicId, true);
 
     const inbox = (await listLeads(db, acme.ctx, { view: "open" })).leads.map((l) => l.publicId);
     const put = (await listLeads(db, acme.ctx, { view: "archived" })).leads.map((l) => l.publicId);
@@ -340,7 +343,7 @@ describe("keeping the inbox to the newest ten", () => {
     const { tenant, site } = await freshInbox("Umbrella");
     for (let day = 1; day <= 10; day += 1) await record(site, onDay(day));
     const [first] = (await listLeads(db, tenant.ctx, { view: "open" })).leads.slice(-1);
-    await setLeadStatus(db, tenant.ctx, first!.publicId, "archived");
+    await setLeadArchived(db, tenant.ctx, first!.publicId, true);
 
     await record(site, onDay(11));
     const inbox = await listLeads(db, tenant.ctx, { view: "open" });
@@ -354,6 +357,138 @@ describe("keeping the inbox to the newest ten", () => {
     const { site } = await freshInbox("Soylent");
     for (let day = 1; day <= 11; day += 1) await record(site, onDay(day));
     expect((await listLeads(db, globex.ctx, { view: "open" })).leads.length).toBe(before);
+  });
+
+  async function publicIdOf(tenant: SeededTenant, name: string): Promise<string> {
+    const [row] = await db
+      .select({ publicId: leads.publicId })
+      .from(leads)
+      .where(and(eq(leads.organizationId, tenant.organizationId), eq(leads.name, name)));
+    return row!.publicId;
+  }
+
+  it("keeps what the client marked an enquiry when it moves to Archived, and still shows ten", async () => {
+    const { tenant, site } = await freshInbox("Vandelay");
+    for (let day = 1; day <= 10; day += 1) await record(site, onDay(day));
+    await setLeadStatus(db, tenant.ctx, await publicIdOf(tenant, "Day 1"), "won");
+    await setLeadStatus(db, tenant.ctx, await publicIdOf(tenant, "Day 2"), "lost");
+    await setLeadStatus(db, tenant.ctx, await publicIdOf(tenant, "Day 3"), "contacted");
+
+    for (let day = 11; day <= 13; day += 1) await record(site, onDay(day));
+
+    const inbox = (await listLeads(db, tenant.ctx, { view: "open" })).leads;
+    const archived = (await listLeads(db, tenant.ctx, { view: "archived" })).leads;
+    expect(inbox.map((l) => l.name)).toEqual(["Day 13", "Day 12", "Day 11", "Day 10", "Day 9", "Day 8", "Day 7", "Day 6", "Day 5", "Day 4"]);
+    expect(archived.map((l) => [l.name, l.status])).toEqual([
+      ["Day 3", "contacted"],
+      ["Day 2", "lost"],
+      ["Day 1", "won"],
+    ]);
+  });
+
+  it("archives an enquiry once, and later arrivals leave it and its time alone", async () => {
+    const { tenant, site } = await freshInbox("Kramerica");
+    for (let day = 1; day <= 10; day += 1) await record(site, onDay(day));
+    const oldest = await publicIdOf(tenant, "Day 1");
+    await setLeadStatus(db, tenant.ctx, oldest, "won");
+
+    const archivedOn = new Date("2026-10-21T08:00:00Z");
+    await record(site, onDay(11), { now: archivedOn });
+    await record(site, onDay(12), { now: new Date("2026-10-21T09:00:00Z") });
+
+    const [row] = await db
+      .select({ status: leads.status, archivedAt: leads.archivedAt })
+      .from(leads)
+      .where(eq(leads.publicId, oldest));
+    expect(row).toEqual({ status: "won", archivedAt: archivedOn });
+  });
+});
+
+describe("archiving keeps what the client marked", () => {
+  async function leadIn(business: string): Promise<{ tenant: SeededTenant; publicId: string }> {
+    const tenant = await seedTenant(db, business);
+    const site = await addSite(tenant, business.toLowerCase().replace(/\s+/g, "-"));
+    const created = await record(site, submission({ data: { name: "Pat Doe", email: "pat@example.test" } }));
+    if (!created.created) throw new Error("not created");
+    const [row] = await db.select({ publicId: leads.publicId }).from(leads).where(eq(leads.id, created.leadId));
+    return { tenant, publicId: row!.publicId };
+  }
+
+  /** Which tab the enquiry is listed under, and what it is marked there. */
+  async function listedAs(tenant: SeededTenant, publicId: string) {
+    for (const view of ["open", "archived"] as const) {
+      const found = (await listLeads(db, tenant.ctx, { view })).leads.find((l) => l.publicId === publicId);
+      if (found) return { view, status: found.status };
+    }
+    return null;
+  }
+
+  it("keeps a won enquiry won when the client archives it, and when they bring it back", async () => {
+    const { tenant, publicId } = await leadIn("Pendant Publishing");
+    await setLeadStatus(db, tenant.ctx, publicId, "won");
+
+    await setLeadArchived(db, tenant.ctx, publicId, true);
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "archived", status: "won" });
+    expect(await openLead(db, tenant.ctx, publicId)).toMatchObject({ status: "won", archived: true });
+
+    await setLeadArchived(db, tenant.ctx, publicId, false);
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "open", status: "won" });
+    expect(await openLead(db, tenant.ctx, publicId)).toMatchObject({ status: "won", archived: false });
+  });
+
+  it("leaves an archived enquiry in Archived when the client changes what it is marked", async () => {
+    const { tenant, publicId } = await leadIn("Kenny Roasters");
+    await setLeadArchived(db, tenant.ctx, publicId, true);
+    await setLeadStatus(db, tenant.ctx, publicId, "lost");
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "archived", status: "lost" });
+  });
+
+  it("keeps the first archive time when Archive is pressed twice", async () => {
+    const { tenant, publicId } = await leadIn("Peterman Catalog");
+    const first = new Date("2026-10-21T08:00:00Z");
+    await setLeadArchived(db, tenant.ctx, publicId, true, { now: first });
+    await setLeadArchived(db, tenant.ctx, publicId, true, { now: new Date("2026-10-21T09:00:00Z") });
+    const [row] = await db.select({ archivedAt: leads.archivedAt }).from(leads).where(eq(leads.publicId, publicId));
+    expect(row!.archivedAt).toEqual(first);
+  });
+
+  it("keeps an enquiry archived before outcomes were kept in Archived, and lets the client mark it", async () => {
+    const { tenant, publicId } = await leadIn("Monks Cafe");
+    // As 0037 left it: archived, and what it was before is gone.
+    await db
+      .update(leads)
+      .set({ status: "archived", archivedAt: new Date("2026-10-20T09:00:00Z") })
+      .where(eq(leads.publicId, publicId));
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "archived", status: "archived" });
+
+    await setLeadStatus(db, tenant.ctx, publicId, "won");
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "archived", status: "won" });
+  });
+
+  it("does not take archived as something an enquiry can be marked", () => {
+    for (const outcome of ["new", "contacted", "won", "lost"]) expect(isLeadOutcome(outcome)).toBe(true);
+    expect(isLeadOutcome("archived")).toBe(false);
+    expect(isLeadOutcome("WON")).toBe(false);
+    expect(isLeadOutcome(null)).toBe(false);
+  });
+
+  it("leaves archived enquiries out of the unread count, whatever they are marked", async () => {
+    const { tenant, publicId } = await leadIn("Bania Comedy");
+    expect(await countUnreadLeads(db, tenant.ctx)).toBe(1);
+    await setLeadArchived(db, tenant.ctx, publicId, true);
+    expect(await countUnreadLeads(db, tenant.ctx)).toBe(0);
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "archived", status: "new" });
+  });
+
+  it("cannot be archived while an operator is viewing as the client", async () => {
+    const { tenant, publicId } = await leadIn("Costanza Imports");
+    const operator = tenantContextFrom(
+      { userId: tenant.userId, organizationId: tenant.organizationId, role: "admin", status: "active", sessionEpoch: 0 },
+      tenant.organizationId,
+      { impersonating: true },
+    );
+    await expect(setLeadArchived(db, operator, publicId, true)).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await listedAs(tenant, publicId)).toEqual({ view: "open", status: "new" });
   });
 });
 

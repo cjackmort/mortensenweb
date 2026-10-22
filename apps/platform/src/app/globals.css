@@ -4477,6 +4477,136 @@ form + .field-hint {
   flex: 1;
 }
 
+/* ------------------------------------------------- QR & campaign tracking */
+
+.campaign-metrics {
+  display: grid;
+  grid-template-columns: 1fr;
+  border-bottom: 1px solid var(--border);
+}
+
+.campaign-metrics > .stat + .stat {
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 48rem) {
+  .campaign-metrics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .campaign-metrics > .stat + .stat {
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+}
+
+/* Columns stretch to the panel; the dates are HTML below, so nothing in the
+   drawing is squashed when it does. */
+.scan-chart {
+  margin: 0;
+}
+
+.scan-chart svg {
+  display: block;
+  width: 100%;
+  height: 9rem;
+}
+
+.scan-chart rect {
+  fill: var(--accent-fill);
+}
+
+.scan-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font: 500 0.72rem / 1.3 var(--mono);
+  color: var(--muted);
+}
+
+/* Always black on white, whatever the theme: it is a picture of the print. */
+.qr-preview {
+  display: block;
+  width: 100%;
+  max-width: 16rem;
+  height: auto;
+  border: 1px solid var(--border);
+}
+
+.campaign-code h3 {
+  margin-top: 0;
+}
+
+.campaign-code h3 + p,
+.campaign-link {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.campaign-link-hint {
+  margin: 0.5rem 0 1.25rem;
+}
+
+.campaign-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.campaign-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.campaign-name {
+  font-weight: 600;
+}
+
+.campaign-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.campaign-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-total {
+  margin: 0 0 1rem;
+}
+
+.campaign-form {
+  max-width: 32rem;
+}
+
+.panel-note + .campaign-form {
+  margin-top: 1.25rem;
+}
+
+/* On a phone the campaign is the row's heading, not one more labelled
+   value squeezed into the right-hand half of the row. */
+@media (max-width: 40rem) {
+  .campaign-table td:first-child {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.5rem;
+  }
+
+  .campaign-table td:first-child::before {
+    content: none;
+  }
+
 /* ------------------------------------------------------- onboarding */
 
 /* Demo sent → login sent → password set → paid, on the client overview. */

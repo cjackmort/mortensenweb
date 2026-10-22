@@ -11,7 +11,7 @@
  *
  * Three demo clients (flagged `is_demo`):
  *  - Juniper Landscaping — password set, website unpaid: the cart.
- *  - Sagebrush Bakery — paying by card for Lite plus the leads inbox: the Plan tab.
+ *  - Sagebrush Bakery — paying by card for Lite plus review requests: the Plan tab.
  *  - Red Rock Plumbing — demo emailed and login sent: the onboarding card.
  * Plus an admin, cart-preview-admin@example.test. Re-running replaces them.
  */
@@ -134,8 +134,8 @@ async function main(): Promise<void> {
       recurringEnabledAt: ago(30),
     })
     .returning();
-  await db.insert(clientAddOns).values({ clientId: sagebrush.id, featureKey: PREVIEW.paying.addOnKey, source: "stripe", stripeSubscriptionItemId: PREVIEW.paying.addOnItem, monthlyPriceCents: 1500 });
-  await db.insert(payments).values({ publicId: newPublicId(), clientId: sagebrush.id, subscriptionId: sub!.id, amountCents: build.priceCents + 4000, method: "stripe", provider: "stripe", receivedOn: ago(30).toISOString().slice(0, 10), isDemo: true });
+  await db.insert(clientAddOns).values({ clientId: sagebrush.id, featureKey: PREVIEW.paying.addOnKey, source: "stripe", stripeSubscriptionItemId: PREVIEW.paying.addOnItem, monthlyPriceCents: 3500 });
+  await db.insert(payments).values({ publicId: newPublicId(), clientId: sagebrush.id, subscriptionId: sub!.id, amountCents: build.priceCents + 6000, method: "stripe", provider: "stripe", receivedOn: ago(30).toISOString().slice(0, 10), isDemo: true });
 
   const redRock = await client({
     name: "Red Rock Plumbing",

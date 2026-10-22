@@ -148,6 +148,11 @@ export function BillingSection({
                 const operatorGrant = growth.addOns.some(
                   (row) => row.featureKey === a.feature.key && row.source === "operator",
                 );
+                // Bought by card before the feature became free: Stripe still
+                // charges for it until the line is removed there.
+                const billedByCard = growth.addOns.some(
+                  (row) => row.featureKey === a.feature.key && row.source === "stripe",
+                );
                 return (
                   <tr key={a.feature.key}>
                     <td data-label="Tool">
@@ -157,6 +162,10 @@ export function BillingSection({
                     <td data-label="Has it">
                       {a.via === "comp"
                         ? "Yes — complimentary"
+                        : a.via === "free"
+                          ? billedByCard
+                            ? "Yes — free, but still billed as a card add-on: remove that line in Stripe"
+                            : "Yes — free for every client"
                         : a.via === "plan"
                           ? "Yes — in their plan"
                           : a.via === "add-on"

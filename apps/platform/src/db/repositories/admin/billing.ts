@@ -14,6 +14,7 @@ import { newPublicId } from "@/lib/ids";
 import { generatePaymentReference } from "@/lib/payments/venmo";
 import { daysOverdue, paymentStanding, type PaymentStanding } from "@/lib/billing/dunning";
 import { unlockClientFeatures } from "./entitlements";
+import { markAdCampaignPaid } from "./ads";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -305,6 +306,12 @@ export async function confirmPaymentReceived(
       receivedOn: input.receivedOn,
     },
   });
+
+  // An ad campaign waiting on this payment goes to review. Same rule as the
+  // extra change below: only the call that claimed the request moves it.
+  if (claimed.length > 0) {
+    await markAdCampaignPaid(db, request.id, { at: now, actorUserId: ctx.userId });
+  }
 
   // An extra change becomes available only now, on confirmed money — never
   // when the client pressed pay. This is the single place a payment request

@@ -23,6 +23,14 @@
  * than assembling it from add-ons — see `upgradeBeatsAddOns` below, which a
  * test holds this file to.
  *
+ * ## 2026-10-21: one build price, and a free portal
+ *
+ * The operator's pricing: "Website creation and design: $500. Access to
+ * portal with analytics and inbox: free. Then the plans of $25, $50, $100,
+ * and so on." The four plans keep their prices. The leads inbox stops being
+ * a Care feature and a $15 add-on and becomes `"free"` — every client has it,
+ * plan or not — and the three builds become one. See `FREE_PORTAL`.
+ *
  * The old keys (`care-lite` … `care-unlimited`) are gone from here but not
  * from the database: their subscribers were moved onto the new plans at their
  * existing price, and their Stripe prices are still recognised. See
@@ -34,6 +42,9 @@
  */
 
 export type PlanKey = "lite" | "care" | "growth" | "pro";
+
+/** Where a feature starts: a plan, or `"free"` for every client, plan or not. */
+export type Tier = "free" | PlanKey;
 
 // ---------------------------------------------------------------------------
 // Growth features
@@ -54,10 +65,14 @@ export interface GrowthFeature {
   summary: string;
   /** What it does *for the business*, in one line — the reason to want it. */
   benefit: string;
-  /** Monthly price when bought on its own, on top of any plan. */
+  /**
+   * Monthly price when bought on its own, on top of any plan. A free feature
+   * is never sold; its figure is what a client who bought it before it was
+   * free still pays until that line is removed in Stripe.
+   */
   addOnCents: number;
-  /** The cheapest plan that includes it. */
-  includedFrom: PlanKey;
+  /** The cheapest plan that includes it, or `"free"` when every client has it. */
+  includedFrom: Tier;
   /**
    * Whether it exists yet. A feature that is not built is shown as "coming
    * soon" and is never sold on its own: charging for a button that does
@@ -73,7 +88,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     summary: "Every contact-form enquiry in your portal, and reply to customers from there.",
     benefit: "No enquiry gets lost in an inbox, and you answer faster than the next quote they asked for.",
     addOnCents: 1500,
-    includedFrom: "care",
+    includedFrom: "free",
     available: true,
   },
   {
@@ -83,7 +98,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Know which print campaign actually brought in calls — and stop paying for the ones that don't.",
     addOnCents: 2000,
     includedFrom: "growth",
-    available: false,
+    available: true,
   },
   {
     key: "reviews",
@@ -92,7 +107,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "More recent reviews push you up the Google map, where most local calls come from.",
     addOnCents: 3500,
     includedFrom: "growth",
-    available: false,
+    available: true,
   },
   {
     key: "winback",
@@ -101,7 +116,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Repeat work from people who already trust you — the cheapest job you will ever win.",
     addOnCents: 2500,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
   {
     key: "showcase",
@@ -110,7 +125,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "Show your real work everywhere customers look, without writing a word.",
     addOnCents: 4000,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
   {
     key: "google-profile",
@@ -119,7 +134,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "An active, accurate profile ranks higher on Google Maps and turns more searches into calls.",
     addOnCents: 6500,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
 ];
 
@@ -154,10 +169,19 @@ export interface Plan {
 
 const PLAN_ORDER: PlanKey[] = ["lite", "care", "growth", "pro"];
 
-/** Whether `plan` is `from` or a plan above it. */
-export function planIncludes(plan: PlanKey, from: PlanKey): boolean {
+/** Whether `plan` is `from` or a plan above it. Every plan includes `"free"`. */
+export function planIncludes(plan: PlanKey, from: Tier): boolean {
+  if (from === "free") return true;
   return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(from);
 }
+
+/** Whether every client has `feature`, with or without a plan. */
+export function isFree(feature: GrowthFeature): boolean {
+  return feature.includedFrom === "free";
+}
+
+/** The Growth features sold on their own: everything that is not free. */
+export const ADD_ON_FEATURES = GROWTH_FEATURES.filter((f) => !isFree(f));
 
 function featuresFor(plan: PlanKey): GrowthFeatureKey[] {
   return GROWTH_FEATURES.filter((f) => planIncludes(plan, f.includedFrom)).map((f) => f.key);
@@ -179,13 +203,12 @@ export const PLANS: Plan[] = [
     overagePerChangeCents: 2500,
     includesAnalytics: true,
     growthFeatures: featuresFor("lite"),
-    description: "Hosting, security updates, analytics, and one change a month.",
+    description: "Hosting, security updates, and one change a month.",
     bestFor: "A site that is finished and mostly stays that way.",
     features: [
       "One content change a month",
       "Hosting, SSL, and domain configuration",
       "Security and dependency updates",
-      "Visitor analytics in your portal",
       "Additional changes $25 each",
     ],
     sortOrder: 10,
@@ -199,13 +222,12 @@ export const PLANS: Plan[] = [
     overagePerChangeCents: null,
     includesAnalytics: true,
     growthFeatures: featuresFor("care"),
-    description: "Unlimited changes, plus every website enquiry in your portal.",
-    bestFor: "A business that keeps its site current and wants every enquiry in one place.",
+    description: "Unlimited changes, one at a time.",
+    bestFor: "A business that keeps its site current.",
     features: [
       "Unlimited content changes, one at a time",
       "Everything in Lite",
-      "Leads inbox — reply to enquiries from your portal",
-      "Monthly report: visitors, calls and enquiries (coming soon)",
+      "Monthly report: visitors, taps to call and enquiries",
     ],
     featured: true,
     sortOrder: 20,
@@ -262,11 +284,12 @@ export const CHEAPEST_PLAN = PLANS.reduce((low, p) => (p.monthlyCents < low.mont
  * What a client on `current` would pay each month to get `target`'s Growth
  * features as add-ons instead of upgrading — and how much upgrading saves.
  *
- * The rule the add-on prices are set by: from any plan to Growth or Pro,
- * assembling the higher plan from add-ons costs more than moving up. Lite to
- * Care is the one step where add-ons come out cheaper ($25 + $15 leads inbox
- * against $50), and deliberately so: what Care sells is unlimited changes,
- * which are never an add-on — the upgrade is the only way to them.
+ * The rule the add-on prices are set by: from Care up, assembling a higher
+ * plan from add-ons costs more than moving up. From Lite the add-on route can
+ * come in under the plan by up to what Care adds over Lite ($25), and
+ * deliberately so: what Care sells is unlimited changes, which are never an
+ * add-on — the upgrade is the only way to them. A free feature is in every
+ * plan, so it is never counted as missing.
  */
 export function upgradeBeatsAddOns(current: PlanKey, target: PlanKey): {
   addOnTotalCents: number;
@@ -287,22 +310,52 @@ export function upgradeBeatsAddOns(current: PlanKey, target: PlanKey): {
 }
 
 // ---------------------------------------------------------------------------
+// The free portal
+// ---------------------------------------------------------------------------
+
+/**
+ * What every client gets with their site, free, with or without a plan —
+ * decided 2026-10-21.
+ *
+ * Visitor analytics needs nothing here: the portal unlocks it on a client's
+ * first payment, which is the build. The rest is read from the `"free"`
+ * Growth features, so this list cannot name one the portal does not give.
+ *
+ * Sold as "Performance tracking", not "Portal": the operator's call the same
+ * day, because most owners do not know what a portal is, and what they get
+ * is a view of how the site is doing.
+ */
+export interface FreePortal {
+  name: string;
+  monthlyCents: 0;
+  description: string;
+  features: string[];
+}
+
+export const FREE_PORTAL: FreePortal = {
+  name: "Performance tracking",
+  monthlyCents: 0,
+  description: "See how your site is doing and every enquiry it brings in. Free with every site we build.",
+  features: ["Visitor analytics", ...GROWTH_FEATURES.filter(isFree).map((f) => f.name)],
+};
+
+// ---------------------------------------------------------------------------
 // Builds
 // ---------------------------------------------------------------------------
 
 /**
- * The build, priced by where the business is — decided 2026-10-06.
+ * The build: one price for every new site — decided 2026-10-21.
  *
- * Replaces the single $1,200 build with a $500 discounted price behind a
- * twelve-month commitment. These stand alone: no plan required, no minimum
- * term, nothing clawed back. A build without a plan is handed over at launch
- * — hosting on the client's own Netlify account — so an unpaid site never
- * draws on the agency's shared allowance.
+ * Replaces the three tiers of 2026-10-06 (Launch $100, Revamp $500,
+ * Established $1,000). It still stands alone: no plan required, no minimum
+ * term. A build without a plan is handed over at launch — hosting on the
+ * client's own Netlify account — so an unpaid site never draws on the
+ * agency's shared allowance; the portal stays free either way.
  *
- * The tier is the operator's judgement at intake, not a calculation: whether
- * a business is "established" is not something a form can measure.
+ * Kept as a list because `/api/plans` publishes `builds` and the standalone
+ * site repository reads it.
  */
-export type BuildKey = "launch" | "revamp" | "established";
+export type BuildKey = "website";
 
 export interface Build {
   key: BuildKey;
@@ -317,41 +370,164 @@ export interface Build {
 
 export const BUILDS: Build[] = [
   {
-    key: "launch",
-    name: "Launch",
-    priceCents: 10000,
-    who: "Just starting out — no website yet, little or no presence online.",
-    short: "just starting out",
+    key: "website",
+    name: "Website",
+    priceCents: 50000,
+    who: "Every new site, whether you are starting out or replacing one.",
+    short: "a new website",
     includes: [
-      "A finished site, launched on your domain",
+      "Designed and built for your business, phone first",
       "Up to five pages, written with you",
       "Two rounds of revisions before launch",
-    ],
-  },
-  {
-    key: "revamp",
-    name: "Revamp",
-    priceCents: 50000,
-    who: "You have a website that people already visit, and it's time for a better one.",
-    short: "replacing a site people already visit",
-    includes: [
-      "Everything in Launch",
-      "Your existing content moved across",
-      "Redirects from every old page, so you keep your Google rankings",
-    ],
-  },
-  {
-    key: "established",
-    name: "Established",
-    priceCents: 100000,
-    who: "A well-known business with years of content and search rankings to protect.",
-    short: "a well-established business",
-    includes: [
-      "Everything in Revamp",
-      "A larger site, planned page by page",
-      "A full search audit before and after launch",
+      "Launched on your domain",
+      "Replacing a site? Every old page redirected, so you keep your Google rankings",
     ],
   },
 ];
 
 export const CHEAPEST_BUILD = BUILDS.reduce((low, b) => (b.priceCents < low.priceCents ? b : low));
+
+/** The one build, for copy that quotes it. */
+export const BUILD: Build = BUILDS[0]!;
+
+// ---------------------------------------------------------------------------
+// Ads
+// ---------------------------------------------------------------------------
+
+/**
+ * Paid ads on Google and Meta, on every plan, paid for per campaign.
+ *
+ * Not a Growth feature: there is nothing to include in a plan or sell as a
+ * monthly add-on. A client pays for each campaign once — the ad spend, which
+ * goes to Google or Meta at cost, and the management fee, which is ours — and
+ * the two are always separate lines. Wasatch Web advertises "no markup on ad
+ * spend"; a fee folded into the spend would be exactly the markup a client
+ * could fairly accuse us of hiding.
+ *
+ * `ADS_AVAILABLE` gates every way into it, for the same reason a Growth
+ * feature has `available`: a client must not be able to pay for an ad before
+ * there is anything on the other side to launch it. On since the operator
+ * queue landed: review, manual launch, results and refunds all work without
+ * the platform APIs, which only add automatic syncing.
+ */
+export const ADS_AVAILABLE = true;
+
+/**
+ * The fee: a share of the ad spend in basis points (1500 = 15%), with a floor
+ * per campaign. The one place it is set. A campaign copies these at checkout,
+ * so changing them here changes what the next client is offered and never
+ * what an existing campaign is settled at.
+ */
+export const AD_MANAGEMENT_FEE = { basisPoints: 1500, minimumCents: 2500 } as const;
+
+export interface AdFeeTerms {
+  basisPoints: number;
+  minimumCents: number;
+}
+
+export function managementFeeCents(spendCents: number, terms: AdFeeTerms = AD_MANAGEMENT_FEE): number {
+  if (spendCents <= 0) return 0;
+  return Math.max(Math.round((spendCents * terms.basisPoints) / 10000), terms.minimumCents);
+}
+
+/** "15% of ad spend, $25 minimum", for the checkout line and the pricing page. */
+export function feeTermsLabel(terms: AdFeeTerms = AD_MANAGEMENT_FEE): string {
+  const percent = terms.basisPoints / 100;
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(1)}% of ad spend, ${dollars(terms.minimumCents)} minimum`;
+}
+
+export type AdChannelKey = "google_search" | "google_maps" | "youtube_display" | "facebook" | "instagram";
+export type AdPlatform = "google_ads" | "meta";
+
+export interface AdChannel {
+  key: AdChannelKey;
+  name: string;
+  platform: AdPlatform;
+  /** Where the ad appears, in the client's terms. */
+  summary: string;
+  /** What has to be true for it to run, when something does. */
+  needs?: string;
+  /**
+   * Per day, so the minimum and the suggestion scale with how long the ad
+   * runs. Both platforms accept less; these are the floors below which a
+   * small business's campaign rarely gathers enough clicks to say anything.
+   */
+  minimumDailyCents: number;
+  suggestedDailyCents: number;
+  /** How long we suggest it runs, in days — one of `AD_DURATIONS_DAYS`. */
+  suggestedDays: number;
+}
+
+export const AD_CHANNELS: AdChannel[] = [
+  {
+    key: "google_search",
+    name: "Google Search",
+    platform: "google_ads",
+    summary: "Text ads at the top of Google when someone nearby searches for what you do.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 1000,
+    suggestedDays: 30,
+  },
+  {
+    key: "google_maps",
+    name: "Google Maps",
+    platform: "google_ads",
+    summary: "Your business pinned at the top of Maps results nearby, with directions and a call button.",
+    needs: "Your Google Business Profile, linked to the ad account.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 700,
+    suggestedDays: 30,
+  },
+  {
+    key: "youtube_display",
+    name: "YouTube & Display",
+    platform: "google_ads",
+    summary: "Image ads on YouTube and on websites and apps across Google's network.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+  {
+    key: "facebook",
+    name: "Facebook",
+    platform: "meta",
+    summary: "Ads in the Facebook feed and Messenger, shown to people in your area.",
+    needs: "A Facebook Page for the business.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+  {
+    key: "instagram",
+    name: "Instagram",
+    platform: "meta",
+    summary: "Ads in the Instagram feed, Stories and Reels, shown to people in your area.",
+    needs: "A Facebook Page for the business. An Instagram account helps but is not required.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+];
+
+/** How long a campaign can run. */
+export const AD_DURATIONS_DAYS = [14, 30, 60, 90] as const;
+
+export function adChannel(key: AdChannelKey): AdChannel {
+  return AD_CHANNELS.find((c) => c.key === key)!;
+}
+
+export function isAdChannelKey(value: unknown): value is AdChannelKey {
+  return AD_CHANNELS.some((c) => c.key === value);
+}
+
+export function channelMinimumCents(channel: AdChannel, days: number): number {
+  return channel.minimumDailyCents * days;
+}
+
+export function channelSuggestedCents(channel: AdChannel, days: number): number {
+  return channel.suggestedDailyCents * days;
+}
+
+/** What unspent budget becomes, said the same way everywhere it is said. */
+export const AD_UNSPENT_POLICY =
+  "If your ad spends less than its budget, we refund the unspent amount to your card when the campaign ends and work the fee out again on what was actually spent. If we can't run your ad, you get everything back, fee included.";

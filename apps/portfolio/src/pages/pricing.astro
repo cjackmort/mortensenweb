@@ -1,53 +1,81 @@
 ---
 import Base from "../layouts/Base.astro";
 import PlanCard from "../components/PlanCard.astro";
+import { SITE } from "../data/site";
 import {
-  PLANS,
-  OVERAGE_CENTS,
-  dollars,
-  CHEAPEST_PLAN,
+  ADD_ON_FEATURES,
+  BUILD,
   BUILDS,
-  CHEAPEST_BUILD,
-  GROWTH_FEATURES,
-  type GrowthFeatureKey,
-  type Plan,
+  CHEAPEST_PLAN,
+  FREE_PORTAL,
+  OVERAGE_CENTS,
+  PLANS,
+  dollars,
 } from "@mortensenweb/plans";
 
+/*
+ * The operator's pricing of 2026-10-21, in their order: the $500 site once,
+ * then one row of plans — Free, $25, $50, $100, $150. Each number appears
+ * once on the page; the side-by-side table that repeated them is gone, at the
+ * operator's request. Every figure is read from `@mortensenweb/plans`.
+ */
+
+const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
+
 const faq = [
+  ["What does the website cost?", `${dollars(BUILD.priceCents)}, one time, for every new site. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost, and performance tracking stays free. Anything unusual we quote before you commit.`],
+  ["What is free?", "Performance tracking, in your client portal: visitor analytics, and a leads inbox with every enquiry from your site, where you can reply to the customer. Free with every site we build, with or without a plan."],
   ["What counts as a change?", "One request in the portal — a new photo, a price, a paragraph, a seasonal notice. If a request is really several unrelated things, we will say so and count it fairly rather than surprise you."],
   ["What does unlimited mean?", `Care, Growth and Pro have no monthly limit on changes. We work on one request at a time, so ask for the next whenever the last one is live. On Lite, a change beyond the one included is a flat ${dollars(OVERAGE_CENTS)}.`],
-  // Both answers below changed on 2026-10-06, when the build stopped being one
-  // price with a discount behind a twelve-month commitment and became three
-  // standalone prices. Left as they were they would have quoted a commitment
-  // that no longer exists.
   ["Is there a minimum term?", "No. Every plan is month to month, and the build has no strings attached — you can take a plan, change plans or stop whenever you like. The domain and the site stay yours."],
-  ["What does the build cost?", `It depends on where the business is: ${BUILDS.map((b) => `${dollars(b.priceCents)} for ${b.name.toLowerCase()}`).join(", ")}. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost. Anything unusual we quote before you commit.`],
-  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. Advertising is outside what we do, and an online store is something we connect rather than host — see Services."],
+  ["Can I add one Growth tool without upgrading?", `Yes, once it is ready. Each Growth tool can be added to any plan on its own, from ${dollars(cheapestAddOn)} a month, and removed again any time from your portal. If you want several, the plan that includes them usually costs less — the portal tells you when it does.`],
+  ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. An online store is something we connect rather than host — see Services."],
 ];
 
-/** Whether a plan includes a Growth feature, for the comparison table. */
-const has = (p: Plan, key: GrowthFeatureKey) => {
-  if (!p.growthFeatures.includes(key)) return "—";
-  return GROWTH_FEATURES.find((f) => f.key === key)!.available ? "✓" : "Soon";
-};
-
-/** Rows of the comparison table, so the markup below stays one loop per plan. */
-const columns = [
-  { head: "Per month", cell: (p: Plan) => dollars(p.monthlyCents), money: true },
-  { head: "Changes / month", cell: (p: Plan) => String(p.includedChangesPerMonth ?? "Unlimited"), money: false },
-  { head: "Extra change", cell: (p: Plan) => (p.overagePerChangeCents ? dollars(p.overagePerChangeCents) : "—"), money: false },
-  { head: "Hosting · SSL · analytics", cell: () => "✓", money: false },
-  { head: "Leads inbox", cell: (p: Plan) => has(p, "leads"), money: false },
-  { head: "Reviews · QR campaigns", cell: (p: Plan) => has(p, "reviews"), money: false },
-  { head: "Google profile · showcase · win-back", cell: (p: Plan) => has(p, "google-profile"), money: false },
-];
 ---
 
 <Base
-  title="Pricing"
-  description={`Websites from ${dollars(CHEAPEST_BUILD.priceCents)}, priced by where your business is. Plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month: hosting, security, analytics and changes, with unlimited changes and Growth tools from ${dollars(PLANS[1]!.monthlyCents)}.`}
+  title="Website pricing for small businesses"
+  description={`Small business website pricing: ${dollars(BUILD.priceCents)} for the site, free performance tracking with a leads inbox, and plans from ${dollars(CHEAPEST_PLAN.monthlyCents)}/month. No contracts.`}
   path="/pricing/"
   schema={[
+    {
+      "@type": "OfferCatalog",
+      "@id": `${SITE.url}/pricing/#offers`,
+      name: "Mortensen Web Co. pricing",
+      itemListElement: [
+        ...BUILDS.map((b) => ({
+          "@type": "Offer",
+          name: `${b.name} design and build`,
+          description: b.who,
+          price: (b.priceCents / 100).toFixed(2),
+          priceCurrency: "USD",
+          seller: { "@id": `${SITE.url}/#organization` },
+        })),
+        {
+          "@type": "Offer",
+          name: FREE_PORTAL.name,
+          description: FREE_PORTAL.description,
+          price: "0.00",
+          priceCurrency: "USD",
+          seller: { "@id": `${SITE.url}/#organization` },
+        },
+        ...PLANS.map((p) => ({
+          "@type": "Offer",
+          name: `${p.name} plan`,
+          description: p.description,
+          price: (p.monthlyCents / 100).toFixed(2),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: (p.monthlyCents / 100).toFixed(2),
+            priceCurrency: "USD",
+            unitText: "MONTH",
+          },
+          seller: { "@id": `${SITE.url}/#organization` },
+        })),
+      ],
+    },
     {
       "@type": "FAQPage",
       mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
@@ -57,36 +85,31 @@ const columns = [
   <section class="section">
     <div class="wrap">
       <div class="section-head">
-        <div><p class="eyebrow">01 · The build</p></div>
+        <div><p class="eyebrow">Pricing</p></div>
         <div>
-          <h1 style="font-size: var(--text-2xl)">Priced by where your business is.</h1>
+          <h1 style="font-size: var(--text-2xl)">One price for the site.</h1>
           <p class="lede" style="margin-top: 1rem">
-            A business just starting out needs less than one with years of
-            customers and search rankings to protect. Every build is mobile
-            first, written with you, and launched on your domain — and none of
-            them requires a plan.
+            Phone first, launched on your domain, and no plan required.
           </p>
         </div>
       </div>
 
-      <div class="builds builds--three">
-        {BUILDS.map((build, index) => (
-          <div class:list={["build", { "build--featured": index === 1 }]}>
-            <p class="eyebrow">{build.name}</p>
-            <p class="build__price">{dollars(build.priceCents)}<small>one-time</small></p>
-            <p class="build__fine">{build.who}</p>
-            <ul class="build__list">
-              {build.includes.map((line) => <li>{line}</li>)}
-            </ul>
-          </div>
-        ))}
+      {/* The one-time price on its own: the price beside what it buys, so the
+          card fills the row instead of sitting in half of it. */}
+      <div class="build build--wide">
+        <div>
+          <p class="eyebrow">{BUILD.name}</p>
+          <p class="build__price">{dollars(BUILD.priceCents)}<small>one time</small></p>
+          <p class="build__fine">{BUILD.who}</p>
+        </div>
+        <ul class="build__list">
+          {BUILD.includes.map((line) => <li>{line}</li>)}
+        </ul>
       </div>
 
       <p class="build__note">
-        No plan? The site is still yours: we hand it over at launch on your own
-        hosting account, with no monthly cost. Want changes later? Start any
-        plan and the portal switches on. The build is invoiced half to start
-        and half at launch.
+        No plan? The site is handed over at launch with no monthly cost, and performance tracking stays free.
+        The build is invoiced half to start, half at launch.
       </p>
     </div>
   </section>
@@ -94,61 +117,18 @@ const columns = [
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">02 · Care plans</p></div>
+        <div><p class="eyebrow">Plans</p></div>
         <div>
-          <h2>Monthly, with no minimum term.</h2>
+          <h2>Free to start. Plans from {dollars(CHEAPEST_PLAN.monthlyCents)}.</h2>
           <p class="lede" style="margin-top: 1rem">
-            Every plan includes hosting, SSL, security updates and visitor
-            analytics. Lite includes one change a month; from Care up, changes
-            are unlimited and the plans add tools that bring in customers.
+            Month to month, no minimum term. Unlimited changes from {PLANS[1]!.name}.
           </p>
         </div>
       </div>
 
       <div class="plans">
+        <PlanCard plan={FREE_PORTAL} />
         {PLANS.map((plan) => <PlanCard plan={plan} />)}
-      </div>
-    </div>
-  </section>
-
-  <section class="section section--sunk">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <div><p class="eyebrow">03 · Side by side</p></div>
-        <h2>The same numbers, as a table.</h2>
-      </div>
-      {/* Focusable because it scrolls sideways on a phone: a scroll container
-          that cannot be reached by keyboard hides the columns past the fade
-          from anyone not using a pointer. */}
-      <div
-        class="table-wrap reveal"
-        tabindex="0"
-        role="region"
-        aria-label="Plan comparison table, scrolls sideways"
-      >
-        <table class="compare">
-          <caption class="sr-only">Plan comparison by monthly price, included changes, and Growth tools. Soon means the tool is being built and is included when it arrives.</caption>
-          <thead>
-            <tr>
-              <th scope="col">Plan</th>
-              {columns.map((c) => <th scope="col">{c.head}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {PLANS.map((p) => (
-              <tr class={p.featured ? "is-featured" : undefined}>
-                <th scope="row">
-                  <span class="compare__plan">{p.name}{p.featured && <span class="compare__flag">most chosen</span>}</span>
-                  <span class="compare__for">{p.bestFor.replace(/\.$/, "")}</span>
-                </th>
-                {columns.map((c) => (
-                  <td class={c.money ? "compare__money" : undefined}>{c.cell(p)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p class="eyebrow table-hint">Swipe sideways for the last columns →</p>
       </div>
     </div>
   </section>
@@ -156,7 +136,45 @@ const columns = [
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
-        <div><p class="eyebrow">04 · Questions</p></div>
+        <div><p class="eyebrow">Growth tools</p></div>
+        <div>
+          <h2>Add one tool on its own.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Included in the plans above, or added to any plan. Remove any time.
+            {" "}<a class="link" href="/growth/">What each tool does</a>.
+          </p>
+        </div>
+      </div>
+      <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tool prices, scrolls sideways">
+        <table class="compare">
+          <caption class="sr-only">Growth tools with their monthly price on their own, the plan that includes them, and whether they are available yet.</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">On its own</th>
+              <th scope="col">Included in</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ADD_ON_FEATURES.map((f) => (
+              <tr>
+                <th scope="row"><span class="compare__plan">{f.name}</span></th>
+                <td class="compare__money">{dollars(f.addOnCents)}/month</td>
+                <td>{PLANS.find((p) => p.key === f.includedFrom)!.name} and up</td>
+                <td>{f.available ? "Live" : "Coming soon"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Questions</p></div>
         <h2>Before you pick one.</h2>
       </div>
       <ul class="rows">
@@ -171,7 +189,7 @@ const columns = [
     <div class="wrap">
       <div class="cta reveal">
         <div>
-          <h2>Want a quote for the build?</h2>
+          <h2>Want to get started?</h2>
           <p class="lede" style="margin-top: 1rem">Tell us about the business. We reply to every enquiry, including the ones where we are not the right fit.</p>
         </div>
         <div class="btn-row">
