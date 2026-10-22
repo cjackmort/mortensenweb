@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { auditLog, monthlyReportPreferences, monthlyReports } from "@/db/schema";
-import { includesMonthlyReport } from "@/lib/reports/eligibility";
+import { auditLog, clients, monthlyReportPreferences, monthlyReports } from "@/db/schema";
+import { includesMonthlyReport, isManagementPaused } from "@/lib/reports/eligibility";
 import { isPeriod, reportWindow } from "@/lib/reports/period";
 import { parseReportData, type MonthlyReportData } from "@/lib/reports/types";
 import { headline } from "@/lib/reports/wording";
@@ -62,6 +62,16 @@ export async function getMyReport(db: Database, ctx: TenantContext, period: stri
 export async function hasMonthlyReport(db: Database, ctx: TenantContext): Promise<boolean> {
   const entitlements = await getEntitlements(db, ctx);
   return includesMonthlyReport({ planKey: entitlements?.planKey ?? null, comped: entitlements?.comped ?? false });
+}
+
+/** Whether new reports are paused because our work on their site is. */
+export async function isMyReportPaused(db: Database, ctx: TenantContext): Promise<boolean> {
+  const [row] = await db
+    .select({ managementState: clients.managementState, managementPausedAt: clients.managementPausedAt })
+    .from(clients)
+    .where(eq(clients.organizationId, ctx.organizationId))
+    .limit(1);
+  return row ? isManagementPaused(row) : false;
 }
 
 export async function getMyReportEmails(db: Database, ctx: TenantContext): Promise<{ on: boolean }> {

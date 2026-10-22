@@ -177,9 +177,14 @@ export type ScheduledReportsResult =
   | { ran: false; reason: "not_due" | "none_due" }
   | { ran: true; period: string; built: number; emailed: number; failed: number; remaining: number };
 
-/** Whether a subject should get `period`'s report: on the plan, and a client by then. */
+/**
+ * Whether a subject should get `period`'s report: on the plan, a client by
+ * then, and our work on them not paused. A pause lifted later in the catch-up
+ * week lets that month's report through on the next tick.
+ */
 export function dueReport(subject: ReportSubject, period: string): boolean {
   if (subject.isDemo) return false;
+  if (subject.managementPaused) return false;
   if (!includesMonthlyReport(subject)) return false;
   const window = reportWindow(period);
   // A client who signed up on the 1st has no September to report on.

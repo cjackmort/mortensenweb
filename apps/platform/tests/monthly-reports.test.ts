@@ -20,6 +20,7 @@ import {
 import { runScheduledMonthlyReports } from "@/db/repositories/admin/report-delivery";
 import {
   getClientReportPreview,
+  getClientReports,
   rebuildClientReport,
   resendClientReport,
   setClientReportEmails,
@@ -28,6 +29,7 @@ import {
   getMyReport,
   getMyReportEmails,
   hasMonthlyReport,
+  isMyReportPaused,
   listMyReports,
   setMyReportEmails,
 } from "@/db/repositories/client/reports";
@@ -111,6 +113,21 @@ async function client(
     });
   }
   return { ...tenant, publicId: row!.publicId };
+}
+
+/** Pause our work for a client, the way the dunning ladder's last rung does. */
+async function pause(
+  tenant: SeededTenant,
+  how: "both" | "state_only" | "timestamp_only" | "at_risk" = "both",
+) {
+  await db
+    .update(clients)
+    .set({
+      managementState: how === "timestamp_only" ? "managed" : how === "at_risk" ? "at_risk" : "unmanaged",
+      managementPausedAt: how === "state_only" || how === "at_risk" ? null : new Date("2026-09-20T00:00:00.000Z"),
+      managementPausedReason: how === "at_risk" ? null : "unpaid",
+    })
+    .where(eq(clients.id, tenant.clientId));
 }
 
 async function site(tenant: SeededTenant, overrides: Partial<typeof sites.$inferInsert> = {}) {
@@ -332,6 +349,29 @@ describe("the scheduled run", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("skips a client whose management is paused, even on an active plan", async () => {
+    await db.delete(monthlyReports);
+    await db.update(clients).set({ archivedAt: new Date() });
+    const paused = await client("Paused Co");
+    await pause(paused);
+    // Either column alone counts: the two are set together, but a hand edit
+    // that sets one must not let a report through.
+    const stateOnly = await client("State Only Co");
+    await pause(stateOnly, "state_only");
+    const stampOnly = await client("Stamp Only Co");
+    await pause(stampOnly, "timestamp_only");
+    // Reminders sent is not paused: we are still working on their site.
+    const atRisk = await client("At Risk Co");
+    await pause(atRisk, "at_risk");
+
+    const result = await runScheduledMonthlyReports(db, { now: FIRST_OF_OCTOBER, extensions: [] });
+
+    expect(result).toMatchObject({ ran: true, built: 1, remaining: 0 });
+    const built = (await db.select().from(monthlyReports)).map((r) => r.organizationId);
+    expect(built).toEqual([atRisk.organizationId]);
+    expect(sent).toHaveLength(1);
+  });
+
   it("works through a backlog a batch at a time", async () => {
     await db.delete(monthlyReports);
     await db.update(clients).set({ archivedAt: new Date() });
@@ -358,6 +398,13 @@ describe("the client's side", () => {
     expect(await getMyReport(db, acme.ctx, "../../x")).toEqual({ found: false });
   });
 
+  it("knows when their reports are paused with our work", async () => {
+    const paused = await client("Paused Client Side");
+    await pause(paused);
+    expect(await isMyReportPaused(db, paused.ctx)).toBe(true);
+    expect(await isMyReportPaused(db, (await client("Managed Client Side")).ctx)).toBe(false);
+  });
+
   it("knows whether their plan includes the report", async () => {
     expect(await hasMonthlyReport(db, (await client("Care Has")).ctx)).toBe(true);
     expect(await hasMonthlyReport(db, (await client("Lite Has", { plan: "lite" })).ctx)).toBe(false);
@@ -381,6 +428,25 @@ describe("the client's side", () => {
 });
 
 describe("the operator's side", () => {
+  it("sees a paused client as paused, and can still build their report by hand", async () => {
+    const paused = await client("Paused Admin Co");
+    await pause(paused);
+    const ctx = adminCtx(paused);
+
+    const before = await getClientReports(ctx, db, paused.publicId, FIRST_OF_OCTOBER);
+    expect(before).toMatchObject({ eligible: true, paused: true });
+
+    expect(await rebuildClientReport(ctx, db, paused.publicId, "2026-09", FIRST_OF_OCTOBER)).toMatchObject({ ok: true });
+    expect(sent).toHaveLength(0);
+    const after = await getClientReports(ctx, db, paused.publicId, FIRST_OF_OCTOBER);
+    expect(after.reports.map((r) => r.period)).toEqual(["2026-09"]);
+  });
+
+  it("does not call a managed client paused", async () => {
+    const managed = await client("Managed Admin Co");
+    expect(await getClientReports(adminCtx(managed), db, managed.publicId, FIRST_OF_OCTOBER)).toMatchObject({ paused: false });
+  });
+
   it("rebuilds without emailing, and refuses a month that isn't over", async () => {
     const acme = await client("Acme Admin");
     const ctx = adminCtx(acme);

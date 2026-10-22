@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
-import { PLANS, OVERAGE_CENTS, dollars, BUILD, FREE_PORTAL, GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
+import { PLANS, OVERAGE_CENTS, dollars, BUILD, FREE_PORTAL, GROWTH_FEATURES, isFree, ADS_AVAILABLE } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
+
+/** Ads are named only while they can be bought; switched off, this file says nothing about them. */
+const ads = ADS_AVAILABLE ? ", and Google, Facebook and Instagram ads" : "";
 
 /** "; plus Review requests (coming soon), …" — the paid tools a plan includes. */
 const paidTools = (keys: string[]) => {
@@ -26,7 +29,7 @@ export const GET: APIRoute = () =>
       "",
       "## Key pages",
       `- [Work](${SITE.url}/work/): live client sites, demos and in-house work, each one linked and labelled`,
-      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request, a leads inbox, Growth tools, and Google, Facebook and Instagram ads (coming soon) — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; posting to social media is not included`,
+      `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request, a free leads inbox, Growth tools${ads} — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; posting to social media is not included`,
       `- [Growth](${SITE.url}/growth/): Growth tools that bring a small business more customers — what each does, which plan includes it, and its price on its own`,
       `- [Pricing](${SITE.url}/pricing/): the build price, then the plans: free performance tracking and four monthly plans`,
       `- [About](${SITE.url}/about/): ${SITE.founder}, the founder — a mechanical engineering senior at the University of Utah focused on aerospace and defense`,
@@ -36,7 +39,7 @@ export const GET: APIRoute = () =>
       "## The build (US dollars, one-time, no plan required)",
       `- ${BUILD.name}: ${dollars(BUILD.priceCents)}. ${BUILD.who} Includes: ${BUILD.includes.join("; ")}.`,
       "- Without a plan, the site is handed over at launch on the client's own hosting account, with no monthly cost.",
-      "- The build is invoiced half to start and half at launch. Domain registration is not included and stays in the client's name.",
+      "- Domain registration is not included and stays in the client's name.",
       "",
       `## ${FREE_PORTAL.name} (free)`,
       `- ${FREE_PORTAL.description} In the client portal. Includes: ${FREE_PORTAL.features.join("; ")}. With or without a plan.`,

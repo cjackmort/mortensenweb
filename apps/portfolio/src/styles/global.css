@@ -50,8 +50,10 @@
      prevent — the wordmark's "Web" was that bug. */
   --blue-on-dark: #7ea6ff;
 
-  --sans: "Schibsted Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Set by Astro's <Font> in Base.astro: the family, its metric-matched
+     fallback, then the fallbacks listed in astro.config.mjs. */
+  --sans: var(--font-schibsted);
+  --mono: var(--font-jetbrains-mono);
 
   /* Raised 2026-10-06 for readability. The labels, eyebrows and badges set
      in --text-xs are uppercase monospace, the slowest style to read, and at
@@ -154,6 +156,13 @@ img {
 :focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 3px;
+}
+
+/* On a dark ground the blue ring is 2.86:1, under the 3:1 a focus indicator
+   needs (WCAG 1.4.11). Off-white there, so the one blue stays the one blue. */
+.section--dark :focus-visible,
+.sq :focus-visible {
+  outline-color: var(--on-dark);
 }
 
 ::selection {
@@ -1628,6 +1637,10 @@ img {
   opacity: 0.08;
   white-space: nowrap;
   user-select: none;
+}
+
+.footer__wordmark::before {
+  content: "MortensenWeb";
 }
 
 .footer__bottom {

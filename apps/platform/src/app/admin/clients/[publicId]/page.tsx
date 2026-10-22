@@ -461,7 +461,10 @@ function summarise(input: {
     reviews: {
       status: reviews.setup ? `${reviews.sent} sent · ${reviews.clicked} clicked` : "Not set up",
     },
-    reports: latestReport
+    // A pause is deliberate, so it is stated rather than flagged for attention.
+    reports: reports.paused
+      ? { status: "Paused: no report this month" }
+      : latestReport
       ? {
           status: `${latestReport.label}${latestReport.emailStatus === "failed" ? " · email failed" : ""}${reports.emailsOff ? " · emails off" : ""}`,
           attention: latestReport.emailStatus === "failed",

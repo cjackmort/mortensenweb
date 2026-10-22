@@ -4,6 +4,9 @@ import { SITE } from "../data/site";
 /**
  * Allow everyone, including the AI answer engines by name — being cited by
  * them is the point. `llms.txt` is the plain-language summary they read.
+ *
+ * A crawler obeys only the most specific group that names it, so the named
+ * bots repeat the `/thanks/` rule rather than inheriting it from `*`.
  */
 export const GET: APIRoute = () =>
   new Response(
@@ -19,6 +22,7 @@ export const GET: APIRoute = () =>
       "User-agent: PerplexityBot",
       "User-agent: Google-Extended",
       "Allow: /",
+      "Disallow: /thanks/",
       "",
       `Sitemap: ${SITE.url}/sitemap-index.xml`,
       `# Summary for language models: ${SITE.url}/llms.txt`,

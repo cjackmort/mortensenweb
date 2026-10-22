@@ -15,6 +15,13 @@
   base = "apps/platform"
   command = "npm run build"
   publish = ".next"
+  # Build when the portal OR anything it imports from the workspace changed.
+  # Netlify's default skips a build when nothing under `base` changed, so a
+  # change to `packages/plans` alone (prices, the Ads switch) was cancelled
+  # with "no content change" and never reached production; #143 was. Runs in
+  # `base`; exit 0 means skip. A cached ref git cannot find exits non-zero,
+  # which builds: the safe direction.
+  ignore = "git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- . ../../packages ../../package.json ../../package-lock.json ../../netlify.toml"
 
 # Scheduled functions live alongside the app rather than at the repository root,
 # because `base` above already scopes the build to `apps/platform` and a
