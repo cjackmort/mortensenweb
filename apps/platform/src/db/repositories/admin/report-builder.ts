@@ -15,6 +15,7 @@ import {
   subscriptions,
 } from "@/db/schema";
 import { growthAccess, hasFeature, type FeatureAccess } from "@/lib/growth/access";
+import { isManagementPaused } from "@/lib/reports/eligibility";
 import { monthAnalytics, type MonthAnalytics } from "@/lib/reports/analytics";
 import { REPORT_EXTENSIONS, type ReportExtension } from "@/lib/reports/extensions";
 import { previousPeriod, reportWindow, type ReportWindow } from "@/lib/reports/period";
@@ -47,6 +48,8 @@ export interface ReportSubject {
   subscriptionStartedOn: string | null;
   createdAt: Date;
   isDemo: boolean;
+  /** Our work on them is paused (see `isManagementPaused`): no scheduled report. */
+  managementPaused: boolean;
   access: FeatureAccess[];
 }
 
@@ -70,6 +73,8 @@ export async function loadReportSubjects(
       startedOn: subscriptions.startedOn,
       createdAt: clients.createdAt,
       isDemo: clients.isDemo,
+      managementState: clients.managementState,
+      managementPausedAt: clients.managementPausedAt,
     })
     .from(clients)
     .innerJoin(organizations, eq(organizations.id, clients.organizationId))
@@ -103,6 +108,7 @@ export async function loadReportSubjects(
       subscriptionStartedOn: row.startedOn,
       createdAt: row.createdAt,
       isDemo: row.isDemo,
+      managementPaused: isManagementPaused(row),
       access: growthAccess({
         planKey,
         comped,
