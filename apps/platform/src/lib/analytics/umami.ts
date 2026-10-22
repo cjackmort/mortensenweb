@@ -211,8 +211,12 @@ type UmamiMetric = { x: string | null; y: number };
  *
  * Hardcoding `/api` here worked only for self-hosted and silently 404s against
  * Cloud, so the prefix belongs in configuration rather than in this file.
+ *
+ * Exported for the monthly report, which compares against the previous
+ * calendar month rather than the equal-length window `fetchAnalytics` uses.
+ * Like everything here, server only, and never with an id from a request.
  */
-async function umamiFetch<T>(
+export async function umamiFetch<T>(
   path: string,
   params: Record<string, string | number>,
 ): Promise<T> {
