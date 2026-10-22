@@ -1,12 +1,15 @@
 ---
 import Base from "../layouts/Base.astro";
 import { SITE } from "../data/site";
-import { GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
+import { ADS_AVAILABLE, GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
 
 /*
  * One line per service: what it is, not how we do it. The operator's brief of
  * 2026-10-14. Growth tools read their status from `@mortensenweb/plans`, so
  * this page stops saying "rolling out" the day the last one switches on.
+ *
+ * Ads are listed only while `ADS_AVAILABLE` is on. Switched off, the page says
+ * nothing about them rather than "coming soon": there is no date to promise.
  */
 const growthTools = GROWTH_FEATURES.filter((f) => !isFree(f));
 
@@ -22,7 +25,9 @@ const included: Array<{ title: string; body: string; soon?: string }> = [
     body: `${growthTools.map((f) => f.name).join(", ")}. In Growth and Pro, or one at a time.`,
     soon: growthTools.some((f) => !f.available) ? "Rolling out" : undefined,
   },
-  { title: "Ads", body: "Google, Facebook and Instagram ads, made from your business details. You pick where and set the budget.", soon: "Coming soon" },
+  ...(ADS_AVAILABLE
+    ? [{ title: "Ads", body: "Google, Facebook and Instagram ads, made from your business details. You pick where and set the budget." }]
+    : []),
 ];
 
 const notIncluded = [

@@ -24,6 +24,8 @@ const howToGet = (f: GrowthFeature) =>
     ? "Free with every site we build, with or without a plan."
     : `Included in ${planName(f.includedFrom)} and above, or ${dollars(f.addOnCents)} a month on its own.`;
 const live = GROWTH_FEATURES.filter((f) => f.available);
+/** Every tool switched on — then nothing on this page may say "being built". */
+const allLive = live.length === GROWTH_FEATURES.length;
 const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
 const allTogether = ADD_ON_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
 const firstPaidPlan = PLANS.find((p) => ADD_ON_FEATURES.some((f) => f.includedFrom === p.key))!;
@@ -62,11 +64,13 @@ const faq: Array<[string, string]> = [
   ],
   [
     "Can I add one Growth tool without changing my plan?",
-    `Yes, once it is ready. Every paid Growth tool can be added on its own for a monthly price, from ${dollars(cheapestAddOn)} a month, and removed again whenever you like. If you want several, the plan that includes them is usually cheaper — the portal tells you when it is.`,
+    `Yes${allLive ? "" : ", once it is ready"}. Every paid Growth tool can be added on its own, from ${dollars(cheapestAddOn)} a month, and removed whenever you like. If you want several, the plan that includes them is usually cheaper — the portal tells you when it is.`,
   ],
   [
     "Which Growth tools are available today?",
-    `${live.map((f) => f.name).join(", ")} ${live.length === 1 ? "is" : "are"} live now. The others are being built and switch on in your portal the day they are ready; they are never charged for before then.`,
+    allLive
+      ? `All of them: ${live.map((f) => f.name).join(", ")}. Each one is live in the client portal now.`
+      : `${live.map((f) => f.name).join(", ")} ${live.length === 1 ? "is" : "are"} live now. The others are being built and switch on in your portal the day they are ready; they are never charged for before then.`,
   ],
   [
     "Do I still get an email when someone fills in my contact form?",
@@ -75,10 +79,6 @@ const faq: Array<[string, string]> = [
   [
     "How much does it cost to get every Growth tool?",
     `Everything is included in the ${pro.name} plan at ${dollars(pro.monthlyCents)} a month. Bought one at a time, the paid tools would cost ${dollars(allTogether)} a month on top of a plan.`,
-  ],
-  [
-    "Do you run Google or Facebook ads?",
-    "Not yet. Ads on Google, Facebook and Instagram are coming to the portal: an ad made from your business details, where it runs and the budget chosen by you, and the results beside your visitor numbers.",
   ],
 ];
 
@@ -135,7 +135,7 @@ const schema = [
       </div>
 
       <ul class="keyfacts">
-        <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{live.length} live today; the rest switch on as they are ready.</li>
+        <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{allLive ? "All live in your portal today." : `${live.length} live today; the rest switch on as they are ready.`}</li>
         <li><strong>The inbox is free</strong>Every enquiry in your portal, with every site we build.</li>
         <li><strong>The rest from {firstPaidPlan.name}</strong>{dollars(firstPaidPlan.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}. Or one at a time, from {dollars(cheapestAddOn)}/month.</li>
         <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
@@ -219,8 +219,7 @@ const schema = [
         <div>
           <h2>Want your website working harder?</h2>
           <p class="lede" style="margin-top: 1rem">
-            Tell us about the business. We will tell you which of these would actually help — including when the
-            answer is none of them yet.
+            Tell us about the business. We'll say which of these would help, if any.
           </p>
         </div>
         <div class="btn-row">
