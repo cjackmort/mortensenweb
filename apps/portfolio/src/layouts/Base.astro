@@ -1,4 +1,5 @@
 ---
+import { Font } from "astro:assets";
 import "../styles/global.css";
 import { SITE, NAV } from "../data/site";
 import PromoBar from "../components/PromoBar.astro";
@@ -104,14 +105,11 @@ const organization = {
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    {/* Two families, four files. Preconnected so the headline face is on its
-        way before the stylesheet has finished parsing. */}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
+    {/* Two families, self-hosted (see `fonts` in astro.config.mjs), each one
+        variable file for both weights. Both are preloaded: the body face and
+        the label face paint the first screen of every page. */}
+    <Font cssVariable="--font-schibsted" preload />
+    <Font cssVariable="--font-jetbrains-mono" preload />
 
     <script type="application/ld+json" set:html={JSON.stringify(organization)} />
     <slot name="head" />

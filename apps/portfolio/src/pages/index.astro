@@ -5,6 +5,7 @@ import Lockup from "../components/Lockup.astro";
 import WorkCard from "../components/WorkCard.astro";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
+import { Font } from "astro:assets";
 import { BUILD, CHEAPEST_PLAN, FREE_PORTAL, GROWTH_FEATURES, PLANS, dollars, isFree, type Plan } from "@mortensenweb/plans";
 import { LOOP, SITE } from "../data/site";
 import { WORK } from "../data/work";
@@ -132,12 +133,11 @@ const schema = [
 
 <Base path="/" schema={schema}>
   {/* Jost only here: it is the home page's display face, and loading it on
-      /pricing/ would cost those pages a font they never set. */}
-  <link
-    slot="head"
-    rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400&display=swap"
-  />
+      /pricing/ would cost those pages a font they never set. Preloaded,
+      because the lockup it sets is the first screen. */}
+  <Fragment slot="head">
+    <Font cssVariable="--font-jost" preload />
+  </Fragment>
 
   {/* ------------------------------------------------------------ hero */}
   <section class="hero-sq sq">

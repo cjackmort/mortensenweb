@@ -50,8 +50,10 @@
      prevent — the wordmark's "Web" was that bug. */
   --blue-on-dark: #7ea6ff;
 
-  --sans: "Schibsted Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Set by Astro's <Font> in Base.astro: the family, its metric-matched
+     fallback, then the fallbacks listed in astro.config.mjs. */
+  --sans: var(--font-schibsted);
+  --mono: var(--font-jetbrains-mono);
 
   /* Raised 2026-10-06 for readability. The labels, eyebrows and badges set
      in --text-xs are uppercase monospace, the slowest style to read, and at
