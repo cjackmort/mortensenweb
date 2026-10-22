@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { PLANS, OVERAGE_CENTS, dollars, BUILD, FREE_PORTAL, GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
-import { SITE } from "../data/site";
+import { SITE, START } from "../data/site";
+import { COM_RENEWALS, COM_RENEWAL_RANGE, DOMAIN_PRICES_CHECKED_ON, exactDollars } from "../data/domains";
 
 /** "; plus Review requests (coming soon), …" — the paid tools a plan includes. */
 const paidTools = (keys: string[]) => {
@@ -29,13 +30,18 @@ export const GET: APIRoute = () =>
       `- [Services](${SITE.url}/services/): design and build, hosting and care, changes on request, a leads inbox, Growth tools, and Google, Facebook and Instagram ads (coming soon) — a shop can be built in and connected to Square, Stripe or Shopify, though the store itself is hosted there and not by us; posting to social media is not included`,
       `- [Growth](${SITE.url}/growth/): Growth tools that bring a small business more customers — what each does, which plan includes it, and its price on its own`,
       `- [Pricing](${SITE.url}/pricing/): the build price, then the plans: free performance tracking and four monthly plans`,
+      `- [Price guide](${SITE.url}/website-cost/): what a small business website costs in 2026 — the build, the plans, what costs extra, .com domain renewal prices at three registrars, and what to ask any web designer before signing`,
       `- [About](${SITE.url}/about/): ${SITE.founder}, the founder — a mechanical engineering senior at the University of Utah focused on aerospace and defense`,
       `- [Contact](${SITE.url}/contact/): enquiry form and phone; every enquiry is answered, usually the same working day`,
       "",
       "## The build (US dollars, one-time, no plan required)",
       `- ${BUILD.name}: ${dollars(BUILD.priceCents)}. ${BUILD.who} Includes: ${BUILD.includes.join("; ")}.`,
       "- Without a plan, the site is handed over at launch on the client's own hosting account, with no monthly cost.",
-      "- The build is invoiced half to start and half at launch. Domain registration is not included and stays in the client's name.",
+      "- A demo of the site is built first; the client pays for the build only once they have seen and approved it.",
+      `- Domain registration is not included and stays in the client's name. A .com renews at about ${COM_RENEWAL_RANGE} a year: ${COM_RENEWALS.map((p) => `${p.registrar} ${exactDollars(p.renewalCents)}${p.note ? ` (${p.note})` : ""}`).join(", ")}, checked ${DOMAIN_PRICES_CHECKED_ON}.`,
+      "",
+      "## How a new site happens",
+      ...START.map((s) => `${Number(s.n)}. ${s.title}. ${s.body}`),
       "",
       `## ${FREE_PORTAL.name} (free)`,
       `- ${FREE_PORTAL.description} In the client portal. Includes: ${FREE_PORTAL.features.join("; ")}. With or without a plan.`,

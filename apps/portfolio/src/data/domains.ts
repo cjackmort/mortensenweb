@@ -13,7 +13,7 @@ export interface DomainPrice {
   registrar: string;
   /** Yearly .com renewal, in cents, as the registrar lists it. */
   renewalCents: number;
-  /** Anything the registrar adds on top of the listed price. */
+  /** Anything worth knowing about the price, lower case: it is read mid-sentence. */
   note?: string;
   /** The page the price was read from. */
   source: string;
@@ -25,13 +25,13 @@ export const COM_RENEWALS: DomainPrice[] = [
   {
     registrar: "Cloudflare",
     renewalCents: 1046,
-    note: "Sold at cost",
+    note: "sold at cost",
     source: "https://www.cloudflare.com/domains/search/",
   },
   {
     registrar: "Namecheap",
     renewalCents: 1848,
-    note: "Plus a $0.20 ICANN fee",
+    note: "plus a $0.20 ICANN fee",
     source: "https://www.namecheap.com/domains/",
   },
   {
