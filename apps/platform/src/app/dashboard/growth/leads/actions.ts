@@ -5,9 +5,17 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb, type Database } from "@/db/client";
 import { NotFoundError, tenantContextFrom, type TenantContext } from "@/db/repositories/context";
-import { deleteLead, isLeadStatus, isLeadView, setLeadStatus } from "@/db/repositories/client/leads";
+import {
+  deleteLead,
+  isLeadOutcome,
+  isLeadView,
+  setLeadArchived,
+  setLeadStatus,
+  type LeadOutcome,
+} from "@/db/repositories/client/leads";
 import { sendLeadReply } from "@/db/repositories/client/lead-replies";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
+import { forgetDeletedLead, recordLeadOutcome } from "@/db/repositories/client/winback-contacts";
 import {
   approveBooking,
   declineBooking,
@@ -36,12 +44,11 @@ function refresh(publicId: string) {
   revalidatePath(`/dashboard/growth/leads/${publicId}`);
 }
 
-const STATUS_SAVED: Record<string, string> = {
+const STATUS_SAVED: Record<LeadOutcome, string> = {
   new: "Marked as new.",
   contacted: "Marked as contacted.",
   won: "Marked as won — nice.",
   lost: "Marked as lost.",
-  archived: "Archived. It stays under Archived if you need it.",
 };
 
 export async function setLeadStatusAction(
@@ -53,10 +60,14 @@ export async function setLeadStatusAction(
 
   const publicId = String(formData.get("lead") ?? "");
   const status = formData.get("status");
-  if (!isLeadStatus(status)) return { ok: false, message: "Pick a status." };
+  if (!isLeadOutcome(status)) return { ok: false, message: "Pick a status." };
 
   try {
     await setLeadStatus(session.db, session.ctx, publicId, status);
+    // Won is when someone becomes a past customer for win-back emails —
+    // recorded now, because the inbox later archives old enquiries and that
+    // overwrites "won".
+    await recordLeadOutcome(session.db, session.ctx, publicId, status);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { ok: false, message: "That enquiry no longer exists." };
@@ -65,7 +76,34 @@ export async function setLeadStatusAction(
   }
 
   refresh(publicId);
-  return { ok: true, message: STATUS_SAVED[status] ?? "Saved." };
+  return { ok: true, message: STATUS_SAVED[status] };
+}
+
+export async function setLeadArchivedAction(
+  _previous: LeadActionResult | null,
+  formData: FormData,
+): Promise<LeadActionResult> {
+  const session = await context();
+  if (!session) return { ok: false, message: "Please sign in again." };
+
+  const publicId = String(formData.get("lead") ?? "");
+  const archive = formData.get("archive");
+  if (archive !== "1" && archive !== "0") return { ok: false, message: "Pick archive or inbox." };
+
+  try {
+    await setLeadArchived(session.db, session.ctx, publicId, archive === "1");
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { ok: false, message: "That enquiry no longer exists." };
+    }
+    throw error;
+  }
+
+  refresh(publicId);
+  return {
+    ok: true,
+    message: archive === "1" ? "Archived. It keeps what you marked it." : "Back in your inbox.",
+  };
 }
 
 export async function deleteLeadAction(formData: FormData): Promise<void> {
@@ -74,6 +112,7 @@ export async function deleteLeadAction(formData: FormData): Promise<void> {
 
   const publicId = String(formData.get("lead") ?? "");
   try {
+    await forgetDeletedLead(session.db, session.ctx, publicId);
     await deleteLead(session.db, session.ctx, publicId);
   } catch (error) {
     // Already gone is the outcome they asked for.

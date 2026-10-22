@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { dollars, type GrowthFeatureKey } from "@mortensenweb/plans";
+import { ADS_AVAILABLE, dollars, feeTermsLabel, type GrowthFeatureKey } from "@mortensenweb/plans";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
@@ -8,6 +8,8 @@ import { getGrowthState } from "@/db/repositories/client/growth";
 import type { FeatureAccess } from "@/lib/growth/access";
 import { addAddOnAction } from "../plan/actions";
 import { PlanActionButton } from "../plan/controls";
+import { CreateAdButton } from "@/components/ads/create-ad-button";
+import "@/components/ads/ads.css";
 
 /**
  * The Growth tab: every tool that brings a client more customers, in one
@@ -32,10 +34,16 @@ export const metadata = {
 /** Where an owned, built feature opens. */
 const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
   leads: "/dashboard/growth/leads",
+  campaigns: "/dashboard/growth/campaigns",
+  reviews: "/dashboard/growth/reviews",
+  winback: "/dashboard/growth/winback",
+  showcase: "/dashboard/growth/showcase",
+  "google-profile": "/dashboard/growth/google",
 };
 
 const VIA_LABEL = {
   comp: "On the house",
+  free: "Free with your site",
   plan: "In your plan",
   "add-on": "Add-on",
 } as const;
@@ -76,6 +84,8 @@ export default async function GrowthPage({
           {lockedName} is not part of your plan yet — here is how to add it.
         </p>
       )}
+
+      {ADS_AVAILABLE && <AdsCard readOnly={ctx.impersonating} />}
 
       {owned.length > 0 && (
         <section aria-labelledby="growth-yours">
@@ -118,10 +128,6 @@ function FeatureCard({
 }) {
   const { feature, via, upgradeTo, upgradeSavesCents, canAdd } = access;
   const opens = OPENS[feature.key];
-  const teaser =
-    feature.key === "leads" && !via && state.waitingLeads > 0
-      ? `${state.waitingLeads} ${state.waitingLeads === 1 ? "enquiry is" : "enquiries are"} waiting for you.`
-      : null;
 
   if (via) {
     return (
@@ -159,7 +165,6 @@ function FeatureCard({
       </div>
       <p>{feature.summary}</p>
       <p className="growth-benefit">{feature.benefit}</p>
-      {teaser && <p className="notice notice-info">{teaser}</p>}
 
       {feature.available ? (
         <div className="growth-actions">
@@ -193,5 +198,30 @@ function FeatureCard({
         </p>
       )}
     </article>
+  );
+}
+
+/**
+ * Ads sit above the plan features because they are on every plan: the client
+ * pays per campaign, so there is nothing to unlock and no upgrade to offer.
+ */
+function AdsCard({ readOnly }: { readOnly: boolean }) {
+  return (
+    <section className="card growth-card" id="ads" aria-labelledby="growth-ads">
+      <div className="card-head">
+        <h2 id="growth-ads">Ads on Google, Facebook and Instagram</h2>
+        <span className="pill pill-success">On every plan</span>
+      </div>
+      <p>
+        We draft the ad from your business information. You choose where it runs and how much to spend, and pay once
+        per campaign: the ad spend at cost, plus our fee ({feeTermsLabel()}) on its own line.
+      </p>
+      <div className="request-cta-actions ad-card-actions">
+        {!readOnly && <CreateAdButton />}
+        <Link className="button secondary" href="/dashboard/growth/ads">
+          See your ads
+        </Link>
+      </div>
+    </section>
   );
 }

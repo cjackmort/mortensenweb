@@ -28,7 +28,7 @@ import {
   takesBookings,
   type BookingDeps,
 } from "@/db/repositories/client/event-bookings";
-import { deleteLead, setLeadStatus } from "@/db/repositories/client/leads";
+import { deleteLead, listLeads, setLeadArchived } from "@/db/repositories/client/leads";
 import { AuthorizationError, NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import type { EmailMessage, SendResult } from "@/lib/email/mailer";
 import type { StorageDriver } from "@/lib/storage";
@@ -489,13 +489,27 @@ describe("holding a date on the calendar", () => {
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
-  it("leaves an archived request in Archived when it is decided", async () => {
+  it("records the decision on an archived request as won, and leaves it in Archived", async () => {
     const lead = await recordBooking(venueSite, { act_name: "Stays Archived" });
-    await setLeadStatus(db, venue.ctx, lead, "archived");
+    await setLeadArchived(db, venue.ctx, lead, true);
     await holdBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "" }, { now: NOW });
     await approveBooking(db, venue.ctx, lead, { eventDate: "2027-05-14", startTime: "" }, deps());
+
     const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
-    expect(row!.status).toBe("archived");
+    expect(row!.status).toBe("won");
+    expect(row!.archivedAt).not.toBeNull();
+    const inbox = (await listLeads(db, venue.ctx, { view: "open" })).leads.map((l) => l.publicId);
+    const archived = (await listLeads(db, venue.ctx, { view: "archived" })).leads.map((l) => l.publicId);
+    expect(inbox).not.toContain(lead);
+    expect(archived).toContain(lead);
+  });
+
+  it("records a decline on an archived request as lost", async () => {
+    const lead = await recordBooking(venueSite, { act_name: "Archived No" });
+    await setLeadArchived(db, venue.ctx, lead, true);
+    await declineBooking(db, venue.ctx, lead, { now: NOW });
+    const [row] = await db.select().from(leads).where(eq(leads.publicId, lead));
+    expect(row).toMatchObject({ status: "lost", archivedAt: expect.any(Date) });
   });
 });
 
@@ -543,7 +557,7 @@ describe("the booking calendar", () => {
 
   it("keeps an undecided request on the calendar after it is archived", async () => {
     const lead = await recordBooking(venueSite, { act_name: "July Asked", preferred_date: "2027-07-09" });
-    await setLeadStatus(db, venue.ctx, lead, "archived");
+    await setLeadArchived(db, venue.ctx, lead, true);
     const entries = await bookingCalendar(db, venue.ctx, "2027-07");
     expect(entries).toEqual([
       { date: "2027-07-09", kind: "requested", actName: "July Asked", startTime: null, leadPublicId: lead },

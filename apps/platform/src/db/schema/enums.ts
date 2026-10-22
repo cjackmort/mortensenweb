@@ -517,8 +517,12 @@ export const mediaUploadStatusEnum = pgEnum("media_upload_status", [
  * Every value is set by a person. Nothing in the portal infers that a lead was
  * contacted or won — a reply sent from the client's own phone is invisible to
  * us, and a guessed "won" would flatter the monthly report with a sale nobody
- * made. `archived` is for the enquiry that was never a customer (a supplier, a
- * job seeker), kept out of the counts without being deleted.
+ * made.
+ *
+ * `archived` is no longer written. Before 0037, archiving a lead overwrote its
+ * status with it, so a lead archived then still holds `archived`, with what it
+ * was before lost. Read it as "not recorded". Whether a lead is in the inbox
+ * is `leads.archived_at`.
  */
 export const leadStatusEnum = pgEnum("lead_status", [
   "new",

@@ -67,6 +67,22 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "Netlify form webhook",
     checks: "verifyNetlifySignature(",
   },
+  "api/webhooks/resend/route.ts": {
+    reason: "Resend delivery webhook (bounces, complaints, opens)",
+    checks: "verifySvixSignature(",
+  },
+
+  // Unsubscribe links in a win-back email, opened by the business's customer,
+  // who has no account. The signed token is checked before any query; the
+  // POST also rate-limits by hashed IP.
+  "unsubscribe/[token]/page.tsx": {
+    reason: "unsubscribe page reached from a customer's email",
+    checks: "verifyUnsubscribeToken(",
+  },
+  "api/unsubscribe/[token]/route.ts": {
+    reason: "one-click unsubscribe, POSTed by mail providers",
+    checks: "verifyUnsubscribeToken(",
+  },
 
   // Fetched by GitHub Actions runners, which have no session. The handler
   // 404s on any token it did not mint.
@@ -86,6 +102,29 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
 
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },
+
+  // A campaign's short link, scanned off a door hanger by someone with no
+  // account. It resolves only codes the portal minted and 404s on the rest,
+  // redirects only to the campaign's own site, and is rate-limited.
+  "q/[code]/route.ts": {
+    reason: "QR code short link, scanned by the public",
+    checks: "findCampaignForRedirect(",
+  },
+  // Links in a review request, opened by the business's customer, who has no
+  // account. Each checks a token signed for its own purpose before any query,
+  // and rate-limits by address.
+  "review/[token]/route.ts": {
+    reason: "tracked review link in a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/stop/page.tsx": {
+    reason: "unsubscribe page reached from a customer's email",
+    checks: "verifyReviewToken(",
+  },
+  "review/[token]/unsubscribe/route.ts": {
+    reason: "one-click unsubscribe, POSTed by mail providers",
+    checks: "verifyReviewToken(",
+  },
 
   // Read by client websites in their visitors' browsers, where no session can
   // exist. Each returns only what the client chose to publish, and 404s on a

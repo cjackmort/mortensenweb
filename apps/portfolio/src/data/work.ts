@@ -1,9 +1,10 @@
 /**
- * The public portfolio, shown in full on `/work` — the homepage no longer
- * excerpts it.
+ * The public portfolio, shown in full on `/work`; the home page shows the
+ * first three.
  *
  * Adding a site is meant to be one entry in this array plus an image in
- * `public/work/` — no component changes. Keep the newest first.
+ * `public/work/` — no component changes. Live client work first, then demos,
+ * then our own.
  *
  * Two rules apply to anything added here, and both exist because this page
  * makes a claim about a real business that the business itself did not write:
@@ -28,7 +29,10 @@ export type Work = {
   name: string;
   /** What the business does — one short line, shown above the title. */
   sector: string;
-  /** Present tense, concrete, no adjectives that cannot be checked. */
+  /**
+   * One sentence, present tense, concrete, no adjectives that cannot be
+   * checked. The cards are compared side by side, so they stay short.
+   */
   description: string;
   /** Bare hostname, shown to the visitor. */
   domain: string;
@@ -57,7 +61,7 @@ export const WORK: Work[] = [
     name: "Scott Mortensen Fine Arts",
     sector: "Bronze sculpture studio",
     description:
-      "A five-page gallery site for a western wildlife sculptor. Full-bleed photography of the work, a gallery that keeps each piece whole rather than cropping it to a grid, and a commission enquiry form. Built to make the sculpture the only thing competing for attention.",
+      "Gallery site for a western wildlife sculptor: full-bleed photography, a gallery that never crops a piece, and a commission enquiry form.",
     domain: "scottmortensenfinearts.com",
     href: "https://scottmortensenfinearts.com",
     status: "live",
@@ -73,7 +77,7 @@ export const WORK: Work[] = [
     name: "Mitch Bedke Glass Art",
     sector: "Glass art studio",
     description:
-      "A gallery site for a glass artist — full-bleed shots of fused and blown work, a studio story, and a commission path. Built to make the glass itself carry the page rather than a template layout.",
+      "Gallery site for a glass artist: full-bleed shots of fused and blown work, the studio's story, and a commission path.",
     domain: "mitchbedkeart.com",
     href: "https://mitchbedkeart.com",
     status: "live",
@@ -81,6 +85,25 @@ export const WORK: Work[] = [
     image: "/work/mitch-bedke-art.webp",
     imageAlt: "A fused glass panel by Mitch Bedke, lit from behind.",
     autoTile: true,
+    year: 2026,
+  },
+  // Graci gave the operator permission to show this, as a demo only
+  // (operator, 2026-10-21) — so it stays `concept` and is labelled "Demo".
+  // No `autoTile`: the site does not publish /__preview/home-tile.png, so the
+  // image is a screenshot of its home page taken that day.
+  {
+    slug: "hair-by-graci",
+    name: "Hair by Graci",
+    sector: "Hair stylist",
+    description:
+      "Booking site for a hair stylist: clients pick one of the week's openings and say what they want done, and Graci confirms from her dashboard.",
+    domain: "hair-by-graci.netlify.app",
+    href: "https://hair-by-graci.netlify.app",
+    status: "concept",
+    tags: ["Online booking", "Weekly openings", "Owner dashboard"],
+    image: "/work/hair-by-graci.webp",
+    imageAlt:
+      "The Hair by Graci home page: the name in large black and red script type over a photo of Graci in a black dress.",
     year: 2026,
   },
   // Ours, and last on purpose. It goes in as `internal` because it is not a
@@ -91,7 +114,7 @@ export const WORK: Work[] = [
     name: "Jack Mortensen Portfolio",
     sector: "Mechanical engineering portfolio",
     description:
-      "A personal portfolio for a mechanical engineering student at the University of Utah. The featured project loads its CAD assembly into the page as a 3D model you can drag to rotate, so a reviewer turns the machine around instead of reading a photograph of it.",
+      "Portfolio for a mechanical engineering student: the featured project's CAD assembly loads as a 3D model you can drag to rotate.",
     domain: "jackmortensenportfolio.netlify.app",
     href: "https://jackmortensenportfolio.netlify.app",
     status: "internal",
@@ -105,6 +128,6 @@ export const WORK: Work[] = [
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {
   live: "Live",
-  concept: "Concept",
+  concept: "Demo",
   internal: "In-house",
 };
