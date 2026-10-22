@@ -4695,3 +4695,24 @@ form + .field-hint {
   color: var(--accent);
   margin-bottom: 0.75rem;
 }
+
+/* The domain the client bought, and the records to add, on the onboarding card. */
+.onboarding-domain {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.onboarding-domain h3 {
+  margin: 0 0 0.5rem;
+}
+
+.onboarding-domain dl {
+  margin: 0 0 0.75rem;
+}
+
+.onboarding-records td {
+  font-family: var(--mono);
+  word-break: break-all;
+}

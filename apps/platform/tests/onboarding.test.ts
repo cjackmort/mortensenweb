@@ -63,7 +63,7 @@ beforeEach(async () => {
 });
 
 describe("onboardingSteps", () => {
-  const none = { demoSentAt: null, loginSentAt: null, passwordSetAt: null, paidAt: null };
+  const none = { demoSentAt: null, loginSentAt: null, passwordSetAt: null, paidAt: null, domainAccessAt: null };
 
   it("starts at the demo", () => {
     expect(onboardingSteps(none).next).toBe("demo");
@@ -76,10 +76,10 @@ describe("onboardingSteps", () => {
     expect(onboardingSteps({ ...none, demoSentAt: at, loginSentAt: at, passwordSetAt: at }).next).toBe("paid");
   });
 
-  it("is finished once paid, whatever came before", () => {
+  it("moves to the domain once paid, whatever came before", () => {
     const result = onboardingSteps({ ...none, paidAt: new Date() });
-    expect(result.next).toBeNull();
-    expect(result.steps.map((s) => s.key)).toEqual(["demo", "login", "password", "paid"]);
+    expect(result.next).toBe("domain");
+    expect(result.steps.map((s) => s.key)).toEqual(["demo", "login", "password", "paid", "domain"]);
   });
 
   it("does not send a client who was given a login without a demo back to the demo", () => {
@@ -100,6 +100,7 @@ describe("getOnboarding", () => {
       ["login", "2026-10-19T16:00:00.000Z"],
       ["password", "2026-10-20T16:00:00.000Z"],
       ["paid", null],
+      ["domain", null],
     ]);
     expect(view?.next).toBe("paid");
   });
@@ -109,7 +110,8 @@ describe("getOnboarding", () => {
 
     const view = await onboarding.getOnboarding(admin, db, publicId);
 
-    expect(view?.next).toBeNull();
+    expect(view?.steps.find((s) => s.key === "paid")?.doneAt).not.toBeNull();
+    expect(view?.next).toBe("domain");
   });
 
   it("offers a draft email with the demo link and the operator's name", async () => {

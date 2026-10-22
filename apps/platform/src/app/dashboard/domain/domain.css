@@ -1,0 +1,58 @@
+/* The domain step: one card per registrar, side by side when there's room. */
+
+.domain-heading {
+  margin: var(--stack) 0 0.5rem;
+  font: 500 clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem) / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.domain-registrars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--stack);
+  margin: 1rem 0 var(--stack);
+}
+
+.domain-registrar {
+  margin: 0;
+}
+
+.domain-registrar .card-head {
+  margin-bottom: 0.5rem;
+}
+
+.domain-registrar h3 {
+  margin: 0;
+  font: 500 1.2rem / 1.2 var(--display);
+}
+
+.domain-price {
+  font-weight: 600;
+}
+
+.domain-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.domain-access {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.domain-steps {
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+.domain-steps li {
+  margin-bottom: 0.35rem;
+}
+
+.domain-links {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+}
+
+.domain-access-email {
+  word-break: break-all;
+}

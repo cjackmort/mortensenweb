@@ -13,6 +13,8 @@
  *  - Juniper Landscaping — password set, website unpaid: the cart.
  *  - Sagebrush Bakery — paying by card for Lite plus review requests: the Plan tab.
  *  - Red Rock Plumbing — demo emailed and login sent: the onboarding card.
+ *  - Bluebird Cleaning — paid, domain bought at Namecheap and access given:
+ *    the domain panel with its Netlify records.
  * Plus an admin, cart-preview-admin@example.test. Re-running replaces them.
  */
 
@@ -26,6 +28,7 @@ import {
   organizations,
   payments,
   servicePlans,
+  sites,
   subscriptions,
   users,
 } from "../../src/db/schema";
@@ -35,8 +38,14 @@ import { newPublicId } from "../../src/lib/ids";
 import { PREVIEW, previewPeriodEnd } from "./fixtures";
 
 const DAY = 86_400_000;
-const SLUGS = ["juniper-landscaping-preview", "sagebrush-bakery-preview", "red-rock-plumbing-preview"];
-const EMAILS = ["cart-preview-admin@example.test", "juniper@example.test", "sagebrush@example.test", "redrock@example.test"];
+const SLUGS = ["juniper-landscaping-preview", "sagebrush-bakery-preview", "red-rock-plumbing-preview", "bluebird-cleaning-preview"];
+const EMAILS = [
+  "cart-preview-admin@example.test",
+  "juniper@example.test",
+  "sagebrush@example.test",
+  "redrock@example.test",
+  "bluebird@example.test",
+];
 
 async function main(): Promise<void> {
   if (process.env.DATABASE_URL) {
@@ -146,10 +155,35 @@ async function main(): Promise<void> {
     record: { buildKey: build.key, demoUrl: "https://red-rock-plumbing-demo.netlify.app/", demoSentAt: ago(3) },
   });
 
+  const bluebird = await client({
+    name: "Bluebird Cleaning",
+    slug: SLUGS[3]!,
+    email: EMAILS[4]!,
+    contact: "Blake",
+    user: { invitedAt: ago(9), activatedAt: ago(8) },
+    record: {
+      buildKey: build.key,
+      buildPaidAt: ago(7),
+      demoUrl: "https://bluebird-cleaning-demo.netlify.app/",
+      demoSentAt: ago(12),
+      domainName: "bluebirdcleaning.com",
+      domainRegistrar: "namecheap",
+      domainAccessConfirmedAt: ago(1),
+    },
+  });
+  await db.insert(sites).values({
+    publicId: newPublicId(),
+    organizationId: bluebird.organizationId,
+    name: "Bluebird Cleaning",
+    netlifySiteName: "bluebird-cleaning",
+    isDemo: true,
+  });
+  await db.insert(payments).values({ publicId: newPublicId(), clientId: bluebird.id, amountCents: build.priceCents, method: "stripe", provider: "stripe", receivedOn: ago(7).toISOString().slice(0, 10), isDemo: true });
+
   console.log(
     JSON.stringify({
-      accounts: { admin: EMAILS[0], cart: EMAILS[1], plan: EMAILS[2], onboarding: EMAILS[3] },
-      clients: { juniper: juniper.publicId, sagebrush: sagebrush.publicId, redRock: redRock.publicId },
+      accounts: { admin: EMAILS[0], cart: EMAILS[1], plan: EMAILS[2], onboarding: EMAILS[3], domain: EMAILS[4] },
+      clients: { juniper: juniper.publicId, sagebrush: sagebrush.publicId, redRock: redRock.publicId, bluebird: bluebird.publicId },
     }),
   );
   process.exit(0);
