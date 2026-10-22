@@ -245,8 +245,8 @@ export async function askForGoogleChange(db: Database, ctx: TenantContext, raw: 
 
 /**
  * Google's own "write a review" link for the caller's profile — what Review
- * requests sends customers to. Null when no profile is linked yet, or the
- * first sync has not read it.
+ * requests sends customers to (`getReviewDestination`, which also checks it).
+ * Null when no profile is linked yet, or the first sync has not read it.
  */
 export async function getGoogleReviewLink(db: Database, ctx: TenantContext): Promise<{ url: string } | null> {
   const location = await locationFor(db, ctx);
@@ -256,8 +256,8 @@ export async function getGoogleReviewLink(db: Database, ctx: TenantContext): Pro
 
 /**
  * The profile's rating and review count, in the shape Review requests'
- * `ReviewStatsSource` returns (`lib/reviews/stats.ts` on its branch), so it
- * can prefer this over the Places API for a client with a linked profile.
+ * `ReviewStatsSource` returns (`lib/reviews/stats.ts`), which prefers this
+ * over the Places API for a client with a linked profile.
  */
 export async function getGoogleReviewStats(
   db: Database,

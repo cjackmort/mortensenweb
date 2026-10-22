@@ -3,15 +3,18 @@ import type { Database } from "@/db/client";
 import {
   businessProfiles,
   clients,
+  googleLocations,
   organizations,
   reviewRequests,
   reviewSettings,
   reviewSuppressions,
 } from "@/db/schema";
 import { sendEmail, type EmailMessage, type SendResult } from "@/lib/email/mailer";
+import { readSnapshot } from "@/lib/google-business/normalize";
 import { replySenderAddress } from "@/lib/growth/lead-reply";
 import { deliverReviewRequest } from "@/lib/reviews/deliver";
 import { reviewIdentity } from "@/lib/reviews/identity";
+import { reviewDestination, type ReviewDestination } from "@/lib/reviews/review-link";
 import { isWithinSendingHours } from "@/lib/reviews/sending-hours";
 import { sendSms, smsConfigured, type SmsResult } from "@/lib/reviews/sms";
 import { effectiveTemplate } from "@/lib/reviews/template";
@@ -32,15 +35,36 @@ const CLICK_DEBOUNCE_MS = 10_000;
 const REMINDERS_PER_RUN = 25;
 
 /**
+ * Where the business's customers are sent: its linked Google profile's own
+ * review form when it has one, else the link it entered. `snapshot` is
+ * `google_locations.snapshot`, which holds Google's `newReviewUri`.
+ */
+function destinationFor(snapshot: unknown, enteredUrl: string | null, organizationId: string): ReviewDestination | null {
+  const profileUrl = readSnapshot(snapshot)?.reviewUrl;
+  const destination = reviewDestination(profileUrl, enteredUrl);
+  if (profileUrl && destination?.from !== "profile") {
+    console.warn("[reviews] the linked profile's review link failed the check; using the entered link", { organizationId });
+  }
+  return destination;
+}
+
+/**
  * Record a click on a review link and return where to send the customer: the
- * business's review form as it is set up *now*, so fixing a wrong link also
- * fixes every email already sent.
+ * business's review form as it is set up *now* — the linked Google profile's
+ * own form, or the link the business entered — so fixing a wrong link, or
+ * linking the profile, also fixes every email already sent.
  */
 export async function recordReviewClick(db: Database, publicId: string, now = new Date()): Promise<string | null> {
   const [row] = await db
-    .select({ id: reviewRequests.id, reviewUrl: reviewSettings.reviewUrl })
+    .select({
+      id: reviewRequests.id,
+      organizationId: reviewRequests.organizationId,
+      reviewUrl: reviewSettings.reviewUrl,
+      profile: googleLocations.snapshot,
+    })
     .from(reviewRequests)
     .innerJoin(reviewSettings, eq(reviewSettings.organizationId, reviewRequests.organizationId))
+    .leftJoin(googleLocations, eq(googleLocations.organizationId, reviewRequests.organizationId))
     .where(eq(reviewRequests.publicId, publicId))
     .limit(1);
   if (!row) return null;
@@ -60,7 +84,7 @@ export async function recordReviewClick(db: Database, publicId: string, now = ne
         or(isNull(reviewRequests.lastClickedAt), lt(reviewRequests.lastClickedAt, new Date(now.getTime() - CLICK_DEBOUNCE_MS))),
       ),
     );
-  return row.reviewUrl;
+  return destinationFor(row.profile, row.reviewUrl, row.organizationId)?.url ?? null;
 }
 
 /** What the unsubscribe page needs to say: whose requests, and whether that is done already. */
@@ -297,6 +321,8 @@ export interface ClientReviewsView {
     remindersEnabled: boolean;
     customised: boolean;
   } | null;
+  /** Where a click sends their customers right now — the same answer `recordReviewClick` gives. */
+  destination: ReviewDestination | null;
   sent: number;
   clicked: number;
   reminded: number;
@@ -330,6 +356,11 @@ export async function getClientReviews(
   const org = client.organizationId;
 
   const [settings] = await db.select().from(reviewSettings).where(eq(reviewSettings.organizationId, org)).limit(1);
+  const [profile] = await db
+    .select({ snapshot: googleLocations.snapshot })
+    .from(googleLocations)
+    .where(eq(googleLocations.organizationId, org))
+    .limit(1);
   const [counts] = await db
     .select({
       sent: sql<number>`count(*) filter (where ${reviewRequests.sentAt} is not null)::int`,
@@ -371,6 +402,7 @@ export async function getClientReviews(
           customised: Boolean(settings.emailSubject ?? settings.emailBody ?? settings.reminderBody),
         }
       : null,
+    destination: destinationFor(profile?.snapshot, settings?.reviewUrl ?? null, org),
     sent: Number(counts?.sent ?? 0),
     clicked: Number(counts?.clicked ?? 0),
     reminded: Number(counts?.reminded ?? 0),

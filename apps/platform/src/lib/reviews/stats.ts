@@ -4,14 +4,20 @@ import { getPlaceSummary } from "./places";
  * Where a business's Google rating and review count come from — a seam, so
  * the source can change without touching the page.
  *
- * Today the only source is the Places API, behind `GOOGLE_PLACES_API_KEY`: a
- * current rating and count, no history. The Google profile management feature
- * (`lib/google-business`, branch `feat/google-profile`) will be able to supply
- * reviews over time once Google approves Business Profile API access for the
- * portal; when it can, it implements `ReviewStatsSource` with `history` filled
- * in and `reviewStatsSource()` prefers it for businesses with a linked
- * profile. Until then a business without a place id, or without the key set,
- * gets `unavailable` and the page shows nothing — never a guessed figure.
+ * Two sources, in order:
+ *
+ *  1. **The linked Google Business Profile**, for a business whose profile the
+ *     agency manages: the portal's own copy, synced every six hours
+ *     (`getGoogleReviewStats` in `db/repositories/client/google-profile.ts`).
+ *     It costs no API call when the page renders.
+ *  2. **The Places API**, behind `GOOGLE_PLACES_API_KEY`: a current rating and
+ *     count from the business's place id, no history.
+ *
+ * A profile that is linked but has not synced yet — the state of every
+ * profile while Google has not approved Business Profile API access — or that
+ * synced without a rating or a count, falls through to Places rather than
+ * hiding a figure Places has. A business with neither gets `unavailable` and
+ * the page shows nothing: never a guessed figure.
  */
 
 export interface ReviewStats {
@@ -29,6 +35,9 @@ export type ReviewStatsResult =
 
 export type ReviewStatsSource = (business: { placeId: string | null }) => Promise<ReviewStatsResult>;
 
+/** The business's linked profile, already scoped to it by the caller. */
+export type LinkedProfileStats = () => Promise<ReviewStatsResult>;
+
 export const placesReviewStats: ReviewStatsSource = async ({ placeId }) => {
   if (!placeId) return { ok: false, reason: "unavailable" };
   const result = await getPlaceSummary(placeId);
@@ -39,6 +48,19 @@ export const placesReviewStats: ReviewStatsSource = async ({ placeId }) => {
   };
 };
 
-export function reviewStatsSource(): ReviewStatsSource {
-  return placesReviewStats;
+function hasFigures(stats: ReviewStats): boolean {
+  return stats.rating !== null || stats.reviewCount !== null;
+}
+
+export function reviewStatsSource({
+  linkedProfile,
+  places = placesReviewStats,
+}: { linkedProfile?: LinkedProfileStats; places?: ReviewStatsSource } = {}): ReviewStatsSource {
+  return async (business) => {
+    if (linkedProfile) {
+      const fromProfile = await linkedProfile();
+      if (fromProfile.ok && hasFigures(fromProfile.stats)) return fromProfile;
+    }
+    return places(business);
+  };
 }
