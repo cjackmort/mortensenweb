@@ -181,6 +181,9 @@ const organization = {
             <p class="footer__h">Company</p>
             <ul>
               {NAV.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+              {/* Not in NAV: it belongs in no menu, but Google's OAuth
+                  verification wants it reachable from the home page. */}
+              <li><a href="/privacy/">Privacy</a></li>
             </ul>
           </div>
           <div>

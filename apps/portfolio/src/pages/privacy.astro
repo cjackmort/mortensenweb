@@ -1,0 +1,468 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../data/site";
+
+/**
+ * Privacy policy for this site and the client portal.
+ *
+ * Every line describes something the code actually does, checked against
+ * apps/platform and this app on 2026-10-22. If a practice changes — a new
+ * provider, a new kind of email, data kept for longer — change this page in
+ * the same pull request, or it stops being true.
+ *
+ * Google's OAuth consent screen points here, and Google reviews the Business
+ * Profile section against what the portal does with the business.manage
+ * scope. The Limited Use sentence is Google's own sample wording (Google Cloud
+ * help, answer 13463817); keep it word for word.
+ *
+ * No law or certification is claimed on purpose. Nothing here has been
+ * checked by a lawyer yet; the pull request that added it lists what to ask.
+ */
+
+const EFFECTIVE = { iso: "2026-10-22", label: "October 22, 2026" };
+const portalHost = new URL(SITE.portalUrl).host;
+const GOOGLE_USER_DATA_POLICY =
+  "https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes";
+---
+
+<Base
+  title="Privacy policy"
+  description={`What ${SITE.name} collects on mortensenweb.com and in its client portal, who handles it, how long it is kept, and how to have it deleted.`}
+  path="/privacy/"
+>
+  <section class="section policy">
+    <div class="wrap">
+      <div class="section-head section-head--top">
+        <div><p class="eyebrow">Privacy</p></div>
+        <div>
+          <h1>Privacy policy</h1>
+          <p class="lede">
+            What we collect on this website and in our client portal, who handles it for us, and how to have it
+            deleted.
+          </p>
+          <p class="policy__date">Effective <time datetime={EFFECTIVE.iso}>{EFFECTIVE.label}</time></p>
+
+          <ul class="ticks">
+            <li>We collect what you send us, and what our clients put in their portal.</li>
+            <li>The visitor counter on this site sets no cookies.</li>
+            <li>We don't sell personal information or use it for advertising.</li>
+            <li>Our clients' customer details belong to our clients. We use them only to do what the client asks.</li>
+            <li>Ask us, and we'll tell you what we hold about you, or delete it.</li>
+          </ul>
+        </div>
+      </div>
+
+      <ol class="rows">
+        <li id="who">
+          <h2 class="h3"><span class="n">01</span> Who we are</h2>
+          <div>
+            <p>
+              {SITE.name} is a one-person web design business in {SITE.locality}, {SITE.region}, run by {SITE.founder}.
+              "We" on this page means the business.
+            </p>
+            <p>
+              This policy covers mortensenweb.com and the client portal at {portalHost}. It doesn't cover the
+              websites we build for clients. Each of those belongs to the business it's for.
+            </p>
+          </div>
+        </li>
+
+        <li id="contact-form">
+          <h2 class="h3"><span class="n">02</span> When you contact us</h2>
+          <div>
+            <p>
+              The <a class="link" href="/contact/">contact form</a> asks for your name, email, business name, your
+              current website if you have one, the plan you're interested in, and your message. It runs on Netlify
+              Forms. Netlify stores what you send and passes it to us by email and into the enquiry inbox in our
+              portal.
+            </p>
+            <p>
+              Email to us goes to a Gmail account, so Google stores it. If you call, we may note what we talked
+              about.
+            </p>
+            <p>
+              We use all of this to reply to you and to quote for the work. We don't add you to a mailing list.
+            </p>
+          </div>
+        </li>
+
+        <li id="analytics">
+          <h2 class="h3"><span class="n">03</span> Visitor counting on this site</h2>
+          <div>
+            <p>
+              We count visits with Umami Cloud. It sets no cookies. It records the page you opened, the site that
+              sent you, your browser, operating system and type of device, and your approximate location. We also
+              count clicks on our phone number, our email address and the contact form's Send button.
+            </p>
+            <p>
+              Umami uses your IP address briefly to tell visits apart and estimate your location, and doesn't keep
+              it in the visitor records. It may keep it in its own security logs. We see counts and pages, not
+              names.
+            </p>
+            <p>
+              This site's two typefaces load from Google Fonts, so your browser asks Google's servers for them.
+              There are no ad trackers or social media pixels on this site.
+            </p>
+          </div>
+        </li>
+
+        <li id="portal">
+          <h2 class="h3"><span class="n">04</span> Client portal accounts</h2>
+          <div>
+            <p>
+              Each portal user has a name, an email address, a username and a password. We store passwords only
+              as a salted one-way hash (PBKDF2 with 600,000 rounds), so we can't read them.
+            </p>
+            <p>
+              Signing in sets one cookie that keeps you signed in for up to 30 days. The portal needs it to know
+              who you are. It isn't used for tracking or ads, and the portal has no analytics.
+            </p>
+            <p>
+              To stop password guessing, we log sign-in attempts, with the email address and IP address stored
+              only as one-way hashes. We also keep a log of important actions, such as payments and approvals.
+              We can open your portal as you see it to help you, and each time we do is logged.
+            </p>
+            <p>
+              Clients also put their business details, change requests, photos and files, approvals and
+              billing in the portal. That's kept in our database and file storage, described below.
+            </p>
+          </div>
+        </li>
+
+        <li id="changes">
+          <h2 class="h3"><span class="n">05</span> Change requests, GitHub and AI</h2>
+          <div>
+            <p>
+              Each client's website is kept in its own private repository on GitHub. When you ask for a change,
+              the portal turns it into a GitHub issue in that repository: your words, your business details, and
+              links to any photos you attached. The photo links expire.
+            </p>
+            <p>
+              An AI agent, Anthropic's Claude, running in GitHub Actions, reads the issue and makes the change on
+              a private preview. It downloads the photos you attached into the repository so the site can use
+              them. Nothing goes live until you approve the preview.
+            </p>
+          </div>
+        </li>
+
+        <li id="payments">
+          <h2 class="h3"><span class="n">06</span> Payments</h2>
+          <div>
+            <p>
+              Card payments are handled by Stripe, on Stripe's own checkout and billing pages. We never see or
+              store your full card number. Stripe tells us what was paid, when and for what, and we keep that in
+              our records.
+            </p>
+            <p>If you pay by Venmo instead, Venmo handles the transfer and we record the payment once we've checked it.</p>
+          </div>
+        </li>
+
+        <li id="email">
+          <h2 class="h3"><span class="n">07</span> Email from the portal</h2>
+          <div>
+            <p>
+              The portal sends email through Resend: sign-in and password emails, updates on your requests,
+              payment reminders and monthly reports. You can turn off the monthly report email in the portal.
+            </p>
+            <p>
+              Resend tells us whether an email was delivered or bounced. For win-back emails (below) it can also
+              tell us whether an email was opened or a link in it was clicked.
+            </p>
+          </div>
+        </li>
+
+        <li id="customers">
+          <h2 class="h3"><span class="n">08</span> Our clients' customers</h2>
+          <div>
+            <p>Some portal tools handle details about our clients' own customers:</p>
+            <ul class="policy__list">
+              <li>
+                <strong>Enquiries.</strong> A message sent through a client's website form goes into that client's
+                inbox in the portal. If the client replies from the portal, we send the reply through Resend under
+                the business's name, and your answer goes straight to the business.
+              </li>
+              <li>
+                <strong>Review requests.</strong> A client enters a customer's name and email address or phone
+                number to ask for a Google review. We send one request and at most one reminder. Texts go through
+                Twilio, and only when the client confirms the customer agreed to be texted.
+              </li>
+              <li>
+                <strong>Win-back emails.</strong> A client can email past customers, from enquiries they won or a
+                list they upload, with messages the client approves. Each one carries the business's postal
+                address.
+              </li>
+            </ul>
+            <p>
+              Every review request and win-back email has an unsubscribe link, and replying STOP to a text stops
+              them.
+              Unsubscribes go on that business's do-not-send list, which is checked before every send. Win-back
+              emails also stop going to addresses that bounce or report spam.
+            </p>
+            <p>
+              We handle these details for the client and only to do what the client asks. The client decides
+              who to contact. A client can delete an enquiry, which erases the person's details from the portal;
+              Netlify keeps its own copy of form submissions until it's deleted there.
+            </p>
+            <p>
+              If you're one of our clients' customers and want your details removed, ask the business,
+              or <a class="link" href="#contact">contact us</a> and we'll delete them from the portal.
+            </p>
+          </div>
+        </li>
+
+        <li id="google">
+          <h2 class="h3"><span class="n">09</span> Google Business Profile</h2>
+          <div>
+            <p>
+              Some clients have us look after their Google Business Profile. The client adds our Google account
+              as a manager of their profile, and the portal connects to Google's Business Profile APIs with that
+              account (the <span class="mono">business.manage</span> permission).
+            </p>
+            <p><strong>What we read:</strong></p>
+            <ul class="policy__list">
+              <li>which business profiles our account manages, and invitations to manage new ones</li>
+              <li>the profile's details: name, address, phone, website, categories, description and hours</li>
+              <li>reviews and their replies, including the reviewer's display name, rating and comment</li>
+              <li>posts and photo counts</li>
+              <li>
+                performance figures: how often the profile was seen in Search and Maps, calls, website clicks and
+                direction requests, and the search terms people used to find it
+              </li>
+            </ul>
+            <p><strong>What we change</strong>, only when the client asks or approves:</p>
+            <ul class="policy__list">
+              <li>hours, holiday hours and the description</li>
+              <li>replies to reviews</li>
+              <li>posts and photos</li>
+              <li>accepting an invitation the client sends us to manage their profile</li>
+            </ul>
+            <p>
+              We use this data only to manage that client's own profile and to show them how it's doing, in their
+              portal and in the reports we send them. Review reply drafts come from a template in the portal, and
+              none is published until a person approves it. We don't sell Google data, use it for advertising, or
+              use it to train AI models. We don't share it with anyone except the client whose profile it is and
+              the providers that run the portal for us: Netlify, Neon, and Resend for the client's report email.
+            </p>
+            <p>
+              We keep a copy in our database so the portal can show it. When a profile is unlinked from the
+              portal, its reviews, figures and search terms are deleted. Our Google sign-in token is stored
+              encrypted. A client can remove our account as a manager of their profile at any time, and we can
+              disconnect the portal from Google at any time, which revokes its access.
+            </p>
+            <p class="policy__statement">
+              {SITE.name}'s use of information received from Google APIs will
+              adhere to <a class="link" href={GOOGLE_USER_DATA_POLICY}>Google API Services User Data Policy</a>,
+              including the Limited Use requirements.
+            </p>
+            <p>
+              To set up review requests, the portal can also look up a business on Google Places to find its
+              listing and show its current rating. That lookup is about the business, not a person, and only the
+              listing's ID is stored.
+            </p>
+          </div>
+        </li>
+
+        <li id="optional">
+          <h2 class="h3"><span class="n">10</span> Used only when switched on</h2>
+          <div>
+            <p>These are built into the portal but stay off unless we switch them on:</p>
+            <ul class="policy__list">
+              <li><strong>Twilio</strong> sends review-request texts, as described above.</li>
+              <li>
+                <strong>Google Ads and Meta</strong> (Facebook and Instagram). If a client runs ads through us, we
+                read the campaign's results, like spend, views and clicks, to report them. We don't upload customer
+                lists to either.
+              </li>
+              <li>
+                <strong>Square</strong> can take card payments in place of Stripe, the same way: on Square's pages,
+                and we never see the card number.
+              </li>
+            </ul>
+          </div>
+        </li>
+
+        <li id="providers">
+          <h2 class="h3"><span class="n">11</span> Who handles data for us</h2>
+          <div>
+            <dl class="policy__providers">
+              <div><dt>Netlify</dt><dd>hosts this site and the portal, runs the contact forms, and stores portal uploads</dd></div>
+              <div><dt>Neon</dt><dd>the portal's database</dd></div>
+              <div><dt>GitHub</dt><dd>stores client website code and change requests</dd></div>
+              <div><dt>Anthropic</dt><dd>the Claude AI agent that makes requested changes</dd></div>
+              <div><dt>Resend</dt><dd>sends the portal's email</dd></div>
+              <div><dt>Stripe</dt><dd>card payments</dd></div>
+              <div><dt>Umami</dt><dd>visitor counts on this site</dd></div>
+              <div><dt>Google</dt><dd>our email (Gmail), this site's fonts, and the Business Profile and Places APIs</dd></div>
+            </dl>
+            <p>
+              Plus the services in section 10, when they're on. We share information with each only so it can do
+              that job. We'll also share information if the law requires it.
+            </p>
+          </div>
+        </li>
+
+        <li id="retention">
+          <h2 class="h3"><span class="n">12</span> How long we keep it</h2>
+          <div>
+            <ul class="policy__list">
+              <li>
+                <strong>Portal accounts and what's in them:</strong> while you're a client. When you leave, we close
+                the account. Ask, and we'll delete it, except billing records we keep for our accounts and taxes.
+              </li>
+              <li>
+                <strong>Enquiries in a client's inbox:</strong> until the client deletes them. Older ones move to an
+                archive; they aren't deleted automatically.
+              </li>
+              <li>
+                <strong>Photos and files:</strong> deleting one moves it to the trash. Emptying the trash deletes
+                the file.
+              </li>
+              <li><strong>Google profile data:</strong> until the profile is unlinked from the portal.</li>
+              <li><strong>Sign-in and action logs:</strong> kept to protect accounts.</li>
+            </ul>
+            <p>We don't delete old records on a schedule yet. If you want something gone, ask.</p>
+          </div>
+        </li>
+
+        <li id="choices">
+          <h2 class="h3"><span class="n">13</span> Your choices</h2>
+          <div>
+            <p>
+              <a class="link" href="#contact">Contact us</a> to see what we hold about you, to correct it, or to
+              delete it. We may need to check it's you first. Review requests and win-back emails each have an
+              unsubscribe link, and clients can turn off the monthly report.
+            </p>
+          </div>
+        </li>
+
+        <li id="security">
+          <h2 class="h3"><span class="n">14</span> Security</h2>
+          <div>
+            <p>
+              Everything travels over HTTPS. Passwords are hashed, our Google token is encrypted, and client
+              repositories are private. No system is perfect. If we learn of a breach that affects your
+              information, we'll tell you.
+            </p>
+          </div>
+        </li>
+
+        <li id="children">
+          <h2 class="h3"><span class="n">15</span> Children</h2>
+          <div>
+            <p>
+              This site and the portal are for businesses. They aren't meant for children, and we don't knowingly
+              collect information from anyone under 13.
+            </p>
+          </div>
+        </li>
+
+        <li id="updates">
+          <h2 class="h3"><span class="n">16</span> Changes to this policy</h2>
+          <div>
+            <p>
+              When we change this policy, we'll update the date at the top. If a change affects how we use
+              clients' data, we'll email clients before it takes effect.
+            </p>
+          </div>
+        </li>
+
+        <li id="contact">
+          <h2 class="h3"><span class="n">17</span> Contact</h2>
+          <div>
+            <p>
+              {SITE.founder}<br />
+              {SITE.name}, {SITE.locality}, {SITE.region}<br />
+              <a class="link" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a><br />
+              <a class="link" href={SITE.phoneHref} data-umami-event="called">{SITE.phone}</a>
+            </p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* A long read: the row grid from the services page, with prose in the right
+     column held to a readable measure. Page-scoped so global.css is untouched. */
+  .policy h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .policy .lede {
+    margin-top: var(--space-4);
+  }
+
+  .policy__date {
+    margin-top: var(--space-4);
+    font: 400 var(--text-xs) / 1.6 var(--mono);
+    color: var(--muted);
+  }
+
+  .policy .rows > li {
+    scroll-margin-top: 7rem;
+  }
+
+  .policy .rows > li > div > * + * {
+    margin-top: var(--space-4);
+  }
+
+  .policy .rows p,
+  .policy__list,
+  .policy__providers {
+    max-width: 62ch;
+    color: var(--ink-2);
+  }
+
+  .policy .rows strong {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* Square blue markers, like the .ticks list in the page head. */
+  .policy__list {
+    margin: 0;
+    padding-left: 1.1rem;
+    list-style: square;
+  }
+
+  .policy__list li::marker {
+    color: var(--blue);
+  }
+
+  .policy__list li + li {
+    margin-top: var(--space-2);
+  }
+
+  .policy__statement {
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--blue);
+  }
+
+  .policy__providers {
+    margin: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .policy__providers > div {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .policy__providers dt {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .policy__providers dd {
+    margin: 0;
+  }
+
+  /* An email address in the contact block may not fit a 320px line whole. */
+  .policy a {
+    overflow-wrap: anywhere;
+  }
+</style>
