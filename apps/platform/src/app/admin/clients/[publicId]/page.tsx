@@ -30,6 +30,8 @@ import { stripeConfigured, TEST_PLAN } from "@/lib/payments/stripe";
 import { listPromoOptions } from "@/lib/payments/promos";
 import { getClientPromo } from "@/db/repositories/admin/promos";
 import { getClientBuild } from "@/db/repositories/admin/client-build";
+import { getOnboarding } from "@/db/repositories/admin/onboarding";
+import { OnboardingSection } from "./onboarding-section";
 import { BUILDS } from "@mortensenweb/plans";
 import { isOpen } from "@/lib/requests/status";
 import { ActivateForm, ReissueForm } from "./credential-forms";
@@ -95,7 +97,7 @@ export default async function ClientDetailPage({
   }
 
   const { client, organization, requests } = detail;
-  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews, reports] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews, reports, onboarding] = await Promise.all([
     listOrganizationUsers(ctx, db, organization.id),
     listSitesWithAnalytics(ctx, db, organization.id),
     listClientPaymentRequests(ctx, db, organization.id),
@@ -104,6 +106,7 @@ export default async function ClientDetailPage({
     getBillingPlan(db, client.id),
     getClientReviews(ctx, db, client.publicId),
     getClientReports(ctx, db, client.publicId),
+    section ? Promise.resolve(null) : getOnboarding(ctx, db, publicId),
   ]);
 
   const summaries = summarise({
@@ -185,6 +188,10 @@ export default async function ClientDetailPage({
             </dl>
           </section>
 
+          {onboarding && !client.isInternal && (
+            <OnboardingSection clientPublicId={client.publicId} view={onboarding} />
+          )}
+
           <PortalAccess
             clientPublicId={client.publicId}
             contactName={client.primaryContactName}
@@ -214,7 +221,7 @@ function PortalAccess({
 }) {
   if (accounts.length === 0) {
     return (
-      <section className="card">
+      <section className="card" id="portal-access">
         <h2>Portal access</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           This client cannot sign in yet. Activating creates their account and issues a temporary
@@ -232,7 +239,7 @@ function PortalAccess({
   }
 
   return (
-    <section className="card">
+    <section className="card" id="portal-access">
       <h2>Portal access</h2>
       <div className="table-wrap">
         <table className="stack">

@@ -165,6 +165,15 @@ export const clients = pgTable(
     demoUrl: text("demo_url"),
     /** When the demo link was emailed, for the onboarding status. */
     demoSentAt: timestamp("demo_sent_at", { withTimezone: true }),
+    /**
+     * The domain the client bought, in their own name, so it stays theirs.
+     * Bare (`example.com`), as `apexDomain` leaves it.
+     */
+    domainName: text("domain_name"),
+    /** Where they bought it: a key from `lib/domains/registrars.ts`, or "other". */
+    domainRegistrar: text("domain_registrar"),
+    /** When they told us they had given us access to it. Their word, not a check. */
+    domainAccessConfirmedAt: timestamp("domain_access_confirmed_at", { withTimezone: true }),
 
     isDemo: boolean("is_demo").notNull().default(false),
     /**

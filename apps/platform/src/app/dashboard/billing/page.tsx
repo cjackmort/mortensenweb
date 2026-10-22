@@ -14,6 +14,7 @@ import {
 import { cardProvider } from "@/lib/payments/card-provider";
 import { getStripeBillingPanel } from "@/db/repositories/client/stripe-billing";
 import { getCart } from "@/db/repositories/client/cart";
+import { getDomainStep } from "@/db/repositories/client/domain";
 import { formatCents } from "@/lib/billing/cart";
 import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
@@ -58,12 +59,13 @@ export default async function BillingPage({
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [overview, entitlements, canRecur, stripePanel, cart] = await Promise.all([
+  const [overview, entitlements, canRecur, stripePanel, cart, domain] = await Promise.all([
     getBillingOverview(db, ctx),
     getEntitlements(db, ctx),
     recurringAvailable(db, ctx),
     getStripeBillingPanel(db, ctx),
     getCart(db, ctx),
+    getDomainStep(db, ctx),
   ]);
 
   /**
@@ -150,6 +152,21 @@ export default async function BillingPage({
             </p>
             <Link className="button" href="/dashboard/cart">
               Pay for your website
+            </Link>
+          </section>
+        )}
+
+        {(cartPaid || domain?.paid) && !domain?.confirmedAt && (
+          <section className="card" aria-labelledby="billing-domain">
+            <div className="card-head">
+              <h2 id="billing-domain">Next: your domain</h2>
+            </div>
+            <p>
+              Buy your domain in your own name, so it stays yours, and give us access to point it at your new site. It
+              isn&rsquo;t part of your payment to us.
+            </p>
+            <Link className="button" href="/dashboard/domain">
+              Get your domain
             </Link>
           </section>
         )}
