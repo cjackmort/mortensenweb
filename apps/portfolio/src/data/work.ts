@@ -41,7 +41,7 @@ export type Work = {
   status: WorkStatus;
   /** Short capability labels. Three or four reads best; more wraps badly. */
   tags: string[];
-  /** Path under `public/`. 1120×700 WebP, with a `-640` variant beside it. */
+  /** Path under `public/`. 1120×700 WebP, with `-800` and `-640` variants beside it. */
   image: string;
   /** Describes the image for anyone who cannot see it — not the project. */
   imageAlt: string;

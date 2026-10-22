@@ -143,8 +143,9 @@ const schema = [
   <section class="hero-sq sq">
     <div class="hero-sq__grid" aria-hidden="true"></div>
     {/* Answers to the pointer. Falls back to the static grid above it if it
-        never mounts. */}
-    <HeroField client:load />
+        never mounts. `client:idle`, not `load`: the hero is complete without
+        it, so React waits until the first paint is done. */}
+    <HeroField client:idle />
     <Lockup />
     {/* The way to contact us from the first screen. Before this the only route
         from the home page was the masthead's "Client login" — which is for

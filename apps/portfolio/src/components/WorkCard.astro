@@ -27,6 +27,11 @@ const hasAuto =
 
 const image = hasAuto ? auto : work.image;
 const small = image.replace(/\.webp$/, "-640.webp");
+// The width a phone actually picks. Checked for, because an auto tile written
+// before the script made it has only the other two.
+const medium = image.replace(/\.webp$/, "-800.webp");
+const hasMedium = existsSync(path.join(process.cwd(), "public", medium));
+const srcset = [`${small} 640w`, ...(hasMedium ? [`${medium} 800w`] : []), `${image} 1120w`].join(", ");
 ---
 
 {/* The card as Wasatch Web lays theirs out — the screenshot first, then what
@@ -35,7 +40,7 @@ const small = image.replace(/\.webp$/, "-640.webp");
   <figure>
     <img
       src={image}
-      srcset={`${small} 640w, ${image} 1120w`}
+      srcset={srcset}
       sizes="(max-width: 40rem) 100vw, (max-width: 70rem) 50vw, 33vw"
       width="1120"
       height="700"
