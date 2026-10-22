@@ -1,12 +1,16 @@
 ---
 import Base from "../layouts/Base.astro";
-import { SITE } from "../data/site";
+import { SITE, START } from "../data/site";
+import { BOOKING } from "../data/booking";
 import { PLANS, dollars } from "@mortensenweb/plans";
 /**
  * Netlify Forms, not a route handler. The form must exist in the built HTML
  * for Netlify's build step to detect it; `form-name` identifies the
  * submission; `action` must be a real built page; the honeypot is a field a
  * human never fills, positioned off-screen and hidden from assistive tech.
+ *
+ * "Book a call" sits beside the form only once `BOOKING_URL` is set in
+ * src/data/booking.ts. Until then it is absent from the HTML, not hidden.
  */
 ---
 
@@ -20,21 +24,27 @@ import { PLANS, dollars } from "@mortensenweb/plans";
       <div class="section-head">
         <div><p class="eyebrow">Contact</p></div>
         <div>
-          <h1 style="font-size: var(--text-2xl)">Tell us about the business.</h1>
+          <h1 style="font-size: var(--text-2xl)">See your site before you pay.</h1>
           <p class="lede" style="margin-top: 1rem">
-            The more concrete you are about what is wrong with the current site
-            — or what the new one has to do — the more useful our first reply
-            will be. Every enquiry gets an answer, including the ones where we
-            are not the right fit.
+            Tell us about the business. We build a demo of your site and send
+            you the link, and you pay once you have approved it. Every enquiry
+            gets an answer, including the ones where we are not the right fit.
           </p>
         </div>
       </div>
 
       <div class="section-head section-head--top" style="border-top: 0; margin-bottom: 0; padding-top: 0">
         <div>
-          <p class="eyebrow" style="margin-bottom: .75rem">Or call or email</p>
+          <p class="eyebrow" style="margin-bottom: .75rem">{BOOKING ? "Or call, email or book a call" : "Or call or email"}</p>
           <p><a class="link link--standalone" href={SITE.phoneHref} data-umami-event="called">{SITE.phone}</a></p>
           <p style="margin-top: .5rem"><a class="link link--standalone" href={`mailto:${SITE.email}`} data-umami-event="emailed">{SITE.email}</a></p>
+          {BOOKING && (
+            <p style="margin-top: 1.25rem">
+              <a class="btn btn--ghost" href={BOOKING} data-umami-event="book a call">
+                Book a call <span class="arrow">→</span>
+              </a>
+            </p>
+          )}
           <p class="hint" style="margin-top: 1rem; color: var(--muted); font-size: var(--text-sm); max-width: 28ch">
             {SITE.founder}, {SITE.locality}, {SITE.region}.
           </p>
@@ -119,6 +129,29 @@ import { PLANS, dollars } from "@mortensenweb/plans";
           </div>
         </form>
       </div>
+    </div>
+  </section>
+
+  <section class="section section--sunk">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">What happens next</p></div>
+        <div>
+          <h2>A demo first. Payment last.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            Pricing is on the <a class="link" href="/pricing/">pricing page</a>, and everything else a
+            website costs is in the <a class="link" href="/website-cost/">price guide</a>.
+          </p>
+        </div>
+      </div>
+      <ol class="rows">
+        {START.map((step) => (
+          <li class="reveal">
+            <h3><span class="n">{step.n}</span> {step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
     </div>
   </section>
 </Base>

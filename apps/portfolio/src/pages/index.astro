@@ -3,11 +3,12 @@ import Base from "../layouts/Base.astro";
 import Marquee from "../components/Marquee.astro";
 import Lockup from "../components/Lockup.astro";
 import WorkCard from "../components/WorkCard.astro";
+import Reviews from "../components/Reviews.astro";
 import HeroField from "../react/HeroField";
 import "../styles/home.css";
 import { Font } from "astro:assets";
 import { BUILD, CHEAPEST_PLAN, FREE_PORTAL, GROWTH_FEATURES, PLANS, dollars, isFree, type Plan } from "@mortensenweb/plans";
-import { LOOP, SITE } from "../data/site";
+import { LOOP, SITE, START } from "../data/site";
 import { WORK } from "../data/work";
 
 /*
@@ -100,6 +101,10 @@ const faq = [
   {
     q: "What does a website cost?",
     a: `${dollars(BUILD.priceCents)}, one time, designed and built for your business and launched on your domain. A monthly plan is optional; without one, the site is handed over at launch.`,
+  },
+  {
+    q: "Do I pay before I see the site?",
+    a: "No. We build a demo of your site first and send you the link. You pay once you have seen it and approved it.",
   },
   {
     q: "What is free?",
@@ -216,14 +221,37 @@ const schema = [
       <p class="eyebrow" style="margin-top: var(--space-5)">
         <a class="link" href="/work/">See all our work →</a>
       </p>
+      {/* Real Google reviews only; renders nothing while there are none. */}
+      <Reviews />
     </div>
   </section>
 
   {/* --------------------------------------------------------- the steps */}
+  {/* Getting a site first, demo before payment; then the four steps every
+      change takes after launch. One section, so the banding is unchanged. */}
   <section class="section">
     <div class="wrap">
       <div class="section-head reveal">
         <div><p class="eyebrow">How it works</p></div>
+        <div>
+          <h2>See your site before you pay.</h2>
+          <p class="lede" style="margin-top: 1rem">
+            We build a demo of your site first. You pay once you have seen it and said yes.
+          </p>
+        </div>
+      </div>
+      <ol class="cells cells--start">
+        {START.map((step) => (
+          <li class="reveal">
+            <p class="n">Step {step.n}</p>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
+
+      <div class="section-head reveal" style="margin-top: var(--space-8)">
+        <div><p class="eyebrow">After launch</p></div>
         <div>
           <h2>Website changes, made easy.</h2>
           <p class="lede" style="margin-top: 1rem">Every change to your site goes through the same four steps.</p>
@@ -320,6 +348,9 @@ const schema = [
           ))
         }
       </ul>
+      <p class="more-links">
+        <a class="link" href="/website-cost/">What a website costs, in full →</a>
+      </p>
     </div>
   </section>
 
@@ -341,3 +372,13 @@ const schema = [
     </div>
   </section>
 </Base>
+
+<style>
+  /* Five steps in one row once there is room for five readable cells; below
+     that, the cells' own auto-fit wraps them. */
+  @media (min-width: 75rem) {
+    .cells--start {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+</style>
