@@ -119,7 +119,7 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     benefit: "An active, accurate profile ranks higher on Google Maps and turns more searches into calls.",
     addOnCents: 6500,
     includedFrom: "pro",
-    available: false,
+    available: true,
   },
 ];
 

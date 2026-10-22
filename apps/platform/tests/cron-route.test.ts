@@ -43,6 +43,7 @@ const jobs = {
   runScheduledAdSync: job("runScheduledAdSync"),
   runReviewReminders: job("runReviewReminders"),
   runWinbackSends: job("runWinbackSends"),
+  runScheduledGoogleSync: job("runScheduledGoogleSync"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -117,6 +118,9 @@ vi.mock("@/db/repositories/admin/reviews", () => ({
 vi.mock("@/db/repositories/admin/winback-sender", () => ({
   runWinbackSends: (...a: unknown[]) => jobs.runWinbackSends(...a),
 }));
+vi.mock("@/db/repositories/admin/google-sync", () => ({
+  runScheduledGoogleSync: (...a: unknown[]) => jobs.runScheduledGoogleSync(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -137,6 +141,7 @@ const LEDGER_KEYS = ["ledgerAutomated"];
 const WINBACK_KEYS = ["winbackSent"];
 const ADS_KEYS = ["adStatsSynced"];
 const REVIEW_KEYS = ["reviewReminders"];
+const GOOGLE_KEYS = ["googleProfilesSynced"];
 const ALL_KEYS = [
   ...LOOP_KEYS,
   ...MEDIA_KEYS,
@@ -146,6 +151,7 @@ const ALL_KEYS = [
   ...WINBACK_KEYS,
   ...ADS_KEYS,
   ...REVIEW_KEYS,
+  ...GOOGLE_KEYS,
 ];
 
 function request(

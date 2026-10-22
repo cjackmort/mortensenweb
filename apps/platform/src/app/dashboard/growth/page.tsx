@@ -38,6 +38,7 @@ const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
   reviews: "/dashboard/growth/reviews",
   winback: "/dashboard/growth/winback",
   showcase: "/dashboard/growth/showcase",
+  "google-profile": "/dashboard/growth/google",
 };
 
 const VIA_LABEL = {
