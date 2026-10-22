@@ -156,6 +156,13 @@ img {
   outline-offset: 3px;
 }
 
+/* On a dark ground the blue ring is 2.86:1, under the 3:1 a focus indicator
+   needs (WCAG 1.4.11). Off-white there, so the one blue stays the one blue. */
+.section--dark :focus-visible,
+.sq :focus-visible {
+  outline-color: var(--on-dark);
+}
+
 ::selection {
   background: var(--blue);
   color: var(--white);
@@ -1628,6 +1635,10 @@ img {
   opacity: 0.08;
   white-space: nowrap;
   user-select: none;
+}
+
+.footer__wordmark::before {
+  content: "MortensenWeb";
 }
 
 .footer__bottom {
