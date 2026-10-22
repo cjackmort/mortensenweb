@@ -3,8 +3,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Work } from "../data/work";
 import { STATUS_LABEL } from "../data/work";
-interface Props { work: Work; index: number }
-const { work, index } = Astro.props;
+interface Props {
+  work: Work;
+  index: number;
+  /** h2 on /work/, where the cards sit under the h1; h3 under a section's h2. */
+  heading?: "h2" | "h3";
+}
+const { work, index, heading = "h2" } = Astro.props;
+const Heading = heading;
 
 /*
  * Prefer the screenshot scripts/sync-tiles.ts pulled from the site itself, and
@@ -23,11 +29,9 @@ const image = hasAuto ? auto : work.image;
 const small = image.replace(/\.webp$/, "-640.webp");
 ---
 
+{/* The card as Wasatch Web lays theirs out — the screenshot first, then what
+    the business is, the name, one line, the tags, and where it goes. */}
 <a class="work reveal" href={work.href} target="_blank" rel="noopener noreferrer" data-umami-event={`work: ${work.name}`}>
-  <div class="work__meta">
-    <span class="eyebrow">{work.sector}</span>
-    <span class={`status status--${work.status}`}>{STATUS_LABEL[work.status]}</span>
-  </div>
   <figure>
     <img
       src={image}
@@ -41,8 +45,14 @@ const small = image.replace(/\.webp$/, "-640.webp");
       decoding="async"
     />
   </figure>
-  <h2 class="h3">{work.name}</h2>
-  <p>{work.description}</p>
-  <div class="tags">{work.tags.map((t) => <span>{t}</span>)}</div>
-  <p class="work__domain">{work.domain} ↗</p>
+  <div class="work__body">
+    <div class="work__meta">
+      <span class="work__sector">{work.sector}</span>
+      <span class={`status status--${work.status}`}>{STATUS_LABEL[work.status]}</span>
+    </div>
+    <Heading class="h3">{work.name}</Heading>
+    <p>{work.description}</p>
+    <div class="tags">{work.tags.map((t) => <span>{t}</span>)}</div>
+  </div>
+  <p class="work__foot"><span>{work.domain}</span><span>Visit site ↗</span></p>
 </a>

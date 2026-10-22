@@ -6,7 +6,7 @@ import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { openLead } from "@/db/repositories/client/leads";
 import { businessTimeZone, formatDateTime, formatDateWithYear } from "@/lib/time";
-import { DeleteLeadForm, LeadStatusForm } from "../lead-controls";
+import { DeleteLeadForm, LeadArchiveForm, LeadStatusForm } from "../lead-controls";
 import { RefreshOnRead } from "../refresh-on-read";
 import { LeadReplyForm } from "../reply-form";
 import { listLeadReplies, replyIdentity } from "@/db/repositories/client/lead-replies";
@@ -174,10 +174,11 @@ export default async function LeadPage({
   }
 
   const isBooking = isBookingForm(lead.formName);
-  const [replies, identity, booking] = await Promise.all([
+  const [replies, identity, booking, hasReviews] = await Promise.all([
     listLeadReplies(db, ctx, publicId),
     replyIdentity(db, ctx),
     isBooking ? findBookingState(db, ctx, publicId) : Promise.resolve(null),
+    requireGrowthFeature(db, ctx, "reviews"),
   ]);
 
   // The rest of what they filled in. Name, email, phone and message are
@@ -302,10 +303,23 @@ export default async function LeadPage({
         </div>
         <div className="panel-body">
           <LeadStatusForm publicId={lead.publicId} current={lead.status} readOnly={ctx.impersonating} />
+          {lead.status === "archived" && (
+            <p className="notice">
+              This was archived before the portal kept what you marked it, so we
+              don&rsquo;t know where it stood. If you remember, pick it above.
+            </p>
+          )}
           <p className="panel-note">
             Only you set this. Marking enquiries won is how your monthly report can say
             how much work your website brought in.
           </p>
+          {hasReviews && !isBooking && lead.email && (
+            <p className="panel-note">
+              Finished the job?{" "}
+              <Link href={`/dashboard/growth/reviews?lead=${lead.publicId}`}>Ask them for a Google review</Link>.
+            </p>
+          )}
+          <LeadArchiveForm publicId={lead.publicId} archived={lead.archived} readOnly={ctx.impersonating} />
         </div>
       </section>
 

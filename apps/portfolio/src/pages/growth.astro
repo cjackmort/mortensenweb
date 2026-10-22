@@ -1,6 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
-import { GROWTH_FEATURES, PLANS, dollars, type GrowthFeature } from "@mortensenweb/plans";
+import { ADD_ON_FEATURES, GROWTH_FEATURES, PLANS, dollars, isFree, type GrowthFeature } from "@mortensenweb/plans";
 import { SITE } from "../data/site";
 
 /**
@@ -9,7 +9,8 @@ import { SITE } from "../data/site";
  * Every figure comes from `@mortensenweb/plans` — what each tool costs on its
  * own, which plan includes it, and whether it is built yet. A tool that is not
  * built says "coming soon" here exactly as it does in the portal, so this page
- * can never sell something a client cannot use.
+ * can never sell something a client cannot use. A free tool (the leads inbox,
+ * since 2026-10-21) says "free" and quotes no price.
  *
  * Written answer-first for AI answer engines: each section opens with a
  * sentence that stands on its own when quoted, naming the business and the
@@ -17,8 +18,15 @@ import { SITE } from "../data/site";
  */
 
 const planName = (key: GrowthFeature["includedFrom"]) => PLANS.find((p) => p.key === key)!.name;
+/** "Free with every site", or "Included in Growth and above, or $35 a month on its own." */
+const howToGet = (f: GrowthFeature) =>
+  isFree(f)
+    ? "Free with every site we build, with or without a plan."
+    : `Included in ${planName(f.includedFrom)} and above, or ${dollars(f.addOnCents)} a month on its own.`;
 const live = GROWTH_FEATURES.filter((f) => f.available);
-const allTogether = GROWTH_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
+const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
+const allTogether = ADD_ON_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
+const firstPaidPlan = PLANS.find((p) => ADD_ON_FEATURES.some((f) => f.includedFrom === p.key))!;
 const pro = PLANS.find((p) => p.key === "pro")!;
 
 /** Each tool's section heading, phrased the way people ask about it. */
@@ -50,11 +58,11 @@ const LEAD: Record<GrowthFeature["key"], string> = {
 const faq: Array<[string, string]> = [
   [
     "What are Growth tools?",
-    `Growth tools are the parts of a Mortensen Web Co. plan that bring a small business more customers, beyond the website itself: a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. They are included from the Care plan up, or can be added one at a time.`,
+    `Growth tools are the parts of Mortensen Web Co. that bring a small business more customers, beyond the website itself: a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. The leads inbox is free with every site; the rest are included from the ${firstPaidPlan.name} plan up, or can be added one at a time.`,
   ],
   [
     "Can I add one Growth tool without changing my plan?",
-    `Yes. Every Growth tool can be added on its own for a monthly price, from ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))} a month, and removed again whenever you like. If you want several, the plan that includes them is usually cheaper — the portal tells you when it is.`,
+    `Yes, once it is ready. Every paid Growth tool can be added on its own for a monthly price, from ${dollars(cheapestAddOn)} a month, and removed again whenever you like. If you want several, the plan that includes them is usually cheaper — the portal tells you when it is.`,
   ],
   [
     "Which Growth tools are available today?",
@@ -66,7 +74,7 @@ const faq: Array<[string, string]> = [
   ],
   [
     "How much does it cost to get every Growth tool?",
-    `Everything is included in the ${pro.name} plan at ${dollars(pro.monthlyCents)} a month. Bought one at a time, the same tools would cost ${dollars(allTogether)} a month on top of a plan.`,
+    `Everything is included in the ${pro.name} plan at ${dollars(pro.monthlyCents)} a month. Bought one at a time, the paid tools would cost ${dollars(allTogether)} a month on top of a plan.`,
   ],
   [
     "Do you run Google or Facebook ads?",
@@ -85,7 +93,7 @@ const schema = [
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Growth tools",
-      itemListElement: GROWTH_FEATURES.map((f) => ({
+      itemListElement: ADD_ON_FEATURES.map((f) => ({
         "@type": "Offer",
         name: f.name,
         description: f.summary,
@@ -110,7 +118,7 @@ const schema = [
 
 <Base
   title="Growth tools for small business websites"
-  description={`Growth tools for small business websites: a leads inbox for every enquiry, review requests, QR campaign tracking and more. From ${dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))}/month, or included from ${dollars(PLANS[1]!.monthlyCents)}.`}
+  description={`Growth tools for small business websites: a free leads inbox, then review requests, QR campaign tracking and more, from ${dollars(cheapestAddOn)}/month or included from ${dollars(firstPaidPlan.monthlyCents)}.`}
   path="/growth/"
   schema={schema}
 >
@@ -128,8 +136,8 @@ const schema = [
 
       <ul class="keyfacts">
         <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{live.length} live today; the rest switch on as they are ready.</li>
-        <li><strong>Included from {PLANS[1]!.name}</strong>{dollars(PLANS[1]!.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}.</li>
-        <li><strong>Or one at a time</strong>From {dollars(Math.min(...GROWTH_FEATURES.map((f) => f.addOnCents)))}/month, added or removed in your portal.</li>
+        <li><strong>The inbox is free</strong>Every enquiry in your portal, with every site we build.</li>
+        <li><strong>The rest from {firstPaidPlan.name}</strong>{dollars(firstPaidPlan.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}. Or one at a time, from {dollars(cheapestAddOn)}/month.</li>
         <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
       </ul>
     </div>
@@ -158,8 +166,8 @@ const schema = [
               <tr>
                 <th scope="row"><span class="compare__plan">{f.name}</span></th>
                 <td>{f.summary}</td>
-                <td>{planName(f.includedFrom)} and up</td>
-                <td class="compare__money">{dollars(f.addOnCents)}/mo</td>
+                <td>{isFree(f) ? "Every site, free" : `${planName(f.includedFrom)} and up`}</td>
+                <td class="compare__money">{isFree(f) ? "Free" : `${dollars(f.addOnCents)}/mo`}</td>
                 <td>{f.available ? "Live" : "Coming soon"}</td>
               </tr>
             ))}
@@ -182,7 +190,7 @@ const schema = [
             <p class="lede" style="margin-top: 1rem">{LEAD[f.key]}</p>
             <p style="margin-top: 1rem"><strong>Why it matters:</strong> {f.benefit}</p>
             <p class="build__fine" style="margin-top: 1rem">
-              Included in {planName(f.includedFrom)} and above, or {dollars(f.addOnCents)} a month on its own.
+              {howToGet(f)}
               {!f.available && " Being built now — it switches on in your portal the day it is ready, and is never charged for before then."}
             </p>
           </div>

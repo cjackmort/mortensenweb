@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, ne, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { eventBookings, leads, sites } from "@/db/schema";
 import type { LeadField } from "@/lib/growth/netlify-forms";
@@ -11,17 +11,26 @@ import { assertMutable, NotFoundError, type TenantContext } from "../context";
  * is `NotFoundError`, indistinguishable from one that never existed.
  */
 
+/**
+ * What a lead can read as. `archived` is only ever read: it is what a lead
+ * archived before 0037 still holds, because archiving used to overwrite the
+ * status, and it means the outcome was not recorded.
+ */
 export const LEAD_STATUSES = ["new", "contacted", "won", "lost", "archived"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
-export function isLeadStatus(value: unknown): value is LeadStatus {
-  return typeof value === "string" && (LEAD_STATUSES as readonly string[]).includes(value);
+/** What the client can mark an enquiry. Archiving is separate; see `setLeadArchived`. */
+export const LEAD_OUTCOMES = ["new", "contacted", "won", "lost"] as const;
+export type LeadOutcome = (typeof LEAD_OUTCOMES)[number];
+
+export function isLeadOutcome(value: unknown): value is LeadOutcome {
+  return typeof value === "string" && (LEAD_OUTCOMES as readonly string[]).includes(value);
 }
 
 /**
  * The inbox's two tabs. `open` is the inbox itself — every enquiry not
  * archived, whatever the client marked it — and holds the newest
- * `INBOX_SIZE`. `archived` is everything else.
+ * `INBOX_SIZE`. `archived` is everything else, still marked as it was.
  */
 export type LeadView = "open" | "archived";
 
@@ -60,7 +69,7 @@ export interface LeadSummary {
 const PAGE_SIZE = 50;
 
 function viewFilter(view: LeadView): SQL {
-  return view === "archived" ? eq(leads.status, "archived") : ne(leads.status, "archived");
+  return view === "archived" ? isNotNull(leads.archivedAt) : isNull(leads.archivedAt);
 }
 
 function previewOf(message: string | null): string | null {
@@ -132,7 +141,7 @@ export async function countUnreadLeads(db: Database, ctx: TenantContext): Promis
         isNull(leads.deletedAt),
         isNull(leads.readAt),
         // An archived lead nobody opened is not waiting for anyone.
-        ne(leads.status, "archived"),
+        isNull(leads.archivedAt),
       ),
     );
   return rows[0]?.n ?? 0;
@@ -144,6 +153,8 @@ export interface LeadDetail extends Omit<LeadSummary, "preview"> {
   formName: string | null;
   pageUrl: string | null;
   statusChangedAt: Date | null;
+  /** Under Archived rather than in the inbox. Says nothing about `status`. */
+  archived: boolean;
 }
 
 /**
@@ -172,6 +183,7 @@ export async function openLead(
       pageUrl: leads.pageUrl,
       status: leads.status,
       statusChangedAt: leads.statusChangedAt,
+      archivedAt: leads.archivedAt,
       receivedAt: leads.receivedAt,
       readAt: leads.readAt,
       siteName: sites.name,
@@ -208,6 +220,7 @@ export async function openLead(
     pageUrl: row.pageUrl,
     status: row.status,
     statusChangedAt: row.statusChangedAt,
+    archived: row.archivedAt !== null,
     receivedAt: row.receivedAt,
     // As it was when they opened it, so the page can say "new".
     unread: row.readAt === null,
@@ -215,17 +228,51 @@ export async function openLead(
   };
 }
 
+/** Where the enquiry stands. An archived one stays under Archived. */
 export async function setLeadStatus(
   db: Database,
   ctx: TenantContext,
   publicId: string,
-  status: LeadStatus,
+  status: LeadOutcome,
 ): Promise<void> {
   assertMutable(ctx);
   const now = new Date();
   const updated = await db
     .update(leads)
     .set({ status, statusChangedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(leads.publicId, publicId),
+        eq(leads.organizationId, ctx.organizationId),
+        isNull(leads.deletedAt),
+      ),
+    )
+    .returning({ id: leads.id });
+  if (updated.length === 0) throw new NotFoundError();
+}
+
+/**
+ * Move an enquiry out of the inbox, or back into it, leaving what the client
+ * marked it alone: archiving a won job tidies the list without un-winning it.
+ *
+ * Archiving one already archived keeps the time it first went. Brought back,
+ * it makes the inbox one over `INBOX_SIZE` until the next enquiry arrives and
+ * the trim archives the oldest again.
+ */
+export async function setLeadArchived(
+  db: Database,
+  ctx: TenantContext,
+  publicId: string,
+  archived: boolean,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<void> {
+  assertMutable(ctx);
+  const updated = await db
+    .update(leads)
+    .set({
+      archivedAt: archived ? sql`coalesce(${leads.archivedAt}, ${now})` : null,
+      updatedAt: now,
+    })
     .where(
       and(
         eq(leads.publicId, publicId),

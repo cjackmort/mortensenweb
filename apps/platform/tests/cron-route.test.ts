@@ -40,6 +40,11 @@ const jobs = {
   runScheduledReconcile: job("runScheduledReconcile"),
   runScheduledLeadImport: job("runScheduledLeadImport"),
   runScheduledLedger: job("runScheduledLedger"),
+  runScheduledAdSync: job("runScheduledAdSync"),
+  runReviewReminders: job("runReviewReminders"),
+  runWinbackSends: job("runWinbackSends"),
+  runScheduledGoogleSync: job("runScheduledGoogleSync"),
+  runScheduledMonthlyReports: job("runScheduledMonthlyReports"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -105,6 +110,21 @@ vi.mock("@/db/repositories/admin/leads", () => ({
 vi.mock("@/db/repositories/admin/ledger-automation", () => ({
   runScheduledLedger: (...a: unknown[]) => jobs.runScheduledLedger(...a),
 }));
+vi.mock("@/db/repositories/admin/ad-sync", () => ({
+  runScheduledAdSync: (...a: unknown[]) => jobs.runScheduledAdSync(...a),
+}));
+vi.mock("@/db/repositories/admin/reviews", () => ({
+  runReviewReminders: (...a: unknown[]) => jobs.runReviewReminders(...a),
+}));
+vi.mock("@/db/repositories/admin/winback-sender", () => ({
+  runWinbackSends: (...a: unknown[]) => jobs.runWinbackSends(...a),
+}));
+vi.mock("@/db/repositories/admin/google-sync", () => ({
+  runScheduledGoogleSync: (...a: unknown[]) => jobs.runScheduledGoogleSync(...a),
+}));
+vi.mock("@/db/repositories/admin/report-delivery", () => ({
+  runScheduledMonthlyReports: (...a: unknown[]) => jobs.runScheduledMonthlyReports(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -122,7 +142,23 @@ const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"
 const STRIPE_KEYS = ["stripeReconciled"];
 const LEAD_KEYS = ["leadsImported"];
 const LEDGER_KEYS = ["ledgerAutomated"];
-const ALL_KEYS = [...LOOP_KEYS, ...MEDIA_KEYS, ...STRIPE_KEYS, ...LEAD_KEYS, ...LEDGER_KEYS];
+const WINBACK_KEYS = ["winbackSent"];
+const ADS_KEYS = ["adStatsSynced"];
+const REVIEW_KEYS = ["reviewReminders"];
+const REPORT_KEYS = ["monthlyReports"];
+const GOOGLE_KEYS = ["googleProfilesSynced"];
+const ALL_KEYS = [
+  ...LOOP_KEYS,
+  ...MEDIA_KEYS,
+  ...STRIPE_KEYS,
+  ...LEAD_KEYS,
+  ...LEDGER_KEYS,
+  ...WINBACK_KEYS,
+  ...ADS_KEYS,
+  ...REVIEW_KEYS,
+  ...REPORT_KEYS,
+  ...GOOGLE_KEYS,
+];
 
 function request(
   secret: string | null = SECRET,

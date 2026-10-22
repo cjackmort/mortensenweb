@@ -15,6 +15,11 @@ import { reconcileStorageReservations } from "@/db/repositories/client/media-quo
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
+import { runScheduledAdSync } from "@/db/repositories/admin/ad-sync";
+import { runReviewReminders } from "@/db/repositories/admin/reviews";
+import { runWinbackSends } from "@/db/repositories/admin/winback-sender";
+import { runScheduledGoogleSync } from "@/db/repositories/admin/google-sync";
+import { runScheduledMonthlyReports } from "@/db/repositories/admin/report-delivery";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -25,10 +30,11 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Twelve jobs that have to run whether or not anyone is looking. The first six
+ * The jobs that have to run whether or not anyone is looking. The first six
  * are the loop's own; jobs 7-9 keep the media library's storage honest,
- * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, and
- * job 12 keeps the books:
+ * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, job 12
+ * keeps the books, and the rest run the Growth features (win-back sending is
+ * documented in `admin/winback-sender.ts`):
  *
  *   1. **Preview re-verification.** Netlify publishes an alias a moment after
  *      the deploy reports success, so a check fired by the webhook can
@@ -65,6 +71,18 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      reaches the client's inbox.
  *  12. **Ledger.** Self-gated to at most hourly; records Stripe's fee on each
  *      card payment and adds this month's row of every monthly expense.
+ *  13. **Ad results.** Ends campaigns past their last day on every run, and
+ *      at most every six hours reads Google Ads and Meta results into
+ *      `ad_stats_daily`. Does nothing more until their credentials are set.
+ *  14. **Review reminders.** The one reminder a customer gets when they did
+ *      not click a review request's link. Days away when it is created, so it
+ *      does not nudge; it runs only between 9am and 8pm business time.
+ *  15. **Monthly reports.** Only in the first week of a month; builds and
+ *      emails last month's report for each client on Care or above, a few per
+ *      tick, holding the scheduler awake while any are left.
+ *  16. **Google profiles.** Each linked profile every six hours, a few per
+ *      tick, with per-profile backoff and a project-wide pause on a 429.
+ *      Costs nothing on a server without Google configured.
  *
  * ## Not every call runs them
  *
@@ -209,9 +227,29 @@ export async function POST(request: Request): Promise<Response> {
     // The same kind of net, for contact-form submissions. Self-gated to every
     // six hours; one Netlify call per connected site.
     ["leadsImported", () => runScheduledLeadImport(db)],
+    // Approved win-back emails, a batch at a time: spaced under Resend's rate
+    // limit and stopped after twenty seconds, so this tick's other jobs keep
+    // their budget. While a campaign has customers left it keeps the
+    // scheduler awake, so the rest go out over the next ticks.
+    ["winbackSent", () => runWinbackSends(db)],
     // After the Stripe reconciliation, so a payment it recovered this tick can
     // have its fee recorded in the same one. Self-gated to at most hourly.
     ["ledgerAutomated", () => runScheduledLedger(db)],
+    // Ads: ending campaigns whose dates have passed is one cheap query; the
+    // platform reads are self-gated to six-hourly and skipped without keys.
+    ["adStatsSynced", () => runScheduledAdSync(db)],
+    // Emails and texts to customers, so last: nothing else waits on it, and a
+    // reminder an hour late is no worse. Bounded at 25 a run; the query is one
+    // partial-index scan when nothing is due.
+    ["reviewReminders", () => runReviewReminders(db)],
+    // Near the end: nobody is waiting on it minute by minute, and it is the
+    // heaviest job on the 1st (a dozen analytics calls per client). Does
+    // nothing after the first week of the month, without querying anything.
+    ["monthlyReports", () => runScheduledMonthlyReports(db)],
+    // Last: the only job here whose quota is shared with an operator's
+    // edits, so it takes whatever budget the tick has left and stops itself
+    // on Google's first 429. See `admin/google-sync.ts`.
+    ["googleProfilesSynced", () => runScheduledGoogleSync(db)],
   ];
 
   const failed: string[] = [];

@@ -66,6 +66,13 @@ export const leads = pgTable(
     readAt: timestamp("read_at", { withTimezone: true }),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
     /**
+     * Moved out of the inbox, by the client or by the trim that keeps the
+     * newest ten. Kept apart from `status` so archiving never changes what the
+     * client marked it: a won job that leaves the inbox is still won, and still
+     * counted as won. Null is in the inbox.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /**
      * Unused since the portal stopped emailing about new leads — Netlify's own
      * form notification does that. Kept rather than dropped: removing a column
      * is a migration with no benefit, and it would be the place to record a

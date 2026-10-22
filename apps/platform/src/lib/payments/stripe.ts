@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { GROWTH_FEATURES, PLANS, type GrowthFeatureKey, type PlanKey } from "@mortensenweb/plans";
+import { ADD_ON_FEATURES, GROWTH_FEATURES, PLANS, type GrowthFeatureKey, type PlanKey } from "@mortensenweb/plans";
 
 /**
  * The Stripe client, and the one place that decides which price a plan buys.
@@ -110,13 +110,18 @@ export function lookupKeyForAddOn(feature: GrowthFeatureKey): string {
   return `addon_${feature.replace(/-/g, "_")}_monthly_v1`;
 }
 
+/**
+ * Every feature, free ones included: a leads-inbox line bought before the
+ * inbox was free is still on some subscriptions, and has to be read as an
+ * add-on rather than mistaken for the plan.
+ */
 export function addOnForLookupKey(lookupKey: string): GrowthFeatureKey | null {
   return GROWTH_FEATURES.find((f) => lookupKeyForAddOn(f.key) === lookupKey)?.key ?? null;
 }
 
-/** The add-ons Stripe can sell: only features that exist. */
+/** The add-ons Stripe can sell: only features that exist and are not free. */
 export function sellableAddOns(): Array<{ key: GrowthFeatureKey; name: string; monthlyCents: number }> {
-  return GROWTH_FEATURES.filter((f) => f.available).map((f) => ({
+  return ADD_ON_FEATURES.filter((f) => f.available).map((f) => ({
     key: f.key,
     name: `${f.name} (add-on)`,
     monthlyCents: f.addOnCents,
