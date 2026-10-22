@@ -1,0 +1,25 @@
+/* Under every signed-in page: `.app` is a column at least a screen tall, so
+   the auto margin keeps this at the bottom of a short page. */
+.privacy-footer {
+  margin-top: auto;
+  width: 100%;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: 1.5rem var(--gutter) calc(1.5rem + env(safe-area-inset-bottom));
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Padding on the anchor so the touch target clears 24px. */
+.privacy-footer a {
+  display: inline-block;
+  padding-block: 0.3rem;
+}
+
+/* Inside the sign-in card: a rule above, the card's own link colour. */
+.auth-card .privacy-footer {
+  margin-top: 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid #262e38;
+  color: #97a0ac;
+}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PrivacyFooter } from "./privacy-link";
 
 /**
  * Full-bleed photo backdrop with a single frosted card centered on it,
@@ -10,7 +11,10 @@ import type { ReactNode } from "react";
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <main className="auth-page">
-      <div className="auth-card">{children}</div>
+      <div className="auth-card">
+        {children}
+        <PrivacyFooter />
+      </div>
     </main>
   );
 }

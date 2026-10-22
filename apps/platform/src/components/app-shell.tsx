@@ -2,6 +2,7 @@ import Link from "next/link";
 import { signOut } from "@/auth";
 import type { AuthenticatedUser } from "@/lib/auth/session";
 import { NavLinks, type NavItem } from "./nav-links";
+import { PrivacyFooter } from "./privacy-link";
 
 /**
  * The chrome around every signed-in page: brand, identity, navigation, sign-out.
@@ -126,6 +127,8 @@ export function AppShell({
       </header>
 
       {children}
+
+      <PrivacyFooter />
     </div>
   );
 }
