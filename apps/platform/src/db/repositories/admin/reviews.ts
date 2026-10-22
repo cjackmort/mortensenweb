@@ -9,8 +9,10 @@ import {
   reviewSuppressions,
 } from "@/db/schema";
 import { sendEmail, type EmailMessage, type SendResult } from "@/lib/email/mailer";
+import { isHardBounce, type ResendEvent } from "@/lib/email/resend-webhook";
+import { ORGANIZATION_TAG } from "@/lib/email/tags";
 import { replySenderAddress } from "@/lib/growth/lead-reply";
-import { deliverReviewRequest } from "@/lib/reviews/deliver";
+import { deliverReviewRequest, REVIEW_REQUEST_TAG } from "@/lib/reviews/deliver";
 import { reviewIdentity } from "@/lib/reviews/identity";
 import { isWithinSendingHours } from "@/lib/reviews/sending-hours";
 import { sendSms, smsConfigured, type SmsResult } from "@/lib/reviews/sms";
@@ -112,6 +114,39 @@ export async function unsubscribeReviewRequest(
     .set({ unsubscribedAt: sql`coalesce(${reviewRequests.unsubscribedAt}, ${now.toISOString()}::timestamptz)`, updatedAt: now })
     .where(eq(reviewRequests.id, row.id));
   return { businessName: row.fromName };
+}
+
+/**
+ * Resend's word on a review email, from `/api/webhooks/resend`.
+ *
+ * A hard bounce or a spam complaint puts the address on the business's list,
+ * so neither the reminder nor a later request goes to it. Nothing else is
+ * recorded: what a client wants to know is whether the customer clicked, and
+ * our own redirect counts that.
+ *
+ * The request is found by the public id tagged on the email (its reminder
+ * carries the same one), and only when the organization tag names the
+ * business that owns it. Idempotent: Resend retries, and an address already
+ * on the list keeps the reason it has. A database error throws, so the route
+ * answers 500 and Resend tries again.
+ */
+export async function applyReviewDeliveryEvent(db: Database, event: ResendEvent): Promise<void> {
+  const reason = event.type === "complained" ? "complained" : isHardBounce(event) ? "bounced" : null;
+  const publicId = event.tags[REVIEW_REQUEST_TAG];
+  const organizationId = event.tags[ORGANIZATION_TAG];
+  if (!reason || !publicId || !organizationId) return;
+
+  const [row] = await db
+    .select({ id: reviewRequests.id, organizationId: reviewRequests.organizationId, email: reviewRequests.email })
+    .from(reviewRequests)
+    .where(eq(reviewRequests.publicId, publicId))
+    .limit(1);
+  if (!row?.email || row.organizationId !== organizationId) return;
+
+  await db
+    .insert(reviewSuppressions)
+    .values({ organizationId: row.organizationId, channel: "email", address: row.email, reason, requestId: row.id })
+    .onConflictDoNothing();
 }
 
 export type ReminderRun =
@@ -234,6 +269,7 @@ export async function runReviewReminders(
       const delivered = await deliverReviewRequest(
         {
           publicId: request.publicId,
+          organizationId: request.organizationId,
           customerName: request.customerName,
           email: request.email,
           phone: request.phone,

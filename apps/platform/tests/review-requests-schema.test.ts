@@ -139,6 +139,19 @@ describe("review_suppressions", () => {
     ).resolves.toBeDefined();
   });
 
+  it("records a hard bounce or a spam complaint as its own reason (0039)", async () => {
+    for (const reason of ["bounced", "complained"]) {
+      await expect(
+        db.insert(reviewSuppressions).values({
+          organizationId: acme.organizationId,
+          channel: "email",
+          address: `${reason}@example.test`,
+          reason,
+        }),
+      ).resolves.toBeDefined();
+    }
+  });
+
   it("refuses an unknown channel or reason", async () => {
     await expect(
       db.insert(reviewSuppressions).values({

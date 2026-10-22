@@ -1,4 +1,5 @@
 import type { EmailMessage, SendResult } from "@/lib/email/mailer";
+import { featureTags } from "@/lib/email/tags";
 import { reviewLinks } from "./links";
 import { buildReviewEmail, buildReviewSms } from "./message";
 import type { SmsResult } from "./sms";
@@ -11,12 +12,20 @@ import type { ReviewTemplate } from "./template";
  * Deciding is the caller's job — consent, suppression, whether texting is
  * set up — because the initial send and the reminder decide differently. This
  * only builds the messages, sends them, and reports what happened to each.
+ *
+ * Every email, the reminder included, is tagged with the business and the
+ * request, so a bounce or a spam complaint on it finds its way back
+ * (`applyReviewDeliveryEvent`, via `/api/webhooks/resend`).
  */
 
 export type ChannelOutcome = "sent" | "failed" | "not_sent";
 
+/** The tag holding the request's public id; Resend echoes it on every event. */
+export const REVIEW_REQUEST_TAG = "review_request";
+
 export interface DeliveryInput {
   publicId: string;
+  organizationId: string;
   customerName: string;
   email: string | null;
   phone: string | null;
@@ -65,8 +74,8 @@ export async function deliverReviewRequest(input: DeliveryInput, deps: DeliveryD
     if (!input.senderAddress) {
       result.email = "not_sent";
     } else {
-      const sent = await deps.send(
-        buildReviewEmail({
+      const sent = await deps.send({
+        ...buildReviewEmail({
           to: input.email,
           customerName: input.customerName,
           businessName: input.businessName,
@@ -79,7 +88,8 @@ export async function deliverReviewRequest(input: DeliveryInput, deps: DeliveryD
           },
           ...links,
         }),
-      );
+        tags: featureTags("reviews", input.organizationId, { [REVIEW_REQUEST_TAG]: input.publicId }),
+      });
       result.email = fromEmail(sent);
       if (sent.status === "failed") result.error = sent.error.slice(0, 500);
     }

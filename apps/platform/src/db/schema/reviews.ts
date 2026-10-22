@@ -172,9 +172,13 @@ export const reviewRequests = pgTable(
  * about another's.
  *
  * `reason` is how they got here: `unsubscribed` (the link in an email),
- * `sms_opt_out` (replied STOP, reported by the SMS provider), or `manual` (the
- * client said not to ask them). Only `manual` entries can be removed by the
- * client; the other two are the customer's decision.
+ * `sms_opt_out` (replied STOP, reported by the SMS provider), `bounced` (the
+ * address rejected the email for good), `complained` (the customer marked it
+ * as spam), or `manual` (the client said not to ask them). `bounced` and
+ * `complained` arrive on Resend's webhook. Only `manual` entries can be
+ * removed by the client: the others are the customer's decision, or the
+ * mailbox's, and sending to an address that bounces or reports spam harms
+ * every business that sends through us.
  */
 export const reviewSuppressions = pgTable(
   "review_suppressions",
@@ -196,7 +200,7 @@ export const reviewSuppressions = pgTable(
     check("review_suppressions_channel_known", sql`${t.channel} IN ('email', 'sms')`),
     check(
       "review_suppressions_reason_known",
-      sql`${t.reason} IN ('unsubscribed', 'sms_opt_out', 'manual')`,
+      sql`${t.reason} IN ('unsubscribed', 'sms_opt_out', 'bounced', 'complained', 'manual')`,
     ),
   ],
 );
