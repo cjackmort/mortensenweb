@@ -213,11 +213,13 @@ describe("building a report", () => {
     expect(data.health).toEqual({ state: "missing", reason: "no_site" });
   });
 
-  it("leaves out the leads inbox for a plan without it", async () => {
+  // Every client has had the leads inbox free since #131, so Lite's report
+  // counts enquiries too.
+  it("includes the leads inbox on every plan, Lite too", async () => {
     const lite = await client("Lite Co", { plan: "lite" });
     await site(lite);
     const data = await buildReportData(db, await subjectFor(lite), "2026-09", { now: FIRST_OF_OCTOBER, extensions: [] });
-    expect(data.enquiries).toBeNull();
+    expect(data.enquiries).toMatchObject({ state: "ok", received: 0 });
   });
 });
 

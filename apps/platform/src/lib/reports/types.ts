@@ -120,7 +120,11 @@ export const reportDataSchema = z.object({
   planName: z.string().nullable(),
   visitors: z.discriminatedUnion("state", [visitors, missing]),
   contact: z.discriminatedUnion("state", [contact, missing]),
-  /** Null when the plan does not include the leads inbox: left out, not zero. */
+  /**
+   * Null when the client does not have the leads inbox: left out, not zero.
+   * Every client has had it free since #131; stored reports from before
+   * then can still be null.
+   */
   enquiries: z.discriminatedUnion("state", [enquiries, missing]).nullable(),
   changes,
   health: z.discriminatedUnion("state", [health, missing]),
