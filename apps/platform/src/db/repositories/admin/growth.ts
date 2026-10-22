@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { GROWTH_FEATURES, type GrowthFeatureKey } from "@mortensenweb/plans";
+import { GROWTH_FEATURES, isFree, type GrowthFeatureKey } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
 import { auditLog, clientAddOns, clients, servicePlans, subscriptions } from "@/db/schema";
 import { growthAccess, type FeatureAccess } from "@/lib/growth/access";
@@ -68,6 +68,7 @@ export async function grantAddOn(
 ): Promise<GrantResult> {
   const feature = GROWTH_FEATURES.find((f) => f.key === featureKey);
   if (!feature) return { ok: false, message: "Unknown feature." };
+  if (isFree(feature)) return { ok: false, message: `${feature.name} is free for every client already.` };
   const client = await clientRow(db, clientPublicId);
 
   const inserted = await db

@@ -43,6 +43,7 @@ const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
 
 const VIA_LABEL = {
   comp: "On the house",
+  free: "Free with your site",
   plan: "In your plan",
   "add-on": "Add-on",
 } as const;
@@ -127,10 +128,6 @@ function FeatureCard({
 }) {
   const { feature, via, upgradeTo, upgradeSavesCents, canAdd } = access;
   const opens = OPENS[feature.key];
-  const teaser =
-    feature.key === "leads" && !via && state.waitingLeads > 0
-      ? `${state.waitingLeads} ${state.waitingLeads === 1 ? "enquiry is" : "enquiries are"} waiting for you.`
-      : null;
 
   if (via) {
     return (
@@ -168,7 +165,6 @@ function FeatureCard({
       </div>
       <p>{feature.summary}</p>
       <p className="growth-benefit">{feature.benefit}</p>
-      {teaser && <p className="notice notice-info">{teaser}</p>}
 
       {feature.available ? (
         <div className="growth-actions">

@@ -6,6 +6,7 @@ import {
   AD_UNSPENT_POLICY,
   ADS_AVAILABLE,
   BUILDS,
+  FREE_PORTAL,
   GROWTH_FEATURES,
   OVERAGE_CENTS,
   PLANS,
@@ -37,9 +38,10 @@ export function GET() {
     plans: PLANS,
     growthFeatures: GROWTH_FEATURES,
     overageCents: OVERAGE_CENTS,
-    // Three standalone builds since 2026-10-06, replacing `build` (one price
-    // and a discount behind a twelve-month commitment). The standalone site
-    // repository reads this at build time and must be updated with it.
+    // A list since 2026-10-06, replacing `build` (one price and a discount
+    // behind a twelve-month commitment); one entry again since 2026-10-21.
+    // The standalone site repository reads this at build time and must be
+    // updated with it.
     builds: BUILDS,
     // Paid ads, on every plan, per campaign. `available` is false until ads
     // can actually be launched; the pricing page should say nothing about
@@ -51,5 +53,6 @@ export function GET() {
       durationsDays: AD_DURATIONS_DAYS,
       unspentPolicy: AD_UNSPENT_POLICY,
     },
+    freePortal: FREE_PORTAL,
   });
 }

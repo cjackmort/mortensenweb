@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { and, eq, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
-import { clientAddOns, clients, leads, servicePlans, sites, subscriptions } from "@/db/schema";
+import type { GrowthFeature } from "@mortensenweb/plans";
+import { clientAddOns, clients, servicePlans, subscriptions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { GROWTH_FEATURES } from "@mortensenweb/plans";
 import { growthAccess, hasFeature } from "@/lib/growth/access";
@@ -21,10 +22,25 @@ import { seedTenant, type SeededTenant } from "./helpers/tenant";
  * Growth access, add-ons and self-serve plan changes.
  *
  * What would go wrong quietly: a stray plan key unlocking a paid feature; an
- * unbuilt feature being sold; an add-on line on a subscription being read as
- * the plan; a hand-granted add-on being cancellable by the client; and Stripe
- * changing while the portal does not.
+ * unbuilt feature being sold; a free feature being sold or locked; an add-on
+ * line on a subscription being read as the plan; a hand-granted add-on being
+ * cancellable by the client; and Stripe changing while the portal does not.
  */
+
+/*
+ * Since 2026-10-21 the leads inbox is free, which leaves no built feature to
+ * sell. The add-on paths still have to work for the next one, so this file
+ * treats QR & campaign tracking as built.
+ */
+vi.mock("@mortensenweb/plans", async () => {
+  const actual = await vi.importActual<typeof import("@mortensenweb/plans")>("@mortensenweb/plans");
+  const built = (f: GrowthFeature) => (f.key === "campaigns" ? { ...f, available: true } : f);
+  return {
+    ...actual,
+    GROWTH_FEATURES: actual.GROWTH_FEATURES.map(built),
+    ADD_ON_FEATURES: actual.ADD_ON_FEATURES.map(built),
+  };
+});
 
 const stripeCalls: Array<{ op: string; args: unknown }> = [];
 let liveSubscription: Partial<Stripe.Subscription>;
@@ -105,19 +121,29 @@ beforeEach(() => {
 
 // ---------------------------------------------------------------------------
 
+const paid = (access: ReturnType<typeof growthAccess>) => access.filter((a) => a.feature.key !== "leads");
+
 describe("who has what", () => {
-  it("gives Lite no Growth tools, but offers the built ones as add-ons", () => {
+  it("gives every client the leads inbox free, with or without a plan, and never sells it", () => {
+    for (const planKey of [null, "lite", "care", "growth", "pro", "test-plan", "care-basic"]) {
+      const leads = growthAccess({ planKey, comped: false, addOns: [] }).find((a) => a.feature.key === "leads")!;
+      expect(leads.via, String(planKey)).toBe("free");
+      expect(leads.canAdd, String(planKey)).toBe(false);
+    }
+  });
+
+  it("gives Lite no paid Growth tools, but offers the built ones as add-ons", () => {
     const access = growthAccess({ planKey: "lite", comped: false, addOns: [] });
-    expect(access.every((a) => a.via === null)).toBe(true);
-    expect(access.find((a) => a.feature.key === "leads")!.canAdd).toBe(true);
+    expect(paid(access).every((a) => a.via === null)).toBe(true);
+    expect(access.find((a) => a.feature.key === "campaigns")!.canAdd).toBe(true);
     expect(access.find((a) => a.feature.key === "reviews")!.canAdd).toBe(true);
     // Not built yet: never offered for sale.
     if (UNBUILT) expect(access.find((a) => a.feature.key === UNBUILT)!.canAdd).toBe(false);
   });
 
-  it("includes the leads inbox from Care up, through the plan", () => {
-    for (const key of ["care", "growth", "pro"]) {
-      expect(growthAccess({ planKey: key, comped: false, addOns: [] }).find((a) => a.feature.key === "leads")!.via).toBe("plan");
+  it("includes campaign tracking from Growth up, through the plan", () => {
+    for (const key of ["growth", "pro"]) {
+      expect(growthAccess({ planKey: key, comped: false, addOns: [] }).find((a) => a.feature.key === "campaigns")!.via).toBe("plan");
     }
   });
 
@@ -125,10 +151,10 @@ describe("who has what", () => {
     expect(growthAccess({ planKey: "comp-unlimited", comped: true, addOns: [] }).every((a) => a.via === "comp")).toBe(true);
   });
 
-  it("counts an add-on, and never lets an unknown plan key unlock anything", () => {
-    expect(hasFeature(growthAccess({ planKey: "lite", comped: false, addOns: ["leads"] }), "leads")).toBe(true);
-    expect(growthAccess({ planKey: "test-plan", comped: false, addOns: [] }).every((a) => a.via === null)).toBe(true);
-    expect(growthAccess({ planKey: "care-basic", comped: false, addOns: [] }).every((a) => a.via === null)).toBe(true);
+  it("counts an add-on, and never lets an unknown plan key unlock a paid tool", () => {
+    expect(hasFeature(growthAccess({ planKey: "lite", comped: false, addOns: ["campaigns"] }), "campaigns")).toBe(true);
+    expect(paid(growthAccess({ planKey: "test-plan", comped: false, addOns: [] })).every((a) => a.via === null)).toBe(true);
+    expect(paid(growthAccess({ planKey: "care-basic", comped: false, addOns: [] })).every((a) => a.via === null)).toBe(true);
   });
 
   it("says when upgrading is the better deal", () => {
@@ -159,19 +185,20 @@ describe("self-serve changes", () => {
 
   it("adds a built feature to the client's own Stripe subscription, from the next payment", async () => {
     const { addGrowthAddOn, getGrowthState } = await import("@/db/repositories/client/growth");
-    const result = await addGrowthAddOn(db, lite.ctx, "leads");
+    const result = await addGrowthAddOn(db, lite.ctx, "campaigns");
     expect(result.ok).toBe(true);
     expect(stripeCalls[0]).toMatchObject({
       op: "item.create",
-      args: { subscription: `sub_${lite.clientId.slice(0, 8)}`, price: "price_addon_leads", proration_behavior: "none" },
+      args: { subscription: `sub_${lite.clientId.slice(0, 8)}`, price: "price_addon_campaigns", proration_behavior: "none" },
     });
     const state = await getGrowthState(db, lite.ctx);
-    expect(state.access.find((a) => a.feature.key === "leads")!.via).toBe("add-on");
+    expect(state.access.find((a) => a.feature.key === "campaigns")!.via).toBe("add-on");
   });
 
-  it("refuses an unbuilt feature, one they already have, and changes for an invoiced client", async () => {
+  it("refuses an unbuilt feature, one they already have, a free one, and changes for an invoiced client", async () => {
     const { addGrowthAddOn } = await import("@/db/repositories/client/growth");
     if (UNBUILT) expect((await addGrowthAddOn(db, lite.ctx, UNBUILT)).ok).toBe(false);
+    expect((await addGrowthAddOn(db, lite.ctx, "campaigns")).ok).toBe(false);
     expect((await addGrowthAddOn(db, lite.ctx, "leads")).ok).toBe(false);
     expect((await addGrowthAddOn(db, invoiced.ctx, "campaigns")).ok).toBe(false);
     expect(stripeCalls).toHaveLength(0);
@@ -210,34 +237,24 @@ describe("self-serve changes", () => {
       lite.organizationId,
       { impersonating: true },
     );
-    await expect(addGrowthAddOn(db, operator, "leads")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(addGrowthAddOn(db, operator, "campaigns")).rejects.toBeInstanceOf(AuthorizationError);
     await expect(setPlanCancellation(db, operator, true)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("removes a card add-on at Stripe, but never one the operator granted", async () => {
     const { removeGrowthAddOn } = await import("@/db/repositories/client/growth");
-    expect((await removeGrowthAddOn(db, lite.ctx, "leads")).ok).toBe(true);
+    expect((await removeGrowthAddOn(db, lite.ctx, "campaigns")).ok).toBe(true);
     expect(stripeCalls.at(-1)).toMatchObject({ op: "item.del", args: { id: "si_new" } });
 
-    await db.insert(clientAddOns).values({ clientId: invoiced.clientId, featureKey: "leads", source: "operator" });
-    expect((await removeGrowthAddOn(db, invoiced.ctx, "leads")).ok).toBe(false);
+    await db.insert(clientAddOns).values({ clientId: invoiced.clientId, featureKey: "campaigns", source: "operator" });
+    expect((await removeGrowthAddOn(db, invoiced.ctx, "campaigns")).ok).toBe(false);
   });
 
-  it("counts waiting enquiries for a client whose plan does not include the inbox", async () => {
-    const { getGrowthState } = await import("@/db/repositories/client/growth");
-    const shop = await seedTenant(db, "Locked Shop");
-    await subscribe(shop, "lite");
-    const [site] = await db.insert(sites).values({ publicId: newPublicId(), organizationId: shop.organizationId, name: "s" }).returning({ id: sites.id });
-    await db.insert(leads).values({
-      publicId: newPublicId(),
-      organizationId: shop.organizationId,
-      siteId: site!.id,
-      providerSubmissionId: newPublicId(),
-      receivedAt: new Date(),
-    });
-    const state = await getGrowthState(db, shop.ctx);
-    expect(hasFeature(state.access, "leads")).toBe(false);
-    expect(state.waitingLeads).toBe(1);
+  it("opens the leads inbox for a client with no plan at all", async () => {
+    const { getGrowthState, requireGrowthFeature } = await import("@/db/repositories/client/growth");
+    const shop = await seedTenant(db, "Build Only Shop");
+    expect((await getGrowthState(db, shop.ctx)).billing).toBe("none");
+    expect(await requireGrowthFeature(db, shop.ctx, "leads")).toBe(true);
   });
 
   it("does not count archived enquiries as waiting, whatever they are marked", async () => {
@@ -301,12 +318,20 @@ describe("the operator's grants", () => {
     const admin = adminContextFrom({ userId: t.userId, organizationId: null, role: "admin", status: "active", sessionEpoch: 0 });
     const [client] = await db.select({ publicId: clients.publicId }).from(clients).where(eq(clients.id, t.clientId));
 
-    expect((await grantAddOn(admin, db, client!.publicId, "leads")).ok).toBe(true);
-    expect((await grantAddOn(admin, db, client!.publicId, "leads")).ok).toBe(false);
-    expect(hasFeature((await getClientGrowth(admin, db, client!.publicId)).access, "leads")).toBe(true);
+    expect((await grantAddOn(admin, db, client!.publicId, "campaigns")).ok).toBe(true);
+    expect((await grantAddOn(admin, db, client!.publicId, "campaigns")).ok).toBe(false);
+    expect(hasFeature((await getClientGrowth(admin, db, client!.publicId)).access, "campaigns")).toBe(true);
 
-    expect((await revokeAddOn(admin, db, client!.publicId, "leads")).ok).toBe(true);
-    await db.insert(clientAddOns).values({ clientId: t.clientId, featureKey: "leads", source: "stripe", stripeSubscriptionItemId: "si_card" });
-    expect((await revokeAddOn(admin, db, client!.publicId, "leads")).ok).toBe(false);
+    expect((await revokeAddOn(admin, db, client!.publicId, "campaigns")).ok).toBe(true);
+    await db.insert(clientAddOns).values({ clientId: t.clientId, featureKey: "campaigns", source: "stripe", stripeSubscriptionItemId: "si_card" });
+    expect((await revokeAddOn(admin, db, client!.publicId, "campaigns")).ok).toBe(false);
+  });
+
+  it("does not grant a feature every client already has free", async () => {
+    const { grantAddOn } = await import("@/db/repositories/admin/growth");
+    const t = await seedTenant(db, "Free Co");
+    const admin = adminContextFrom({ userId: t.userId, organizationId: null, role: "admin", status: "active", sessionEpoch: 0 });
+    const [client] = await db.select({ publicId: clients.publicId }).from(clients).where(eq(clients.id, t.clientId));
+    expect((await grantAddOn(admin, db, client!.publicId, "leads")).ok).toBe(false);
   });
 });

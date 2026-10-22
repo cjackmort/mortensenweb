@@ -14,14 +14,14 @@ npm run check --workspace apps/portfolio    # astro check (types + templates)
 | --- | --- |
 | Pages | `src/pages/*.astro`, plus `robots.txt.ts` and `llms.txt.ts` |
 | Layout | `src/layouts/Base.astro` — head, fonts, header, footer, JSON-LD, the one inline script |
-| Design system | `src/styles/global.css` — tokens, type, the pinned story, every component |
+| Design system | `src/styles/global.css` — tokens, type, every component; `src/styles/home.css` — the home page's hero |
 | Copy that repeats | `src/data/site.ts` (the four steps, the marquee, contact details) |
 | Work | `src/data/work.ts` + `public/work/*.webp` (1120×700 and a `-640` variant) |
 | Plans | `@mortensenweb/plans` (`packages/plans`) — shared with the portal's seed |
 
 ## Decisions worth knowing
 
-**Zero JavaScript by design.** The previous site shipped 457 KB of framework to render five pages and hid every section until it had run. Motion here is CSS: headline lines rise with keyframes, sections reveal with `animation-timeline: view()` inside `@supports`, and the pinned story runs on a named view timeline. Browsers without those features, and readers who prefer reduced motion, see everything at rest. The only script is a few hundred bytes for the hero spotlight and magnetic buttons, mouse-only, and the analytics tag.
+**Zero JavaScript by design.** The previous site shipped 457 KB of framework to render five pages and hid every section until it had run. Motion here is CSS: headline lines rise with keyframes, and sections reveal with `animation-timeline: view()` inside `@supports`. Browsers without those features, and readers who prefer reduced motion, see everything at rest. The only script is a few hundred bytes for the hero spotlight and magnetic buttons, mouse-only, and the analytics tag.
 
 **Design direction: Swiss / International** with a monospace label system. One grotesk (Schibsted Grotesk), one mono (JetBrains Mono), one blue — the portal's, so a client who reads this site and then signs in sees the same colour meaning the same thing. Hairline rules instead of cards. Asymmetry on a strict grid.
 
