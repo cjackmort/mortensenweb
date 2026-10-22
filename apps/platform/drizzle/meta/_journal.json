@@ -213,10 +213,10 @@
       "breakpoints": true
     },
     {
-      "idx": 37,
+      "idx": 38,
       "version": "7",
-      "when": 1790700000000,
-      "tag": "0036_cart_checkout",
+      "when": 1790900000000,
+      "tag": "0038_cart_checkout",
       "breakpoints": true
     }
   ]
