@@ -239,6 +239,28 @@ describe("self-serve changes", () => {
     expect(hasFeature(state.access, "leads")).toBe(false);
     expect(state.waitingLeads).toBe(1);
   });
+
+  it("does not count archived enquiries as waiting, whatever they are marked", async () => {
+    const { getGrowthState } = await import("@/db/repositories/client/growth");
+    const shop = await seedTenant(db, "Tidy Shop");
+    const [site] = await db.insert(sites).values({ publicId: newPublicId(), organizationId: shop.organizationId, name: "s" }).returning({ id: sites.id });
+    const lead = (values: Partial<typeof leads.$inferInsert>) => ({
+      publicId: newPublicId(),
+      organizationId: shop.organizationId,
+      siteId: site!.id,
+      providerSubmissionId: newPublicId(),
+      receivedAt: new Date(),
+      ...values,
+    });
+    await db.insert(leads).values([
+      lead({ status: "new" }),
+      lead({ status: "contacted" }),
+      lead({ status: "won" }),
+      lead({ status: "new", archivedAt: new Date() }),
+      lead({ status: "contacted", archivedAt: new Date() }),
+    ]);
+    expect((await getGrowthState(db, shop.ctx)).waitingLeads).toBe(2);
+  });
 });
 
 describe("the webhook mirrors add-ons", () => {

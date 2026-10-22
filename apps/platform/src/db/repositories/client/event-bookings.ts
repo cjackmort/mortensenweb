@@ -135,8 +135,9 @@ function toState(row: typeof eventBookings.$inferSelect): BookingState {
  * list was never opened, and would otherwise stay in the Growth tab's unread
  * count. A time it was already read is kept.
  *
- * An archived request stays archived. The inbox holds the newest ten, and a
- * decision on an older one must not push a newer one out of it.
+ * An archived request stays archived, and still records the outcome: the
+ * inbox holds the newest ten, and a decision on an older one must not push a
+ * newer one out of it, nor go uncounted because it was decided late.
  */
 async function markLeadDecided(
   db: Database,
@@ -146,12 +147,8 @@ async function markLeadDecided(
 ): Promise<void> {
   await db
     .update(leads)
-    .set({ readAt: sql`coalesce(${leads.readAt}, ${now})`, updatedAt: now })
+    .set({ readAt: sql`coalesce(${leads.readAt}, ${now})`, status, statusChangedAt: now, updatedAt: now })
     .where(eq(leads.id, leadId));
-  await db
-    .update(leads)
-    .set({ status, statusChangedAt: now })
-    .where(and(eq(leads.id, leadId), ne(leads.status, "archived")));
 }
 
 /** What was decided about one lead, or null if nothing yet. */

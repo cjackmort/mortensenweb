@@ -145,6 +145,8 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
         eq(leads.organizationId, ctx.organizationId),
         isNull(leads.deletedAt),
         inArray(leads.status, ["new", "contacted"]),
+        // Out of the inbox is not waiting, whatever it was marked.
+        isNull(leads.archivedAt),
       ),
     );
 
