@@ -92,6 +92,40 @@ export const LOOP = [
   },
 ] as const;
 
+/**
+ * How a new site happens, from the first enquiry to launch: the operator's
+ * process as of 2026-10-21. We build a demo before anyone pays, which is the
+ * promise on the home page and /contact/: "See your site before you pay." If
+ * the process changes (a deposit, say), change it here and drop that promise.
+ */
+export const START = [
+  {
+    n: "01",
+    title: "You tell us about the business",
+    body: "Fill in the form, call or email. A few lines is enough to start.",
+  },
+  {
+    n: "02",
+    title: "We build a demo of your site",
+    body: "A working version of your site, at a private link. We send you the link.",
+  },
+  {
+    n: "03",
+    title: "We talk through changes",
+    body: "On a call, you tell us what to change. We change it on the demo.",
+  },
+  {
+    n: "04",
+    title: "You approve it",
+    body: "When it looks right, you say so. You have paid nothing up to here.",
+  },
+  {
+    n: "05",
+    title: "You get your login and pay",
+    body: "You sign in to your client portal and pay for the site there, with a plan if you want one. Then it goes live on your domain.",
+  },
+] as const;
+
 /** Plausible examples of what clients ask for — the marquee. */
 export const REQUESTS = [
   "Change the phone number in the footer",

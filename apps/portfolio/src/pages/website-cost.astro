@@ -1,0 +1,305 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../data/site";
+import {
+  COM_RENEWALS,
+  COM_RENEWAL_RANGE,
+  DOMAIN_PRICES_CHECKED,
+  DOMAIN_PRICES_CHECKED_ON,
+  exactDollars,
+} from "../data/domains";
+import {
+  ADD_ON_FEATURES,
+  BUILD,
+  CHEAPEST_PLAN,
+  FREE_PORTAL,
+  OVERAGE_CENTS,
+  PLANS,
+  dollars,
+} from "@mortensenweb/plans";
+
+/*
+ * The price guide: what a small business website costs, answered first.
+ *
+ * Wasatch Web's "How much does a website cost in Utah in 2026" is the model
+ * for the shape. Not for its numbers: its market ranges are its own, uncited.
+ * This page gives no market ranges, because none we could find were more than
+ * one agency's say-so. It says what we charge, read from
+ * `@mortensenweb/plans`; what a domain costs, from the registrars' own sites
+ * (src/data/domains.ts); and what moves a price elsewhere, without numbers.
+ */
+
+const build = dollars(BUILD.priceCents);
+const plansFrom = dollars(CHEAPEST_PLAN.monthlyCents);
+const priciest = PLANS.reduce((high, p) => (p.monthlyCents > high.monthlyCents ? p : high));
+const plansTo = dollars(priciest.monthlyCents);
+const cheapestAddOn = dollars(Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents)));
+const lite = PLANS.find((p) => p.includedChangesPerMonth !== null)!;
+const firstUnlimited = PLANS.find((p) => p.includedChangesPerMonth === null)!;
+
+const keyFacts = [
+  { label: "Your website", value: `${build} once`, body: "Designed, written with you and launched on your domain." },
+  { label: FREE_PORTAL.name, value: "Free", body: FREE_PORTAL.description },
+  { label: "Monthly plan", value: `${plansFrom}–${plansTo}`, body: "Optional. Hosting, updates and changes. Month to month." },
+  { label: "Domain name", value: `${COM_RENEWAL_RANGE}/year`, body: "For a .com, paid to the registrar, in your name." },
+];
+
+const priceAffectors = [
+  "How many pages, and who writes the words on them.",
+  "A design made for your business, or a template you fill in yourself.",
+  "Online booking, payments or a shop, and other software the site has to connect to.",
+  "Whether hosting and changes are included, or billed by the hour after launch.",
+  "Who owns the domain and the site if you leave.",
+];
+
+const askFirst = [
+  "What exactly is included, and how many rounds of changes before launch?",
+  "What does it cost each month after launch, and what does that cover?",
+  "How is a change charged once the site is live?",
+  "Is the domain registered in my name?",
+  "If I leave, do I keep the site, and how do I take it with me?",
+];
+
+const faq: Array<[string, string]> = [
+  [
+    "How much does a small business website cost?",
+    `At ${SITE.name}, ${build}, one time. That includes: ${BUILD.includes.slice(0, 4).join("; ").toLowerCase()}. The only other cost you cannot avoid is a domain name, about ${COM_RENEWAL_RANGE} a year for a .com.`,
+  ],
+  [
+    "Is there a monthly fee?",
+    `Only if you want a plan. Plans cost ${plansFrom} to ${plansTo} a month, month to month, and cover hosting, security updates and changes. Without one, the site is handed over at launch on your own hosting account, at no monthly cost. Performance tracking is free either way.`,
+  ],
+  [
+    "How much does a domain name cost?",
+    `About ${COM_RENEWAL_RANGE} a year for a .com. The yearly renewal price is ${COM_RENEWALS.map((p) => `${exactDollars(p.renewalCents)} at ${p.registrar}${p.note ? ` (${p.note})` : ""}`).join(", ")}, checked on each registrar's site on ${DOMAIN_PRICES_CHECKED}. The first year is often cheaper. Buy it in your own name, so it stays yours.`,
+  ],
+  [
+    "Do I pay before I see the site?",
+    "No. We build a demo of your site first and send you the link. You pay once you have seen it and approved it.",
+  ],
+  [
+    "What costs extra?",
+    `Your domain name, paid to the registrar. A redesign or a new section after launch, which we quote before you commit. A Growth tool added to a plan on its own, from ${cheapestAddOn} a month. On ${lite.name}, each change beyond the one included is ${dollars(OVERAGE_CENTS)}.`,
+  ],
+];
+
+const title = "How much does a small business website cost in 2026?";
+---
+
+<Base
+  title="What a small business website costs in 2026"
+  description={`What a small business website costs: ${build} once at ${SITE.name} in ${SITE.locality}, ${SITE.region}, free performance tracking, optional plans from ${plansFrom}/month, and a .com domain at ${COM_RENEWAL_RANGE} a year.`}
+  path="/website-cost/"
+  schema={[
+    {
+      "@type": "Article",
+      "@id": `${SITE.url}/website-cost/#article`,
+      headline: title,
+      datePublished: DOMAIN_PRICES_CHECKED_ON,
+      dateModified: DOMAIN_PRICES_CHECKED_ON,
+      author: { "@id": `${SITE.url}/about/#founder` },
+      publisher: { "@id": `${SITE.url}/#organization` },
+      mainEntityOfPage: `${SITE.url}/website-cost/`,
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+    },
+  ]}
+>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div><p class="eyebrow">Price guide</p></div>
+        <div>
+          <h1 style="font-size: var(--text-2xl)">{title}</h1>
+          {/* The answer, in one paragraph that stands on its own when quoted. */}
+          <p class="lede" style="margin-top: 1rem">
+            At {SITE.name} in {SITE.locality}, {SITE.region}, a website costs {build}, one time.
+            Performance tracking is free. A monthly plan for hosting and changes is optional, from {plansFrom}.
+            The other cost is your domain name: about {COM_RENEWAL_RANGE} a year for a .com.
+          </p>
+          <p class="eyebrow" style="margin-top: 1.25rem">
+            Updated <time datetime={DOMAIN_PRICES_CHECKED_ON}>{DOMAIN_PRICES_CHECKED}</time> · {SITE.founder}
+          </p>
+        </div>
+      </div>
+
+      <ul class="keyfacts" aria-label="The short answer">
+        {keyFacts.map((f) => (
+          <li><strong>{f.label}: {f.value}</strong>{f.body}</li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--sunk">
+    <div class="wrap">
+      <ol class="rows">
+        <li class="reveal" id="included">
+          <h2 class="h3"><span class="n">01</span> What {build} gets you</h2>
+          <div>
+            <p>{BUILD.who} No plan needed, and no minimum term.</p>
+            <ul class="ticks">
+              {BUILD.includes.map((line) => <li>{line}</li>)}
+            </ul>
+            <p style="margin-top: var(--space-4)">
+              We build a demo first and send you the link. You pay once you have approved it.
+            </p>
+          </div>
+        </li>
+
+        <li class="reveal" id="extra">
+          <h2 class="h3"><span class="n">02</span> What costs extra</h2>
+          <div>
+            <p>
+              <strong>Your domain name.</strong> You buy it from a registrar, in your name, so it stays yours whoever builds the site.
+              These are the yearly .com renewal prices on each registrar's own site, checked {DOMAIN_PRICES_CHECKED}.
+              The first year is often cheaper.
+            </p>
+            <table class="domains">
+              <caption class="visually-hidden">Yearly .com renewal price at three registrars, checked {DOMAIN_PRICES_CHECKED}.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Registrar</th>
+                  <th scope="col">.com renewal</th>
+                  <th scope="col">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COM_RENEWALS.map((p) => (
+                  <tr>
+                    <th scope="row"><a class="link" href={p.source}>{p.registrar}</a></th>
+                    <td class="domains__money">{exactDollars(p.renewalCents)}/year</td>
+                    <td>{p.note ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <ul class="ticks">
+              <li>A redesign or a new section after launch: a separate project, quoted before you commit.</li>
+              <li>A Growth tool on its own, added to any plan: from {cheapestAddOn} a month. <a class="link" href="/growth/">What each one does</a>.</li>
+              <li>On {lite.name}, each change beyond the one included: {dollars(OVERAGE_CENTS)}.</li>
+              <li>A shop: we connect Square, Stripe or Shopify, and they charge their own fees.</li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="reveal" id="plans">
+          <h2 class="h3"><span class="n">03</span> How the monthly plans work</h2>
+          <div>
+            <p>
+              A plan is optional. It keeps the site hosted, secure and up to date, and covers the changes you ask for.
+              Month to month, no minimum term. Change or stop it any time.
+            </p>
+            <ul class="ticks">
+              {PLANS.map((p) => (
+                <li><strong>{p.name}, {dollars(p.monthlyCents)}/month.</strong> {p.description}</li>
+              ))}
+            </ul>
+            <p style="margin-top: var(--space-4)">
+              Unlimited changes start at {firstUnlimited.name}. Without a plan, the site is handed over at launch
+              on your own hosting account, at no monthly cost, and performance tracking stays free.
+              {" "}<a class="link" href="/pricing/">Compare the plans</a>.
+            </p>
+          </div>
+        </li>
+
+        <li class="reveal" id="elsewhere">
+          <h2 class="h3"><span class="n">04</span> What changes the price elsewhere</h2>
+          <div>
+            <p>Quotes for the same small business can be far apart. These are usually why.</p>
+            <ul class="ticks">
+              {priceAffectors.map((line) => <li>{line}</li>)}
+            </ul>
+          </div>
+        </li>
+
+        <li class="reveal" id="ask">
+          <h2 class="h3"><span class="n">05</span> What to ask before you sign</h2>
+          <div>
+            <p>Ask any web designer, us included.</p>
+            <ul class="ticks">
+              {askFirst.map((line) => <li>{line}</li>)}
+            </ul>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="eyebrow">Questions</p></div>
+        <h2>Quick answers.</h2>
+      </div>
+      <ul class="rows">
+        {faq.map(([q, a]) => (
+          <li class="reveal"><h3>{q}</h3><p>{a}</p></li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--dark">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>See your site before you pay.</h2>
+          <p class="lede" style="margin-top: 1rem">Tell us about the business. We build a demo and send you the link.</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/contact/" data-umami-event="cta: price guide start a project">Start a project <span class="arrow">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* Three registrars, three columns: small enough to fit a phone, so none of
+     the pricing table's sideways scrolling. Hairlines, like the rows around it. */
+  .domains {
+    width: 100%;
+    max-width: 40rem;
+    margin-top: var(--space-4);
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .domains th,
+  .domains td {
+    text-align: left;
+    padding: 0.7rem 0.75rem 0.7rem 0;
+    border-bottom: 1px solid var(--rule-strong);
+    vertical-align: baseline;
+  }
+
+  .domains thead th {
+    font: 500 var(--text-xs) / 1.4 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .domains tbody th {
+    font-weight: 500;
+  }
+
+  .domains__money {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .domains td:last-child {
+    color: var(--muted);
+  }
+
+  /* The notes are written lower case to read mid-sentence elsewhere; in their
+     own cell they start a phrase. */
+  .domains td:last-child::first-letter {
+    text-transform: uppercase;
+  }
+</style>

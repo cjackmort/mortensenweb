@@ -1,0 +1,86 @@
+---
+import { GOOGLE_REVIEWS_URL, REVIEWS, type ClientReview } from "../data/reviews";
+
+/**
+ * "What clients say": real Google reviews from `src/data/reviews.ts`.
+ *
+ * Renders nothing while the list is empty, so the home page never shows an
+ * empty shelf or a placeholder quote. It sits inside the work section rather
+ * than in a section of its own, so the page's plain/sunk banding is the same
+ * whether it shows or not.
+ *
+ * No Review or AggregateRating structured data: Google ignores reviews a
+ * business publishes about itself, and marking them up invites a manual
+ * action for self-serving review markup.
+ */
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function posted(review: ClientReview): string {
+  if (!MONTH.test(review.date)) {
+    throw new Error(`Review by ${review.author}: date must be YYYY-MM, got "${review.date}"`);
+  }
+  return new Date(`${review.date}-01T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+const reviews = REVIEWS.map((r) => ({ ...r, when: posted(r) }));
+---
+
+{reviews.length > 0 && (
+  <div class="reviews" id="reviews">
+    <div class="section-head reveal">
+      <div><p class="eyebrow">Reviews</p></div>
+      <div>
+        <h2>What clients say.</h2>
+        <p class="lede" style="margin-top: 1rem">
+          Copied word for word from Google.
+          {GOOGLE_REVIEWS_URL && <>{" "}<a class="link" href={GOOGLE_REVIEWS_URL}>Read them on Google</a>.</>}
+        </p>
+      </div>
+    </div>
+    <ul class="cells">
+      {reviews.map((r) => (
+        <li class="reveal">
+          <p class="n">
+            <span aria-hidden="true">{"★".repeat(r.rating)}</span>
+            <span class="visually-hidden">{r.rating} out of 5 stars</span>
+          </p>
+          <blockquote class="reviews__quote"><p>{r.text}</p></blockquote>
+          <p class="reviews__by">
+            <strong>{r.author}</strong>
+            {r.business && <>, {r.business}</>}
+            {r.connection && <> ({r.connection})</>}
+            <br />
+            Google review, {r.when}
+          </p>
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
+<style>
+  .reviews {
+    margin-top: var(--space-8);
+  }
+
+  .reviews__quote {
+    margin: 0;
+  }
+
+  /* The review is the cell's main text, so it reads at body size rather than
+     the cells' small print. */
+  .reviews__quote p {
+    max-width: 60ch;
+    font-size: var(--text-base);
+    color: var(--ink);
+  }
+
+  .reviews__by {
+    margin-top: auto;
+  }
+</style>
