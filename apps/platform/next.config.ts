@@ -172,6 +172,18 @@ const nextConfig: NextConfig = {
       "../../node_modules/@img/sharp-wasm32/**",
     ],
   },
+
+  /**
+   * The font the showcase graphics draw their captions in.
+   *
+   * Read from disk by path (`lib/showcase/graphics.ts`), which file tracing
+   * cannot see, so without this the deployed function would not have it and
+   * every graphic would fail. A Netlify function has no system fonts to fall
+   * back on.
+   */
+  outputFileTracingIncludes: {
+    "/dashboard/growth/showcase/**": ["./assets/fonts/Geist-Regular.ttf"],
+  },
 };
 
 export default nextConfig;
