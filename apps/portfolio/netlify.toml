@@ -15,6 +15,10 @@
   command = "npm run build"
   # Astro's static output.
   publish = "dist"
+  # Prices and plan copy come from `packages/plans`, outside this base. Without
+  # this, a price change alone is cancelled as "no content change" and the
+  # site keeps quoting the old figure. Exit 0 means skip.
+  ignore = "git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- . ../../packages ../../package.json ../../package-lock.json"
 
 [build.environment]
   NODE_VERSION = "22"
