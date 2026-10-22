@@ -355,3 +355,145 @@ export const BUILDS: Build[] = [
 ];
 
 export const CHEAPEST_BUILD = BUILDS.reduce((low, b) => (b.priceCents < low.priceCents ? b : low));
+
+// ---------------------------------------------------------------------------
+// Ads
+// ---------------------------------------------------------------------------
+
+/**
+ * Paid ads on Google and Meta, on every plan, paid for per campaign.
+ *
+ * Not a Growth feature: there is nothing to include in a plan or sell as a
+ * monthly add-on. A client pays for each campaign once — the ad spend, which
+ * goes to Google or Meta at cost, and the management fee, which is ours — and
+ * the two are always separate lines. Wasatch Web advertises "no markup on ad
+ * spend"; a fee folded into the spend would be exactly the markup a client
+ * could fairly accuse us of hiding.
+ *
+ * `ADS_AVAILABLE` gates every way into it, for the same reason a Growth
+ * feature has `available`: a client must not be able to pay for an ad before
+ * there is anything on the other side to launch it. On since the operator
+ * queue landed: review, manual launch, results and refunds all work without
+ * the platform APIs, which only add automatic syncing.
+ */
+export const ADS_AVAILABLE = true;
+
+/**
+ * The fee: a share of the ad spend in basis points (1500 = 15%), with a floor
+ * per campaign. The one place it is set. A campaign copies these at checkout,
+ * so changing them here changes what the next client is offered and never
+ * what an existing campaign is settled at.
+ */
+export const AD_MANAGEMENT_FEE = { basisPoints: 1500, minimumCents: 2500 } as const;
+
+export interface AdFeeTerms {
+  basisPoints: number;
+  minimumCents: number;
+}
+
+export function managementFeeCents(spendCents: number, terms: AdFeeTerms = AD_MANAGEMENT_FEE): number {
+  if (spendCents <= 0) return 0;
+  return Math.max(Math.round((spendCents * terms.basisPoints) / 10000), terms.minimumCents);
+}
+
+/** "15% of ad spend, $25 minimum", for the checkout line and the pricing page. */
+export function feeTermsLabel(terms: AdFeeTerms = AD_MANAGEMENT_FEE): string {
+  const percent = terms.basisPoints / 100;
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(1)}% of ad spend, ${dollars(terms.minimumCents)} minimum`;
+}
+
+export type AdChannelKey = "google_search" | "google_maps" | "youtube_display" | "facebook" | "instagram";
+export type AdPlatform = "google_ads" | "meta";
+
+export interface AdChannel {
+  key: AdChannelKey;
+  name: string;
+  platform: AdPlatform;
+  /** Where the ad appears, in the client's terms. */
+  summary: string;
+  /** What has to be true for it to run, when something does. */
+  needs?: string;
+  /**
+   * Per day, so the minimum and the suggestion scale with how long the ad
+   * runs. Both platforms accept less; these are the floors below which a
+   * small business's campaign rarely gathers enough clicks to say anything.
+   */
+  minimumDailyCents: number;
+  suggestedDailyCents: number;
+  /** How long we suggest it runs, in days — one of `AD_DURATIONS_DAYS`. */
+  suggestedDays: number;
+}
+
+export const AD_CHANNELS: AdChannel[] = [
+  {
+    key: "google_search",
+    name: "Google Search",
+    platform: "google_ads",
+    summary: "Text ads at the top of Google when someone nearby searches for what you do.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 1000,
+    suggestedDays: 30,
+  },
+  {
+    key: "google_maps",
+    name: "Google Maps",
+    platform: "google_ads",
+    summary: "Your business pinned at the top of Maps results nearby, with directions and a call button.",
+    needs: "Your Google Business Profile, linked to the ad account.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 700,
+    suggestedDays: 30,
+  },
+  {
+    key: "youtube_display",
+    name: "YouTube & Display",
+    platform: "google_ads",
+    summary: "Image ads on YouTube and on websites and apps across Google's network.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+  {
+    key: "facebook",
+    name: "Facebook",
+    platform: "meta",
+    summary: "Ads in the Facebook feed and Messenger, shown to people in your area.",
+    needs: "A Facebook Page for the business.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+  {
+    key: "instagram",
+    name: "Instagram",
+    platform: "meta",
+    summary: "Ads in the Instagram feed, Stories and Reels, shown to people in your area.",
+    needs: "A Facebook Page for the business. An Instagram account helps but is not required.",
+    minimumDailyCents: 500,
+    suggestedDailyCents: 800,
+    suggestedDays: 30,
+  },
+];
+
+/** How long a campaign can run. */
+export const AD_DURATIONS_DAYS = [14, 30, 60, 90] as const;
+
+export function adChannel(key: AdChannelKey): AdChannel {
+  return AD_CHANNELS.find((c) => c.key === key)!;
+}
+
+export function isAdChannelKey(value: unknown): value is AdChannelKey {
+  return AD_CHANNELS.some((c) => c.key === value);
+}
+
+export function channelMinimumCents(channel: AdChannel, days: number): number {
+  return channel.minimumDailyCents * days;
+}
+
+export function channelSuggestedCents(channel: AdChannel, days: number): number {
+  return channel.suggestedDailyCents * days;
+}
+
+/** What unspent budget becomes, said the same way everywhere it is said. */
+export const AD_UNSPENT_POLICY =
+  "If your ad spends less than its budget, we refund the unspent amount to your card when the campaign ends and work the fee out again on what was actually spent. If we can't run your ad, you get everything back, fee included.";

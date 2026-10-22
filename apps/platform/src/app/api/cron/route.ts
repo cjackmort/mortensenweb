@@ -15,6 +15,7 @@ import { reconcileStorageReservations } from "@/db/repositories/client/media-quo
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
+import { runScheduledAdSync } from "@/db/repositories/admin/ad-sync";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -25,7 +26,7 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
 /**
  * The scheduled work.
  *
- * Twelve jobs that have to run whether or not anyone is looking. The first six
+ * Thirteen jobs that have to run whether or not anyone is looking. The first six
  * are the loop's own; jobs 7-9 keep the media library's storage honest,
  * jobs 10-11 are the nets under Stripe's and Netlify Forms' webhooks, and
  * job 12 keeps the books:
@@ -65,6 +66,9 @@ import { constantTimeEqual } from "@/lib/webhooks/signature";
  *      reaches the client's inbox.
  *  12. **Ledger.** Self-gated to at most hourly; records Stripe's fee on each
  *      card payment and adds this month's row of every monthly expense.
+ *  13. **Ad results.** Ends campaigns past their last day on every run, and
+ *      at most every six hours reads Google Ads and Meta results into
+ *      `ad_stats_daily`. Does nothing more until their credentials are set.
  *
  * ## Not every call runs them
  *
@@ -212,6 +216,9 @@ export async function POST(request: Request): Promise<Response> {
     // After the Stripe reconciliation, so a payment it recovered this tick can
     // have its fee recorded in the same one. Self-gated to at most hourly.
     ["ledgerAutomated", () => runScheduledLedger(db)],
+    // Ads: ending campaigns whose dates have passed is one cheap query; the
+    // platform reads are self-gated to six-hourly and skipped without keys.
+    ["adStatsSynced", () => runScheduledAdSync(db)],
   ];
 
   const failed: string[] = [];
