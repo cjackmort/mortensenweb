@@ -406,11 +406,15 @@ export const BUILD: Build = BUILDS[0]!;
  *
  * `ADS_AVAILABLE` gates every way into it, for the same reason a Growth
  * feature has `available`: a client must not be able to pay for an ad before
- * there is anything on the other side to launch it. On since the operator
- * queue landed: review, manual launch, results and refunds all work without
- * the platform APIs, which only add automatic syncing.
+ * there is anything on the other side to launch it. Review, manual launch,
+ * results and refunds all work without the platform APIs, which only add
+ * automatic syncing.
+ *
+ * Off since 2026-10-22, at the operator's request, until the agency's Google
+ * Ads and Meta ad accounts exist to launch campaigns in. Set it back to true
+ * to offer ads again; nothing else needs to change.
  */
-export const ADS_AVAILABLE = true;
+export const ADS_AVAILABLE = false;
 
 /**
  * The fee: a share of the ad spend in basis points (1500 = 15%), with a floor
