@@ -6,6 +6,7 @@ import { tenantContextFrom } from "@/db/repositories/context";
 import {
   getMyReportEmails,
   hasMonthlyReport,
+  isMyReportPaused,
   listMyReports,
 } from "@/db/repositories/client/reports";
 import { currentReportPeriod, nextPeriod, reportWindow } from "@/lib/reports/period";
@@ -40,9 +41,10 @@ export default async function ReportsPage() {
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [reports, eligible, emails] = await Promise.all([
+  const [reports, eligible, paused, emails] = await Promise.all([
     listMyReports(db, ctx),
     hasMonthlyReport(db, ctx),
+    isMyReportPaused(db, ctx),
     getMyReportEmails(db, ctx),
   ]);
 
@@ -76,12 +78,23 @@ export default async function ReportsPage() {
           <div className="panel-head">
             <h2>Your reports</h2>
           </div>
-          {reports.length === 0 ? (
-            <div className="empty">
-              <p>
-                Your first report arrives on {firstReportOn}, covering {reportWindow(thisMonth).label}.
+          {/* Worded like the billing page's "we've paused work on your site". */}
+          {paused && (
+            <div className="panel-body">
+              <p className="notice" style={{ margin: 0 }}>
+                New reports are paused while work on your site is paused. They start again when the work
+                does.{reports.length > 0 && " Your past reports stay here."}
               </p>
             </div>
+          )}
+          {reports.length === 0 ? (
+            !paused && (
+              <div className="empty">
+                <p>
+                  Your first report arrives on {firstReportOn}, covering {reportWindow(thisMonth).label}.
+                </p>
+              </div>
+            )
           ) : (
             <ul className="lead-list">
               {reports.map((report) => (
