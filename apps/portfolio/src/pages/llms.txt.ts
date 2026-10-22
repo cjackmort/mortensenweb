@@ -31,6 +31,7 @@ export const GET: APIRoute = () =>
       `- [Pricing](${SITE.url}/pricing/): the build price, then the plans: free performance tracking and four monthly plans`,
       `- [About](${SITE.url}/about/): ${SITE.founder}, the founder — a mechanical engineering senior at the University of Utah focused on aerospace and defense`,
       `- [Contact](${SITE.url}/contact/): enquiry form and phone; every enquiry is answered, usually the same working day`,
+      `- [Privacy](${SITE.url}/privacy/): what the site and the client portal collect, which providers handle it, how Google Business Profile data is used, and how to have data deleted`,
       "",
       "## The build (US dollars, one-time, no plan required)",
       `- ${BUILD.name}: ${dollars(BUILD.priceCents)}. ${BUILD.who} Includes: ${BUILD.includes.join("; ")}.`,
