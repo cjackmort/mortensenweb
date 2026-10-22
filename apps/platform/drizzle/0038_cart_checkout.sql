@@ -1,12 +1,13 @@
 -- Cart checkout and onboarding: what a new client pays for their website,
--- whether they have, how far the operator has taken them, and add-ons that
--- end at the close of a paid period instead of at once.
+-- whether they have, how far the operator has taken them, the domain they
+-- bought in their own name, and add-ons that end at the close of a paid
+-- period instead of at once.
 --
--- Additive only: six nullable columns. Code already deployed runs unchanged.
+-- Additive only: nine nullable columns. Code already deployed runs unchanged.
 --
--- `when` is 1790700000000, above every migration on main and every sibling
--- migration in flight (0029-0035, up to 1790600000000). Drizzle's migrator
--- skips anything below the highest applied `when`, silently.
+-- `when` is 1790900000000, above 0037_lead_archived_at's 1790800000000, the
+-- highest applied in production. Drizzle's migrator skips anything below the
+-- highest applied `when`, silently.
 --
 -- Hand-written, as 0016 onwards are: `drizzle-kit generate` cannot run on this
 -- repository. No session state between statements: production migrates over
@@ -18,4 +19,7 @@ ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "build_price_cents" integer CONST
 ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "build_paid_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "demo_url" text;--> statement-breakpoint
 ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "demo_sent_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "domain_name" text;--> statement-breakpoint
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "domain_registrar" text;--> statement-breakpoint
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "domain_access_confirmed_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "client_add_ons" ADD COLUMN IF NOT EXISTS "cancels_at" timestamp with time zone;

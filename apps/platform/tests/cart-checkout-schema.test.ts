@@ -4,7 +4,7 @@ import type { Database } from "@/db/client";
 import { createTestDb } from "./helpers/db";
 
 /**
- * Migration 0036: the columns the cart checkout and the onboarding status
+ * Migration 0038: the columns the cart checkout and the onboarding status
  * read, added before any code that names them.
  *
  * The Drizzle schema deliberately does not declare these yet. Drizzle expands
@@ -37,7 +37,7 @@ async function columns(table: string): Promise<Map<string, { type: string; nulla
   );
 }
 
-describe("0036 cart checkout columns", () => {
+describe("0038 cart checkout columns", () => {
   it("adds the build, payment and demo columns to clients, all nullable", async () => {
     const found = await columns("clients");
     expect(found.get("build_key")).toEqual({ type: "text", nullable: true });
@@ -45,6 +45,13 @@ describe("0036 cart checkout columns", () => {
     expect(found.get("build_paid_at")).toEqual({ type: "timestamp with time zone", nullable: true });
     expect(found.get("demo_url")).toEqual({ type: "text", nullable: true });
     expect(found.get("demo_sent_at")).toEqual({ type: "timestamp with time zone", nullable: true });
+  });
+
+  it("adds the client-owned domain columns to clients, all nullable", async () => {
+    const found = await columns("clients");
+    expect(found.get("domain_name")).toEqual({ type: "text", nullable: true });
+    expect(found.get("domain_registrar")).toEqual({ type: "text", nullable: true });
+    expect(found.get("domain_access_confirmed_at")).toEqual({ type: "timestamp with time zone", nullable: true });
   });
 
   it("adds cancels_at to client_add_ons, nullable", async () => {

@@ -1,22 +1,27 @@
 ---
-import { dollars, type Plan } from "@mortensenweb/plans";
-interface Props { plan: Plan; compact?: boolean }
-const { plan, compact = false } = Astro.props;
+import { dollars, type FreePortal, type Plan } from "@mortensenweb/plans";
+/** A paid plan, or free performance tracking shown as the first step of the same ladder. */
+interface Props { plan: Plan | FreePortal }
+const { plan } = Astro.props;
+const isPaid = "bestFor" in plan;
+const featured = isPaid && plan.featured;
 ---
 
-<div class:list={["plan", "reveal", { "plan--featured": plan.featured }]}>
-  {plan.featured && <span class="plan__badge">Most chosen</span>}
+<div class:list={["plan", "reveal", { "plan--featured": featured }]}>
+  {featured && <span class="plan__badge">Most chosen</span>}
   <p class="plan__name">{plan.name}</p>
-  <p class="plan__price">{dollars(plan.monthlyCents)}<small>/month</small></p>
-  <p class="plan__for">{plan.bestFor}</p>
-  {
-    !compact && (
-      <ul>
-        {plan.features.map((f) => <li>{f}</li>)}
-      </ul>
-    )
-  }
-  <a class="btn btn--ghost" href={compact ? "/pricing/" : "/contact/"}>
-    {compact ? "Compare plans" : "Start a project"} <span class="arrow">→</span>
+  {isPaid ? (
+    <p class="plan__price">{dollars(plan.monthlyCents)}<small>/month</small></p>
+  ) : (
+    <p class="plan__price">Free</p>
+  )}
+  <p class="plan__for">{isPaid ? plan.bestFor : plan.description}</p>
+  <ul>
+    {plan.features.map((f) => <li>{f}</li>)}
+  </ul>
+  {/* "Get started" rather than "Start a project": five cards to a row leaves
+      too little width for the longer label on one line. */}
+  <a class="btn btn--ghost" href="/contact/">
+    Get started <span class="arrow">→</span>
   </a>
 </div>

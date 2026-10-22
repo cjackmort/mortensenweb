@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  AD_CHANNELS,
+  AD_MANAGEMENT_FEE,
+  ADS_AVAILABLE,
+  ADD_ON_FEATURES,
   BUILDS,
+  FREE_PORTAL,
   GROWTH_FEATURES,
   OVERAGE_CENTS,
   PLANS,
@@ -29,11 +34,19 @@ describe("GET /api/plans", () => {
     expect(body.plans).toEqual(PLANS);
   });
 
-  it("returns the overage, Growth features and builds the pricing page quotes", async () => {
+  it("returns the overage, Growth features, builds and free portal the pricing page quotes", async () => {
     const body = await GET().json();
     expect(body.overageCents).toBe(OVERAGE_CENTS);
     expect(body.growthFeatures).toEqual(GROWTH_FEATURES);
     expect(body.builds).toEqual(BUILDS);
+    expect(body.freePortal).toEqual(FREE_PORTAL);
+  });
+
+  it("returns the ads fee from the one place it is set, and whether ads exist yet", async () => {
+    const body = await GET().json();
+    expect(body.ads.fee).toEqual(AD_MANAGEMENT_FEE);
+    expect(body.ads.available).toBe(ADS_AVAILABLE);
+    expect(body.ads.channels.map((c: { key: string }) => c.key)).toEqual(AD_CHANNELS.map((c) => c.key));
   });
 
   it("never lists the complimentary plan", async () => {
@@ -73,21 +86,31 @@ describe("the price ladder", () => {
     }
   });
 
-  it("keeps Lite's add-on routes within $10 of the plan that also brings unlimited changes", () => {
-    // From Lite, add-ons can come in just under the next plan — $25 + $15 for
-    // the inbox against Care's $50, or $95 against Growth's $100. Allowed,
-    // because the plan also brings unlimited changes, which are never sold as
-    // an add-on; this holds the gap small enough that the upgrade stays the
-    // obvious buy.
+  it("keeps Lite's add-on routes within what unlimited changes cost", () => {
+    // From Lite, add-ons can come in under the next plan — $80 against
+    // Growth's $100. Allowed, because the plan also brings unlimited changes,
+    // which are never sold as an add-on; this holds the gap to what Care adds
+    // over Lite for exactly that, so the upgrade stays the obvious buy. (Until
+    // 2026-10-21 the bound was $10, with the inbox a $15 add-on.)
+    const unlimitedChanges =
+      PLANS.find((p) => p.key === "care")!.monthlyCents - PLANS.find((p) => p.key === "lite")!.monthlyCents;
     for (const target of ["care", "growth", "pro"] as PlanKey[]) {
       const { saves } = upgradeBeatsAddOns("lite", target);
-      expect(saves, `lite -> ${target}`).toBeGreaterThanOrEqual(-1000);
+      expect(saves, `lite -> ${target}`).toBeGreaterThanOrEqual(-unlimitedChanges);
     }
   });
 
-  it("puts every Growth feature together at more than $100 a month", () => {
-    const total = GROWTH_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
+  it("puts every paid Growth feature together at more than $100 a month", () => {
+    const total = ADD_ON_FEATURES.reduce((sum, f) => sum + f.addOnCents, 0);
     expect(total).toBeGreaterThan(10000);
+  });
+
+  it("gives the leads inbox to every plan and to the free portal", () => {
+    expect(GROWTH_FEATURES.find((f) => f.key === "leads")!.includedFrom).toBe("free");
+    expect(ADD_ON_FEATURES.map((f) => f.key)).not.toContain("leads");
+    for (const plan of PLANS) expect(plan.growthFeatures, plan.key).toContain("leads");
+    expect(FREE_PORTAL.monthlyCents).toBe(0);
+    expect(FREE_PORTAL.features).toEqual(["Visitor analytics", "Leads inbox"]);
   });
 
   it("reserves unlimited changes for Care and above, never an add-on", () => {
@@ -107,11 +130,7 @@ describe("the price ladder", () => {
     }
   });
 
-  it("prices the three builds at $100, $500 and $1,000", () => {
-    expect(BUILDS.map((b) => [b.key, b.priceCents])).toEqual([
-      ["launch", 10000],
-      ["revamp", 50000],
-      ["established", 100000],
-    ]);
+  it("prices the build at $500, one price for every new site", () => {
+    expect(BUILDS.map((b) => [b.key, b.priceCents])).toEqual([["website", 50000]]);
   });
 });

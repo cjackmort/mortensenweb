@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, leads, sites } from "@/db/schema";
 import { INBOX_ORDER, INBOX_SIZE } from "../client/leads";
@@ -106,6 +106,9 @@ export async function recordLead(
  * Archive whatever in a client's inbox falls past the newest `INBOX_SIZE`,
  * oldest first by when it was sent — so an imported old submission goes
  * straight to Archived rather than pushing out a newer one.
+ *
+ * Only `archived_at` changes. What the client marked it stays, so a won job
+ * that slides out of the inbox is still counted as won.
  */
 async function trimInbox(db: Database, organizationId: string, now: Date): Promise<void> {
   const overflow = await db
@@ -115,7 +118,7 @@ async function trimInbox(db: Database, organizationId: string, now: Date): Promi
       and(
         eq(leads.organizationId, organizationId),
         isNull(leads.deletedAt),
-        ne(leads.status, "archived"),
+        isNull(leads.archivedAt),
       ),
     )
     .orderBy(...INBOX_ORDER)
@@ -124,7 +127,7 @@ async function trimInbox(db: Database, organizationId: string, now: Date): Promi
 
   await db
     .update(leads)
-    .set({ status: "archived", statusChangedAt: now, updatedAt: now })
+    .set({ archivedAt: now, updatedAt: now })
     .where(inArray(leads.id, overflow.map((lead) => lead.id)));
 }
 

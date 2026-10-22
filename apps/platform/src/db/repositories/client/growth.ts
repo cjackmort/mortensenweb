@@ -1,4 +1,4 @@
-import { and, count, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
 import {
   GROWTH_FEATURES,
   PLANS,
@@ -6,7 +6,7 @@ import {
   type PlanKey,
 } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
-import { auditLog, clientAddOns, clients, leads, servicePlans, subscriptions } from "@/db/schema";
+import { auditLog, clientAddOns, clients, servicePlans, subscriptions } from "@/db/schema";
 import { growthAccess, hasFeature, type FeatureAccess } from "@/lib/growth/access";
 import {
   lookupKeyForPlan,
@@ -68,8 +68,6 @@ export interface GrowthState {
     /** Cancelled: it keeps working until this date. */
     cancelsAt: Date | null;
   }>;
-  /** Open enquiries — shown on a locked inbox as a reason to unlock it. */
-  waitingLeads: number;
 }
 
 export interface StripeSubscriptionRow {
@@ -163,17 +161,6 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
         ? "invoiced"
         : "none";
 
-  const [waiting] = await db
-    .select({ n: count() })
-    .from(leads)
-    .where(
-      and(
-        eq(leads.organizationId, ctx.organizationId),
-        isNull(leads.deletedAt),
-        inArray(leads.status, ["new", "contacted"]),
-      ),
-    );
-
   return {
     access: growthAccess({
       planKey: entitlements?.planKey ?? null,
@@ -187,7 +174,6 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
     cancelsOn: sub?.cancelAtPeriodEnd ? (sub.currentPeriodEnd ?? null) : null,
     renewsOn: sub && !sub.cancelAtPeriodEnd ? (sub.currentPeriodEnd ?? null) : null,
     addOns,
-    waitingLeads: waiting?.n ?? 0,
   };
 }
 

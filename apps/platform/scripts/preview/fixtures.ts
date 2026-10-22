@@ -10,9 +10,9 @@ export const PREVIEW = {
     customer: "cus_preview_sagebrush",
     subscription: "sub_preview_sagebrush",
     planItem: "si_preview_plan",
-    addOnItem: "si_preview_leads",
+    addOnItem: "si_preview_reviews",
     planKey: "lite",
-    addOnKey: "leads",
+    addOnKey: "reviews",
   },
   /** How far into the future the paying client's period ends. */
   periodDays: 20,
