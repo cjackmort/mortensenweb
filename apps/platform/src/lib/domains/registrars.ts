@@ -12,7 +12,7 @@
  * `checkedOn`, with the page in `sources`. Prices and menus change: re-check
  * a registrar before relying on it, update its entry, and move the date.
  *
- * Checked and left out (2026-10-22):
+ * Checked and left out (2026-10-21):
  * - **Porkbun** ($11.08/yr): its password-free option, Authorized Users,
  *   opens the whole account, not one domain or its DNS, and needs app-based
  *   2FA on both accounts. https://kb.porkbun.com/article/242-subaccounts-vs-authorized-users
@@ -74,7 +74,7 @@ export const REGISTRARS: Registrar[] = [
         url: "https://answers.netlify.com/t/support-guide-what-problems-could-occur-when-using-cloudflare-in-front-of-netlify/138",
       },
     ],
-    checkedOn: "2026-10-22",
+    checkedOn: "2026-10-21",
   },
   {
     key: "namecheap",
@@ -98,7 +98,7 @@ export const REGISTRARS: Registrar[] = [
         url: "https://www.namecheap.com/support/knowledgebase/article.aspx/192/46/how-do-i-share-access-to-my-domain-with-other-users/",
       },
     ],
-    checkedOn: "2026-10-22",
+    checkedOn: "2026-10-21",
   },
   {
     key: "squarespace",
@@ -128,7 +128,7 @@ export const REGISTRARS: Registrar[] = [
         url: "https://support.squarespace.com/hc/en-us/articles/31119879125645-DNS-records-for-web-hosting",
       },
     ],
-    checkedOn: "2026-10-22",
+    checkedOn: "2026-10-21",
   },
   {
     key: "godaddy",
@@ -151,7 +151,7 @@ export const REGISTRARS: Registrar[] = [
       { label: "Access levels", url: "https://www.godaddy.com/help/delegate-access-levels-of-permission-12374" },
       { label: "Domain permissions", url: "https://www.godaddy.com/help/grant-delegate-access-to-domains-32180" },
     ],
-    checkedOn: "2026-10-22",
+    checkedOn: "2026-10-21",
   },
 ];
 
