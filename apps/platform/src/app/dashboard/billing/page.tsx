@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -12,6 +13,8 @@ import {
 } from "@/lib/payments/venmo";
 import { cardProvider } from "@/lib/payments/card-provider";
 import { getStripeBillingPanel } from "@/db/repositories/client/stripe-billing";
+import { getCart } from "@/db/repositories/client/cart";
+import { formatCents } from "@/lib/billing/cart";
 import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
 import { StripePanel } from "./stripe-panel";
@@ -30,7 +33,7 @@ export const dynamic = "force-dynamic";
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ payment?: string }>;
+  searchParams: Promise<{ payment?: string; checkout?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -55,11 +58,12 @@ export default async function BillingPage({
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [overview, entitlements, canRecur, stripePanel] = await Promise.all([
+  const [overview, entitlements, canRecur, stripePanel, cart] = await Promise.all([
     getBillingOverview(db, ctx),
     getEntitlements(db, ctx),
     recurringAvailable(db, ctx),
     getStripeBillingPanel(db, ctx),
+    getCart(db, ctx),
   ]);
 
   /**
@@ -97,8 +101,12 @@ export default async function BillingPage({
   // Back from Stripe's payment page. Wording only: the invoice is settled by
   // the webhook, and until it lands the invoice still reads as due — this says
   // why, instead of leaving them to wonder whether to pay again.
-  const { payment } = await searchParams;
+  const { payment, checkout } = await searchParams;
   const justPaid = payment === "complete" && Boolean(overview.current);
+  // Back from paying the cart. Until the webhook lands the cart still reads
+  // as unpaid, so it is not offered again on this visit; checkout itself also
+  // refuses a second payment (see `client/cart.ts`).
+  const cartPaid = checkout === "complete";
 
   const handle = configuredVenmoHandle();
   const venmoUrl =
@@ -123,6 +131,29 @@ export default async function BillingPage({
           )}
         </div>
 
+        {cartPaid && (
+          <p className="notice notice-success" role="status">
+            <strong>Thanks &mdash; your payment went through.</strong> It can take a minute to show here.
+            There&rsquo;s no need to pay again.
+          </p>
+        )}
+
+        {cart.open && !cartPaid && (
+          <section className="card" aria-labelledby="billing-website">
+            <div className="card-head">
+              <h2 id="billing-website">Your website</h2>
+              <span className="pill pill-warning">Not paid yet</span>
+            </div>
+            <p>
+              Your website is {formatCents(cart.catalog.build.priceCents)}, one payment. You can add a monthly plan
+              in the same checkout.
+            </p>
+            <Link className="button" href="/dashboard/cart">
+              Pay for your website
+            </Link>
+          </section>
+        )}
+
         {justPaid ? (
           <p className="notice notice-success">
             <strong>Thanks &mdash; your payment went through.</strong> It can
@@ -136,7 +167,7 @@ export default async function BillingPage({
         {/* Card subscriptions. Hidden entirely when Stripe has no credentials
             in this environment, so the Square and Venmo paths below are
             unaffected by it being switched off. */}
-        {stripePanel.available && (
+        {stripePanel.available && !cart.open && (
           <StripePanel
             state={stripePanel.status.state}
             label={stripePanel.status.label}

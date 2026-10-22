@@ -1,4 +1,4 @@
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import {
@@ -23,10 +23,10 @@ import {
   requireStripe,
   subscriptionIdFromInvoice,
 } from "@/lib/payments/stripe";
-import { unlockClientFeatures } from "./entitlements";
 import { billingDayFromAnchor } from "@/lib/billing/billing-day";
 import { retireHandBilledPlans } from "./hand-billed-plans";
 import { settleOneOffCheckout } from "./stripe-one-off";
+import { BUILD_NOTE, cartBuildCents, fromCart, markBuildPaid, resumeAndUnlock, settleCartPayment } from "./stripe-cart";
 import { describeDiscounts, SUBSCRIPTION_EXPAND } from "@/lib/payments/promos";
 
 /**
@@ -322,7 +322,12 @@ export async function mirrorSubscription(
   const now = new Date();
   // Undefined when the promo could not be read: the stored one is left alone
   // rather than wiped, because the client may well still have it.
-  const discount = await describeDiscounts(subscription, priceCents);
+  const product = item?.price?.product;
+  const discount = await describeDiscounts(
+    subscription,
+    priceCents,
+    typeof product === "string" ? product : (product?.id ?? null),
+  );
 
   const values = {
     ...(discount ?? {}),
@@ -447,7 +452,36 @@ async function recordInvoicePayment(
     localSubscriptionId = rows[0]?.id ?? null;
   }
 
-  const line = invoice.lines?.data[0];
+  // A cart's first invoice also carries the website build. It is booked as
+  // its own row, keyed on the same invoice, so it is never counted as plan
+  // revenue and a second event for this invoice adds nothing.
+  const buildCents = cartBuildCents(invoice, invoiceMetadata(invoice));
+  if (buildCents !== null) {
+    await db
+      .insert(payments)
+      .values({
+        publicId: newPublicId(),
+        clientId,
+        subscriptionId: null,
+        amountCents: buildCents,
+        currency: (invoice.currency ?? "usd").toUpperCase(),
+        method: "stripe",
+        provider: "stripe",
+        providerReference: invoice.id,
+        receiptUrl: invoice.hosted_invoice_url ?? null,
+        idempotencyKey: `${idempotencyKey}:build`,
+        receivedOn: businessDate(
+          invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000) : new Date(),
+        ),
+        recordedBy: null,
+        status: "recorded",
+        note: BUILD_NOTE,
+      })
+      .onConflictDoNothing({ target: payments.idempotencyKey });
+  }
+  const recurringCents = cents - (buildCents ?? 0);
+
+  const line = invoice.lines?.data.find((l) => l.parent?.type === "subscription_item_details") ?? invoice.lines?.data[0];
   const periodStart = line?.period?.start
     ? businessDate(new Date(line.period.start * 1000))
     : null;
@@ -461,7 +495,7 @@ async function recordInvoicePayment(
       publicId: newPublicId(),
       clientId,
       subscriptionId: localSubscriptionId,
-      amountCents: cents,
+      amountCents: recurringCents,
       currency: (invoice.currency ?? "usd").toUpperCase(),
       method: "stripe",
       provider: "stripe",
@@ -497,6 +531,7 @@ async function recordInvoicePayment(
       amountPaidCents: cents,
       invoiceTotalCents: invoice.total ?? 0,
       collectedCash: cents > 0,
+      ...(buildCents !== null ? { buildCents } : {}),
     },
   });
 
@@ -552,30 +587,17 @@ export async function applyPaidInvoice(
     source,
   );
 
+  // The first invoice of a cart settles the website build too.
+  if (cartBuildCents(invoice, invoiceMetadata(invoice)) !== null) {
+    await markBuildPaid(db, match.clientId);
+  }
+
   // Money arriving lifts any dunning pause and turns the features on.
   // Idempotent and first-write-wins, so a renewal does not reset the original
   // unlock date. Skipped for a comp client, whose entitlements are the
   // operator's to decide.
   if (!comped && collectedCents(invoice) > 0) {
-    await db
-      .update(clients)
-      .set({
-        managementState: "managed",
-        managementPausedAt: null,
-        managementPausedReason: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(clients.id, match.clientId),
-          sql`${clients.managementState} <> 'managed'`,
-        ),
-      );
-
-    await unlockClientFeatures(db, match.clientId, {
-      actorUserId: null,
-      reason: "stripe_invoice_paid",
-    });
+    await resumeAndUnlock(db, match.clientId, "stripe_invoice_paid");
   }
 
   return outcome;
@@ -629,6 +651,17 @@ export async function processStripeEvent(
             status: "unmatched",
             note: `No client for checkout session ${session.id}.`,
           };
+        }
+
+        // The cart, for the website build alone: no invoice of ours to settle.
+        if (session.mode === "payment" && fromCart(session.metadata)) {
+          const settled = await settleCartPayment(db, {
+            sessionId: session.id,
+            eventType: event.type,
+            match,
+          });
+          await markDelivery(db, event.id, settled.deliveryStatus);
+          return settled.outcome;
         }
 
         // A one-off payment against one of our invoices, not a subscription.
@@ -853,6 +886,12 @@ export async function processStripeEvent(
  * subscription is an add-on the client has, and a line that has gone — or a
  * subscription that has ended — is one they no longer have. Rows the operator
  * granted by hand are left alone; this only manages its own.
+ *
+ * Except a line the client cancelled (`cancels_at`, see
+ * `client/cancellation.ts`): it is gone from Stripe at once but paid for to
+ * the end of the period, so it stays until that date unless the whole
+ * subscription has ended. A line present on a subscription that is not
+ * ending is not cancelled, whatever the row says, so its `cancels_at` clears.
  */
 export async function syncStripeAddOns(
   db: Database,
@@ -863,6 +902,13 @@ export async function syncStripeAddOns(
   const present = live ? addOnItemsOf(subscription) : [];
   const now = new Date();
 
+  // A row past its cancellation date is ended first, so it is never matched
+  // below as the live row for a line bought again since.
+  await db
+    .update(clientAddOns)
+    .set({ endedAt: now, updatedAt: now })
+    .where(and(eq(clientAddOns.clientId, clientId), isNull(clientAddOns.endedAt), lte(clientAddOns.cancelsAt, now)));
+
   for (const { item, feature } of present) {
     const [existing] = await db
       .select({ id: clientAddOns.id, source: clientAddOns.source, item: clientAddOns.stripeSubscriptionItemId })
@@ -872,6 +918,12 @@ export async function syncStripeAddOns(
     if (existing) {
       if (existing.source === "stripe" && existing.item !== item.id) {
         await db.update(clientAddOns).set({ stripeSubscriptionItemId: item.id, updatedAt: now }).where(eq(clientAddOns.id, existing.id));
+      }
+      if (existing.source === "stripe" && !subscription.cancel_at_period_end) {
+        await db
+          .update(clientAddOns)
+          .set({ cancelsAt: null })
+          .where(and(eq(clientAddOns.id, existing.id), sql`${clientAddOns.cancelsAt} IS NOT NULL`));
       }
       continue;
     }
@@ -896,6 +948,7 @@ export async function syncStripeAddOns(
         eq(clientAddOns.clientId, clientId),
         eq(clientAddOns.source, "stripe"),
         isNull(clientAddOns.endedAt),
+        ...(live ? [or(isNull(clientAddOns.cancelsAt), lte(clientAddOns.cancelsAt, now))] : []),
         ...(keep.length ? [notInArray(clientAddOns.stripeSubscriptionItemId, keep)] : []),
       ),
     );

@@ -125,6 +125,34 @@ async function codeOf(
 }
 
 /**
+ * Whether a coupon comes off the plan at all.
+ *
+ * A build-only promo from the cart (see `build-promos.ts`) sits on the new
+ * subscription for its first invoice, restricted to the website product.
+ * Mirrored as if it applied to the plan, the billing page would quote the
+ * plan at $100 less than it is. `applies_to` only comes back when expanded,
+ * so it is fetched when missing; if that fails the coupon is taken to apply,
+ * which is how every promo was read before restrictions mattered.
+ */
+async function appliesToPlan(
+  stripe: Stripe,
+  coupon: Stripe.Coupon,
+  planProductId: string | null | undefined,
+): Promise<boolean> {
+  if (!planProductId) return true;
+  let scope = coupon.applies_to;
+  if (scope === undefined) {
+    try {
+      scope = (await stripe.coupons.retrieve(coupon.id, { expand: ["applies_to"] })).applies_to;
+    } catch {
+      return true;
+    }
+  }
+  const products = scope?.products ?? [];
+  return products.length === 0 || products.includes(planProductId);
+}
+
+/**
  * The promo a subscription is on, as the columns the portal mirrors.
  *
  * All-null when there is no discount. `undefined` when it could not be worked
@@ -135,6 +163,7 @@ async function codeOf(
 export async function describeDiscounts(
   subscription: Pick<Stripe.Subscription, "discounts">,
   listPriceCents: number,
+  planProductId?: string | null,
 ): Promise<DiscountColumns | undefined> {
   const discounts = subscription.discounts ?? [];
   if (discounts.length === 0) return NO_DISCOUNT;
@@ -149,6 +178,7 @@ export async function describeDiscounts(
     for (const discount of discounts as Stripe.Discount[]) {
       const coupon = await couponOf(stripe, discount.source?.coupon);
       if (!coupon) continue;
+      if (!(await appliesToPlan(stripe, coupon, planProductId))) continue;
       cents = applyCoupon(cents, coupon);
 
       const code = await codeOf(stripe, discount.promotion_code);

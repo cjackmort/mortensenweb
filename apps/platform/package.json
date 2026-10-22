@@ -20,7 +20,9 @@
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:reset": "tsx scripts/reset.ts",
     "square:plans": "tsx --env-file=.env.local scripts/square-plans.ts",
-    "stripe:setup": "tsx --env-file=.env.stripe scripts/stripe-setup.ts"
+    "stripe:setup": "tsx --env-file=.env.stripe scripts/stripe-setup.ts",
+    "stripe:fake": "tsx scripts/preview/fake-stripe.ts",
+    "db:seed:cart": "tsx scripts/preview/seed-cart-preview.ts"
   },
   "dependencies": {
     "@mortensenweb/plans": "*",

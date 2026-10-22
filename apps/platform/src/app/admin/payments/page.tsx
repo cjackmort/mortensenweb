@@ -81,6 +81,11 @@ export default async function AdminPaymentsPage({
       <main className="shell">
         <div className="masthead">
           <h1>Payments</h1>
+          {stripeConfigured() && (
+            <span className="muted">
+              <Link href="/admin/payments/promos">Promo codes →</Link>
+            </span>
+          )}
         </div>
 
         <div className="grid grid-4">

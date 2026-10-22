@@ -262,6 +262,12 @@ export const clientAddOns = pgTable(
     monthlyPriceCents: integer("monthly_price_cents"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
+    /**
+     * The client cancelled it: it keeps working until this date, the end of
+     * the period they paid for, and is not charged again. Cleared by Undo.
+     * A row past this date is ended, whether or not `ended_at` has caught up.
+     */
+    cancelsAt: timestamp("cancels_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

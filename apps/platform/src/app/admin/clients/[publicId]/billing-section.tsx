@@ -9,6 +9,9 @@ import { PromoForm, type PromoChoice } from "./promo-forms";
 import { GrowthAddOnButton } from "./growth-forms";
 import type { ClientGrowthView } from "@/db/repositories/admin/growth";
 import { discountApplies } from "@/lib/payments/promos";
+import type { ClientBuildView } from "@/db/repositories/admin/client-build";
+import { BuildForm, type BuildOption } from "./build-forms";
+import { formatDateWithYear } from "@/lib/time";
 
 const INVOICE_PILL: Record<string, string> = {
   draft: "pill-neutral",
@@ -56,6 +59,8 @@ export function BillingSection({
   promos,
   savedPromo,
   growth,
+  build,
+  builds,
 }: {
   clientPublicId: string;
   plan: BillingPlanView | null;
@@ -70,11 +75,38 @@ export function BillingSection({
   /** The promo saved for their checkout, as "CODE: terms". */
   savedPromo: string | null;
   growth: ClientGrowthView;
+  /** The website build their cart charges. */
+  build: ClientBuildView | null;
+  builds: BuildOption[];
 }) {
   const onStripe = plan?.provider === "stripe";
 
   return (
     <>
+      <section className="card">
+        <div className="card-head">
+          <h2>Website build</h2>
+          {build?.paidAt ? (
+            <span className="pill pill-success">Paid {formatDateWithYear(build.paidAt)}</span>
+          ) : (
+            <span className="pill pill-warning">Not paid</span>
+          )}
+        </div>
+        <p style={{ marginTop: 0 }}>
+          {build?.priceCents == null
+            ? "No build set yet, so their cart has nothing to charge. Choose one below."
+            : `Their cart charges ${formatCurrency(build.priceCents)}${build.quoted ? " (your quote)" : ""} for the website, plus any plan and add-ons they tick, in one payment.`}
+        </p>
+        {!build?.paidAt && (
+          <BuildForm
+            clientPublicId={clientPublicId}
+            builds={builds}
+            currentKey={build?.buildKey ?? null}
+            quotedCents={build?.quoted ? build.priceCents : null}
+          />
+        )}
+      </section>
+
       <section className="card">
         <div className="card-head">
           <h2>Plan and payment day</h2>

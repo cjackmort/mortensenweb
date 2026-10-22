@@ -146,6 +146,26 @@ export const clients = pgTable(
     promoCode: text("promo_code"),
     promoTerms: text("promo_terms"),
 
+    /**
+     * The website build this client is paying for: a `BuildKey` from
+     * `@mortensenweb/plans`, set by the operator. The cart charges this build
+     * and no other, so a client cannot pick a cheaper one. Null while the
+     * catalogue has one build means that one.
+     */
+    buildKey: text("build_key"),
+    /**
+     * A price the operator quoted instead of the build's list price. Null means
+     * the list price. Charged as a one-off line on the build's Stripe product,
+     * so a build-only promo still applies to it.
+     */
+    buildPriceCents: integer("build_price_cents"),
+    /** When the build was paid. Set by the webhook; a paid client is not asked again. */
+    buildPaidAt: timestamp("build_paid_at", { withTimezone: true }),
+    /** The demo site the operator built for this client, before they signed up. */
+    demoUrl: text("demo_url"),
+    /** When the demo link was emailed, for the onboarding status. */
+    demoSentAt: timestamp("demo_sent_at", { withTimezone: true }),
+
     isDemo: boolean("is_demo").notNull().default(false),
     /**
      * The agency's own site, running through this same pipeline. Not a
@@ -208,6 +228,10 @@ export const clients = pgTable(
     // with no Stripe customer coexist while any real id stays single-valued.
     uniqueIndex("clients_stripe_customer_key").on(t.stripeCustomerId),
     index("clients_industry_idx").on(t.industry),
+    check(
+      "clients_build_price_non_negative",
+      sql`${t.buildPriceCents} IS NULL OR ${t.buildPriceCents} >= 0`,
+    ),
   ],
 );
 

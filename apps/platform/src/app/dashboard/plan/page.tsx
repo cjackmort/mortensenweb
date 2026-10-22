@@ -6,8 +6,14 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { getGrowthState } from "@/db/repositories/client/growth";
 import { formatDate } from "@/lib/time";
-import { addAddOnAction, cancellationAction, changePlanAction, removeAddOnAction } from "./actions";
-import { PlanActionButton } from "./controls";
+import {
+  addAddOnAction,
+  cancelAddOnAction,
+  cancellationAction,
+  changePlanAction,
+  undoAddOnCancelAction,
+} from "./actions";
+import { CancelledUntil, PlanActionButton } from "./controls";
 
 /**
  * The Plan tab: what the client is on, what it includes, and every way to
@@ -18,6 +24,9 @@ import { PlanActionButton } from "./controls";
  * has everything; one invoiced by hand is told how to ask. Payments and
  * invoices stay on Billing: this page is about what they get, not what they
  * have paid.
+ *
+ * Cancelling the plan or any add-on is one click with no dialog, answered in
+ * place by "Ends <date> · Undo" — see `client/cancellation.ts`.
  */
 
 export const dynamic = "force-dynamic";
@@ -77,16 +86,11 @@ export default async function PlanPage() {
 
         {state.cancelsOn ? (
           <div className="notice notice-warning plan-cancelling">
+            <CancelledUntil endsOn={formatDate(state.cancelsOn)} action={cancellationAction} fields={{ cancel: "0" }} />
             <p>
-              Your plan ends on <strong>{formatDate(state.cancelsOn)}</strong>. Your website stays online
-              after that; changes and Growth tools stop.
+              You won&rsquo;t be charged again. Your website stays online after that; changes and Growth
+              tools stop.
             </p>
-            <PlanActionButton
-              action={cancellationAction}
-              fields={{ cancel: "0" }}
-              label="Keep my plan"
-              pendingLabel="Saving…"
-            />
           </div>
         ) : state.renewsOn && selfServe ? (
           <p className="muted">Renews on {formatDate(state.renewsOn)}.</p>
@@ -116,14 +120,24 @@ export default async function PlanPage() {
                       {addOn.monthlyPriceCents !== null ? <> · {dollars(addOn.monthlyPriceCents)}/month</> : <> · added by us</>}
                     </span>
                     {selfServe && addOn.source === "stripe" ? (
-                      <PlanActionButton
-                        action={removeAddOnAction}
-                        fields={{ feature: addOn.featureKey }}
-                        label="Remove"
-                        pendingLabel="Removing…"
-                        variant="secondary"
-                        confirm={`Remove ${feature.name}? You stop paying for it from your next payment and lose access now.`}
-                      />
+                      state.cancelsOn ? (
+                        <span className="muted">Ends with your plan on {formatDate(state.cancelsOn)}</span>
+                      ) : addOn.cancelsAt ? (
+                        <CancelledUntil
+                          endsOn={formatDate(addOn.cancelsAt)}
+                          action={undoAddOnCancelAction}
+                          fields={{ feature: addOn.featureKey }}
+                        />
+                      ) : (
+                        <PlanActionButton
+                          action={cancelAddOnAction}
+                          fields={{ feature: addOn.featureKey }}
+                          label="Cancel"
+                          pendingLabel="Cancelling…"
+                          variant="secondary"
+                          showSuccess={false}
+                        />
+                      )
                     ) : null}
                   </li>
                 );
@@ -221,8 +235,10 @@ export default async function PlanPage() {
             <h2 id="plan-cancel">Cancel</h2>
           </div>
           <p>
-            Your plan stays active until the end of the period you have paid for, then stops. Your website
-            stays online either way.
+            One click, no questions. Your plan stays active
+            {state.renewsOn ? <> until {formatDate(state.renewsOn)}, the end of the period you have paid for,</> : " until the end of the period you have paid for,"}{" "}
+            then stops, along with any add-ons. You can undo it until then, and your website stays online either
+            way. We email you a confirmation.
           </p>
           <PlanActionButton
             action={cancellationAction}
@@ -230,7 +246,7 @@ export default async function PlanPage() {
             label="Cancel my plan"
             pendingLabel="Cancelling…"
             variant="secondary"
-            confirm="Cancel your plan? It stays active until the end of the period you have paid for. You can undo this any time before then."
+            showSuccess={false}
           />
         </section>
       )}

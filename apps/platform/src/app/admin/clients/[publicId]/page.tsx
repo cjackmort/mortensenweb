@@ -29,6 +29,8 @@ import { formatCurrency } from "@/lib/payments/venmo";
 import { stripeConfigured, TEST_PLAN } from "@/lib/payments/stripe";
 import { listPromoOptions } from "@/lib/payments/promos";
 import { getClientPromo } from "@/db/repositories/admin/promos";
+import { getClientBuild } from "@/db/repositories/admin/client-build";
+import { BUILDS } from "@mortensenweb/plans";
 import { isOpen } from "@/lib/requests/status";
 import { ActivateForm, ReissueForm } from "./credential-forms";
 import { ProfilePanel } from "./profile-forms";
@@ -371,13 +373,14 @@ async function Billing(props: {
 }) {
   const db = await getDb();
   const cardPayments = stripeConfigured();
-  const [plans, compPlans, comp, promos, savedPromo, growth] = await Promise.all([
+  const [plans, compPlans, comp, promos, savedPromo, growth, build] = await Promise.all([
     listAssignablePlans(db),
     listActivePlans(db),
     getClientComp(props.ctx, db, props.clientPublicId),
     cardPayments ? listPromoOptions() : Promise.resolve([]),
     getClientPromo(props.ctx, db, props.clientPublicId),
     getClientGrowth(props.ctx, db, props.clientPublicId),
+    getClientBuild(props.ctx, db, props.clientPublicId),
   ]);
 
   // Today's date as the suggestion, so a client set up today pays today.
@@ -408,6 +411,8 @@ async function Billing(props: {
       }))}
       savedPromo={savedPromo?.promoCode ? `${savedPromo.promoCode}: ${savedPromo.promoTerms ?? ""}` : null}
       growth={growth}
+      build={build}
+      builds={BUILDS.map((b) => ({ key: b.key, name: b.name, priceCents: b.priceCents, short: b.short }))}
     />
   );
 }

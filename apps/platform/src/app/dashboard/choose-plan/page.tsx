@@ -4,6 +4,7 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { getPlanChoice } from "@/db/repositories/client/plan-choice";
+import { getCart } from "@/db/repositories/client/cart";
 import { ordinal } from "@/lib/billing/billing-day";
 import { PlanPicker } from "./plan-picker";
 
@@ -21,7 +22,8 @@ export const metadata = {
  * back from Billing. Nothing is charged by choosing: the button opens Stripe's
  * checkout, and only a paid invoice arriving by webhook puts money in the
  * ledger. A client with nothing to choose — a free plan, or already paying —
- * is sent on to their site rather than shown plans they cannot buy.
+ * is sent on to their site rather than shown plans they cannot buy, and one
+ * whose website is unpaid is sent to the cart.
  */
 export default async function ChoosePlanPage({
   searchParams,
@@ -33,7 +35,11 @@ export default async function ChoosePlanPage({
   if (!user.organizationId) redirect("/dashboard");
 
   const db = await getDb();
-  const choice = await getPlanChoice(db, tenantContextFrom(user, user.organizationId));
+  const ctx = tenantContextFrom(user, user.organizationId);
+  // A client who has not paid for their website pays for it and chooses a
+  // plan in one checkout. A plan on its own from here would skip the build.
+  if ((await getCart(db, ctx)).open) redirect("/dashboard/cart");
+  const choice = await getPlanChoice(db, ctx);
   if (!choice.open) redirect(choice.reason === "subscribed" ? "/dashboard/billing" : "/dashboard");
 
   const { welcome } = await searchParams;
