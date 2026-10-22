@@ -75,6 +75,7 @@ const reviews = REVIEWS.map((r) => ({ ...r, when: posted(r) }));
   /* The review is the cell's main text, so it reads at body size rather than
      the cells' small print. */
   .reviews__quote p {
+    max-width: 60ch;
     font-size: var(--text-base);
     color: var(--ink);
   }
