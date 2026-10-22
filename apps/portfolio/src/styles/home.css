@@ -29,7 +29,7 @@
   --blue: #1552d6;
   --on-dark: #edefea;
   --sq-muted: #97a0ac;
-  --sq-display: Jost, "Schibsted Grotesk", Helvetica, Arial, sans-serif;
+  --sq-display: var(--font-jost);
 
   /* One 3px square every 32px — the same construction as the mark, so the
      ground reads as the brand's grid rather than a generic tech texture. */

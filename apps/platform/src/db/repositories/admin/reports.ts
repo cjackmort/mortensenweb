@@ -41,6 +41,8 @@ export interface AdminReportRow {
 
 export interface ClientReportsView {
   eligible: boolean;
+  /** Our work on them is paused, so the scheduled run skips them. */
+  paused: boolean;
   planName: string | null;
   emailsOff: { at: Date; by: string | null } | null;
   reports: AdminReportRow[];
@@ -80,6 +82,7 @@ export async function getClientReports(
   const last = lastCompletedPeriod(now);
   return {
     eligible: subject ? includesMonthlyReport(subject) : false,
+    paused: subject?.managementPaused ?? false,
     planName: subject?.planName ?? null,
     emailsOff: pref?.at ? { at: pref.at, by: pref.by } : null,
     reports: rows.map((row) => {

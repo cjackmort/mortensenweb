@@ -18,3 +18,22 @@ export function includesMonthlyReport(input: { planKey: string | null; comped: b
   if (input.comped) return true;
   return isPlanKey(input.planKey) && planIncludes(input.planKey, REPORT_FROM);
 }
+
+/**
+ * Whether our work on a client is paused, which also pauses their report.
+ *
+ * A report is an account of the work we did for them that month; while the
+ * work is paused (non-payment, usually) there is none to report, and an
+ * upbeat email about their traffic in the middle of a payment dispute reads
+ * badly. Their plan can still be active, so this is checked on its own.
+ *
+ * Either column counts. The pause sets both and payment clears both, but a
+ * hand edit that sets only one must still stop the report. `at_risk` is not
+ * paused: reminders have gone out and we are still working on the site.
+ */
+export function isManagementPaused(input: {
+  managementState: string;
+  managementPausedAt: Date | null;
+}): boolean {
+  return input.managementState === "unmanaged" || input.managementPausedAt !== null;
+}

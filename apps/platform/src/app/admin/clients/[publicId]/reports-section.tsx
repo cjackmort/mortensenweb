@@ -35,11 +35,18 @@ export function ReportsSection({
       <div className="card-head">
         <h2>Monthly reports</h2>
       </div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        {view.eligible
-          ? `Built on the 1st of each month for ${view.planName ?? "their plan"}, and emailed to their portal users.`
-          : "Not on their plan (Care and above). You can still build one by hand; it is not emailed until you send it."}
-      </p>
+      {view.paused ? (
+        <p className="notice" style={{ marginTop: 0 }}>
+          <strong>Paused: no report this month.</strong> Our work on them is paused, so the run on the 1st
+          skips them. You can still build one by hand; it is not emailed until you send it.
+        </p>
+      ) : (
+        <p className="muted" style={{ marginTop: 0 }}>
+          {view.eligible
+            ? `Built on the 1st of each month for ${view.planName ?? "their plan"}, and emailed to their portal users.`
+            : "Not on their plan (Care and above). You can still build one by hand; it is not emailed until you send it."}
+        </p>
+      )}
 
       {!lastCompleted.built && (
         <div className="action-block">

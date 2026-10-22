@@ -1,4 +1,4 @@
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 import react from "@astrojs/react";
 
@@ -44,6 +44,42 @@ export default defineConfig({
       cssMinify: "esbuild",
     },
   },
+  /*
+   * The typefaces, fetched from Google Fonts at build time and served from
+   * this site. Linking Google's stylesheet instead cost every first visit a
+   * render-blocking request to a second origin and then a third for the
+   * files — Lighthouse put it at 2.2 s of a phone's first paint. Served from
+   * here, the files are immutable under /_astro/, the important weights are
+   * preloaded, and Astro sizes a local fallback to each face's metrics so
+   * the swap does not shift the page. Only the weights the CSS sets.
+   */
+  fonts: [
+    {
+      provider: fontProviders.google(),
+      name: "Schibsted Grotesk",
+      cssVariable: "--font-schibsted",
+      weights: [400, 500],
+      styles: ["normal"],
+      fallbacks: ["Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
+    },
+    {
+      provider: fontProviders.google(),
+      name: "JetBrains Mono",
+      cssVariable: "--font-jetbrains-mono",
+      weights: [400, 500],
+      styles: ["normal"],
+      fallbacks: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+    },
+    {
+      // The home page's display face, for the lockup only.
+      provider: fontProviders.google(),
+      name: "Jost",
+      cssVariable: "--font-jost",
+      weights: [400],
+      styles: ["normal"],
+      fallbacks: ["Helvetica", "Arial", "sans-serif"],
+    },
+  ],
   integrations: [
     react(),
     sitemap({

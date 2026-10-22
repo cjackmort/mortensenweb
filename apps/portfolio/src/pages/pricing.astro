@@ -21,6 +21,7 @@ import {
  */
 
 const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
+const allLive = ADD_ON_FEATURES.every((f) => f.available);
 
 const faq = [
   ["What does the website cost?", `${dollars(BUILD.priceCents)}, one time, for every new site. You do not need a plan to buy one. Without a plan, the site is handed over at launch on your own hosting account, at no monthly cost, and performance tracking stays free. Anything unusual we quote before you commit.`],
@@ -28,7 +29,7 @@ const faq = [
   ["What counts as a change?", "One request in the portal — a new photo, a price, a paragraph, a seasonal notice. If a request is really several unrelated things, we will say so and count it fairly rather than surprise you."],
   ["What does unlimited mean?", `Care, Growth and Pro have no monthly limit on changes. We work on one request at a time, so ask for the next whenever the last one is live. On Lite, a change beyond the one included is a flat ${dollars(OVERAGE_CENTS)}.`],
   ["Is there a minimum term?", "No. Every plan is month to month, and the build has no strings attached — you can take a plan, change plans or stop whenever you like. The domain and the site stay yours."],
-  ["Can I add one Growth tool without upgrading?", `Yes, once it is ready. Each Growth tool can be added to any plan on its own, from ${dollars(cheapestAddOn)} a month, and removed again any time from your portal. If you want several, the plan that includes them usually costs less — the portal tells you when it does.`],
+  ["Can I add one Growth tool without upgrading?", `Yes${allLive ? "" : ", once it is ready"}. Each Growth tool can be added to any plan on its own, from ${dollars(cheapestAddOn)} a month, and removed again any time from your portal. If you want several, the plan that includes them usually costs less — the portal tells you when it does.`],
   ["What is not covered?", "A redesign or a new section is a project, quoted separately — typically $150–$400. An online store is something we connect rather than host — see Services."],
 ];
 
@@ -149,13 +150,13 @@ const faq = [
       </div>
       <div class="table-wrap reveal" tabindex="0" role="region" aria-label="Growth tool prices, scrolls sideways">
         <table class="compare">
-          <caption class="sr-only">Growth tools with their monthly price on their own, the plan that includes them, and whether they are available yet.</caption>
+          <caption class="sr-only">Growth tools with their monthly price on their own{allLive ? " and" : ","} the plan that includes them{allLive ? "" : ", and whether they are available yet"}.</caption>
           <thead>
             <tr>
               <th scope="col">Tool</th>
               <th scope="col">On its own</th>
               <th scope="col">Included in</th>
-              <th scope="col">Status</th>
+              {!allLive && <th scope="col">Status</th>}
             </tr>
           </thead>
           <tbody>
@@ -164,7 +165,7 @@ const faq = [
                 <th scope="row"><span class="compare__plan">{f.name}</span></th>
                 <td class="compare__money">{dollars(f.addOnCents)}/month</td>
                 <td>{PLANS.find((p) => p.key === f.includedFrom)!.name} and up</td>
-                <td>{f.available ? "Live" : "Coming soon"}</td>
+                {!allLive && <td>{f.available ? "Live" : "Coming soon"}</td>}
               </tr>
             ))}
           </tbody>

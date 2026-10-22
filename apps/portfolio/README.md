@@ -16,7 +16,7 @@ npm run check --workspace apps/portfolio    # astro check (types + templates)
 | Layout | `src/layouts/Base.astro` — head, fonts, header, footer, JSON-LD, the one inline script |
 | Design system | `src/styles/global.css` — tokens, type, every component; `src/styles/home.css` — the home page's hero |
 | Copy that repeats | `src/data/site.ts` (the four steps, the marquee, contact details) |
-| Work | `src/data/work.ts` + `public/work/*.webp` (1120×700 and a `-640` variant) |
+| Work | `src/data/work.ts` + `public/work/*.webp` (1120×700, with `-800` and `-640` variants) |
 | Plans | `@mortensenweb/plans` (`packages/plans`) — shared with the portal's seed |
 
 ## Decisions worth knowing

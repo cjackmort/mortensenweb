@@ -41,6 +41,8 @@ const TILE_PATH = "/__preview/home-tile.png";
 
 /** Must match the committed images, and so the width/height on WorkCard's <img>. */
 const LARGE = { w: 1120, h: 700 };
+/** What a phone picks: a ~380px card at 1.75–2x. Without it, phones took the 1120. */
+const MEDIUM = { w: 800, h: 500 };
 const SMALL = { w: 640, h: 400 };
 
 /** Long enough for a cold edge, short enough not to stall a deploy. */
@@ -100,20 +102,26 @@ async function writeVariants(slug: string, buffer: Buffer): Promise<string> {
     .resize(LARGE.w, LARGE.h, { fit: "cover", position: "top" })
     .webp({ quality: 82 })
     .toBuffer();
+  const medium = await sharp(buffer)
+    .resize(MEDIUM.w, MEDIUM.h, { fit: "cover", position: "top" })
+    .webp({ quality: 82 })
+    .toBuffer();
   const small = await sharp(buffer)
     .resize(SMALL.w, SMALL.h, { fit: "cover", position: "top" })
     .webp({ quality: 82 })
     .toBuffer();
 
-  // Both or neither: a half-written pair would give the card a srcset entry
+  // All or none: a half-written set would give the card a srcset entry
   // pointing at a file that does not exist.
   await writeFile(`${base}.webp`, large);
+  await writeFile(`${base}-800.webp`, medium);
   await writeFile(`${base}-640.webp`, small);
   return `${meta.width}x${meta.height}`;
 }
 
 async function clearStale(slug: string): Promise<void> {
   await rm(path.join(WORK_DIR, `${slug}-auto.webp`), { force: true });
+  await rm(path.join(WORK_DIR, `${slug}-auto-800.webp`), { force: true });
   await rm(path.join(WORK_DIR, `${slug}-auto-640.webp`), { force: true });
 }
 
