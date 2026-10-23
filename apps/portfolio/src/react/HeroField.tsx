@@ -16,12 +16,31 @@ import { useEffect, useRef, useState } from "react";
  * If this never mounts, the CSS background grid underneath is still there and
  * the hero looks exactly as designed, just still. That is why the canvas fades
  * itself in rather than the CSS grid being removed.
+ *
+ * It only mounts where it can earn its keep. The field answers to a mouse and
+ * nothing else, so on a touch screen it would be a full-screen canvas
+ * repainted sixty times a second for a shimmer nobody asked for — and the
+ * in-app browsers people arrive through from Instagram or Facebook have no
+ * GPU path for that. Those visitors keep the CSS grid. Where it does mount,
+ * the loop stops the moment the hero scrolls out of view or the tab is
+ * hidden, because a loop that runs under the pricing table is pure cost.
  */
 
 const PITCH = 32;
 const SIZE = 3;
 /** How far the pointer's influence reaches, in pixels. */
 const REACH = 190;
+/**
+ * Below this width the canvas renders at 1x. The squares are 3px blobs of
+ * low-alpha off-white; nobody can see the difference, and a 2x buffer on a
+ * small screen is four times the pixels to clear and paint every frame.
+ */
+const HIDPI_MIN_WIDTH = 900;
+
+/** True when the device's primary input is a mouse-like pointer that can hover. */
+function canHover(): boolean {
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
 
 export default function HeroField() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -29,6 +48,7 @@ export default function HeroField() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!canHover()) return;
     const canvas = ref.current;
     // NOT parentElement: Astro wraps an island in <astro-island>, which is an
     // unstyled custom element and therefore `display: inline` with a zero-size
@@ -47,7 +67,8 @@ export default function HeroField() {
     let dpr = 1;
     const resize = () => {
       const r = host.getBoundingClientRect();
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cap = window.innerWidth < HIDPI_MIN_WIDTH ? 1 : 2;
+      dpr = Math.min(window.devicePixelRatio || 1, cap);
       w = r.width;
       h = r.height;
       canvas.width = Math.round(w * dpr);
@@ -125,14 +146,44 @@ export default function HeroField() {
         }
       }
     };
-    raf = requestAnimationFrame(frame);
+
+    // The loop runs only while the hero is on screen and the tab is visible.
+    // Both conditions are tracked separately so that scrolling back up to a
+    // hidden tab, or un-hiding a tab scrolled past the hero, both stay idle.
+    let inView = true;
+    let visible = document.visibilityState !== "hidden";
+    let running = false;
+    const sync = () => {
+      const want = inView && visible;
+      if (want && !running) {
+        running = true;
+        raf = requestAnimationFrame(frame);
+      } else if (!want && running) {
+        running = false;
+        cancelAnimationFrame(raf);
+      }
+    };
+    const io = new IntersectionObserver((entries) => {
+      inView = entries.some((e) => e.isIntersecting);
+      sync();
+    });
+    io.observe(host);
+    const onVisibility = () => {
+      visible = document.visibilityState !== "hidden";
+      sync();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    sync();
 
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
     return () => {
+      running = false;
       cancelAnimationFrame(raf);
+      io.disconnect();
       ro.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pointermove", onMove);
       host.removeEventListener("pointerleave", onLeave);
       delete host.dataset.field;
