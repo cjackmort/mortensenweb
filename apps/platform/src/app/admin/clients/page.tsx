@@ -6,6 +6,8 @@ import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { listClients } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
+import { listPotentialClients } from "@/db/repositories/admin/potential-clients";
+import { PotentialClientsSection } from "./potential-clients-section";
 import { StatRow } from "@/components/analytics-summary";
 import { TimeSeriesChart } from "@/components/time-series-chart";
 import { demoAnalytics } from "@/lib/analytics/demo";
@@ -47,7 +49,10 @@ export default async function AdminClientsPage() {
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const clients = await listClients(ctx, db);
+  const [clients, potentialClients] = await Promise.all([
+    listClients(ctx, db),
+    listPotentialClients(ctx, db),
+  ]);
   const umamiReady = isUmamiConfigured();
 
   // One site (the oldest, same convention as the client-detail page) and its
@@ -180,6 +185,8 @@ export default async function AdminClientsPage() {
             ))}
           </div>
         )}
+
+        <PotentialClientsSection prospects={potentialClients} />
       </main>
     </>
   );
