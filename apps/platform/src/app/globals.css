@@ -354,6 +354,41 @@ code {
   }
 }
 
+/* "Switch to MortensenWeb" keeps only the name on a phone, beside Sign out. */
+@media (max-width: 30rem) {
+  .switch-verb {
+    display: none;
+  }
+}
+
+/* Across the top while the operator is using the portal as the agency's own
+   client. The accent wash, like `.notice-action`: nothing is wrong, but it
+   must not be mistaken for the admin view. */
+.client-view-bar {
+  background: var(--accent-wash);
+  border-bottom: 1px solid var(--border);
+}
+
+.client-view-bar-inner {
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: 0.5rem var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.client-view-bar-inner p {
+  margin: 0;
+}
+
+.client-view-bar-inner button {
+  white-space: nowrap;
+}
+
 /* Horizontal scrolling tabs — more than fit is normal on a phone. */
 .nav {
   overflow-x: auto;

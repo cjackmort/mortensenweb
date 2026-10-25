@@ -34,6 +34,11 @@ export interface AuthenticatedUser extends SessionLike {
   email: string;
   name: string | null;
   mustChangePassword: boolean;
+  /**
+   * Set while an admin has switched to the agency's own client. `role` and
+   * `organizationId` are then the client's; see `lib/auth/client-view`.
+   */
+  viewingAs?: { organizationName: string; sessionPublicId: string };
 }
 
 /**

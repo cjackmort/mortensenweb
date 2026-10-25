@@ -32,7 +32,7 @@ export default async function AdminRequestsPage() {
   // and passed down: the table rows are plain components and must not.
   const now = new Date().getTime();
   const [all, escalations, awaitingRelease] = await Promise.all([
-    listAllChangeRequests(ctx, db, { limit: 200 }),
+    listAllChangeRequests(ctx, db, { limit: 200, includeInternal: true }),
     listEscalations(ctx, db),
     listPreviewsAwaitingRelease(ctx, db),
   ]);
@@ -208,7 +208,15 @@ function RequestTable({
                   </span>
                 )}
               </td>
-              <td data-label="Client">{r.organizationName}</td>
+              <td data-label="Client">
+                {r.organizationName}
+                {r.isInternal && (
+                  <>
+                    {" "}
+                    <span className="pill">Your site</span>
+                  </>
+                )}
+              </td>
               <td data-label="Status">
                 <span className={`pill ${statusPill(r.status)}`}>
                   {statusLabel(r.status)}

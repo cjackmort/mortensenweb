@@ -427,11 +427,18 @@ export async function listProspects(_ctx: AdminContext, db: Database) {
     .orderBy(desc(prospects.updatedAt));
 }
 
-/** Every change request across all tenants, for the admin queue. */
+/**
+ * Every change request across all tenants, for the admin queue.
+ *
+ * The agency's own requests are left out unless `includeInternal` is set: the
+ * Overview counts this as client work. The Requests page sets it, because with
+ * the MortensenWeb tab off the top bar it is where the operator starts and
+ * follows the agent on the agency's own site too.
+ */
 export async function listAllChangeRequests(
   _ctx: AdminContext,
   db: Database,
-  options: { limit?: number } = {},
+  options: { limit?: number; includeInternal?: boolean } = {},
 ) {
   return db
     .select({
@@ -440,6 +447,7 @@ export async function listAllChangeRequests(
       status: changeRequests.status,
       priority: changeRequests.priority,
       organizationName: organizations.name,
+      isInternal: clients.isInternal,
       createdAt: changeRequests.createdAt,
       // How the automation is doing on this one, in numbers the operator can
       // scan: when the run started, when it produced a pull request or gave
@@ -483,11 +491,8 @@ export async function listAllChangeRequests(
       organizations,
       eq(changeRequests.organizationId, organizations.id),
     )
-    // The MortensenWeb tab is a separate queue on purpose — mixing the
-    // operator's own site work into the client queue is exactly what that
-    // tab exists to avoid, so this join+filter keeps it out here too.
     .innerJoin(clients, eq(clients.organizationId, organizations.id))
-    .where(eq(clients.isInternal, false))
+    .where(options.includeInternal ? undefined : eq(clients.isInternal, false))
     .orderBy(desc(changeRequests.createdAt))
     .limit(options.limit ?? 100);
 }

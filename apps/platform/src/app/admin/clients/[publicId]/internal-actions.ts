@@ -33,7 +33,7 @@ export async function designateInternalAction(
       ok: false,
       message:
         outcome.reason === "archived"
-          ? "This client is archived, so the tab would show nothing."
+          ? "This client is archived, so it can't be your own site."
           : "No such client.",
     };
   }
@@ -42,6 +42,6 @@ export async function designateInternalAction(
   revalidatePath("/admin/mortensenweb");
   revalidatePath(`/admin/clients/${clientPublicId}`);
 
-  // Straight to the tab, which is what the operator wants to see next.
-  redirect("/admin/mortensenweb");
+  // Back to the record, which now says it is the one the switch opens.
+  redirect(`/admin/clients/${clientPublicId}`);
 }
