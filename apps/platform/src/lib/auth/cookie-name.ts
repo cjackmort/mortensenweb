@@ -55,3 +55,13 @@ export function sessionCookieName(): string {
 export function secureSessionCookieName(): string {
   return `__Secure-${BASE}${devSuffix()}`;
 }
+
+/**
+ * The cookie holding an admin's open "Switch to MortensenWeb", named by the
+ * same rules as the session cookie: a dev suffix so two local servers keep
+ * their own, and the `__Secure-` prefix in production.
+ */
+export function clientViewCookieName(): string {
+  const name = `mw.client-view${devSuffix()}`;
+  return process.env.NODE_ENV === "production" ? `__Secure-${name}` : name;
+}

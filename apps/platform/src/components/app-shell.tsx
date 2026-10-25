@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/auth";
+import { switchBackToAdmin, switchToMortensenWeb } from "@/app/client-view/actions";
+import { closeClientView } from "@/lib/auth/client-view-cookie";
 import type { AuthenticatedUser } from "@/lib/auth/session";
 import { NavLinks, type NavItem } from "./nav-links";
 import { PrivacyFooter } from "./privacy-link";
@@ -25,8 +27,12 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/ads", label: "Ads" },
   { href: "/admin/google", label: "Google" },
-  { href: "/admin/mortensenweb", label: "MortensenWeb" },
   { href: "/admin/winback", label: "Win-back" },
+  // MortensenWeb is hidden, not removed. "Switch to MortensenWeb" in the top
+  // bar shows the agency's site exactly as a client sees it, which this tab
+  // only approximated, and the agency's requests now sit in Requests, marked
+  // "Your site", with the same dispatch button as every other request.
+  // { href: "/admin/mortensenweb", label: "MortensenWeb" },
   // Prospects is hidden, not removed. Finding and pitching businesses moved out
   // of the portal to the `/pitch` command in the agency repo, which researches
   // keywords, rebuilds the site and previews it locally — so this tab duplicates
@@ -73,6 +79,7 @@ export function AppShell({
 
   async function endSession() {
     "use server";
+    await closeClientView();
     await signOut({ redirectTo: "/login" });
   }
 
@@ -81,6 +88,23 @@ export function AppShell({
       {/* The tabs live inside the sticky header, so they never scroll away
           from the page they navigate. */}
       <header className="topbar">
+        {/* While the operator is using the portal as the agency's own client,
+            so it is never mistaken for the admin view. */}
+        {user.viewingAs && (
+          <div className="client-view-bar">
+            <div className="client-view-bar-inner">
+              <p>
+                Viewing <strong>{user.viewingAs.organizationName}</strong> as a client.
+                What you submit here is real.
+              </p>
+              <form action={switchBackToAdmin}>
+                <button type="submit" className="small">
+                  Back to admin
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
         <div className="topbar-inner">
           {/* mortensenweb.com's lockup: the M. mark, the wordmark with "Web"
               in the blue, and "Co." in mono. */}
@@ -104,6 +128,13 @@ export function AppShell({
           </Link>
 
           <div className="topbar-meta">
+            {isAdmin && (
+              <form action={switchToMortensenWeb}>
+                <button type="submit" className="secondary small" aria-label="Switch to MortensenWeb">
+                  <span className="switch-verb">Switch to </span>MortensenWeb
+                </button>
+              </form>
+            )}
             <span className="who" title={user.email}>
               {user.name ?? user.email}
             </span>

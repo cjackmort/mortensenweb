@@ -1,12 +1,15 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import {
+  clientViewCookieName,
   secureSessionCookieName,
   sessionCookieName,
 } from "@/lib/auth/cookie-name";
 import { getDb } from "@/db/client";
 import { ipFromHeaders } from "@/lib/auth/client-ip";
+import { resolveClientView } from "@/lib/auth/client-view";
 import { authenticate, resolveSession } from "@/lib/auth/session";
 
 /**
@@ -156,8 +159,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  * draws the shell and the page that renders inside it — the database is read
  * once, not once per caller. The cache is per request, so revocation is still
  * immediate on the next one.
+ *
+ * An admin who has switched to MortensenWeb comes back as that organization's
+ * client (see `lib/auth/client-view`). With no switch cookie this costs
+ * nothing extra; with one, a single indexed read.
  */
 export const currentUser = cache(async function currentUser() {
+  const user = await signedInUser();
+  if (!user || user.role !== "admin") return user;
+
+  const sessionPublicId = (await cookies()).get(clientViewCookieName())?.value;
+  if (!sessionPublicId) return user;
+  return resolveClientView(await getDb(), user, sessionPublicId);
+});
+
+/**
+ * The account that signed in, ignoring any switch to MortensenWeb.
+ *
+ * Only for switching back, which needs the admin underneath the client view.
+ * Everything else asks `currentUser()`.
+ */
+export const signedInUser = cache(async function signedInUser() {
   const session = await auth();
   if (!session) return null;
 

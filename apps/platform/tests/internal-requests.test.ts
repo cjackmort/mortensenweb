@@ -221,3 +221,30 @@ describe("the agency's own change requests", () => {
     expect(inQueue !== inOwn).toBe(true);
   });
 });
+
+/**
+ * The MortensenWeb tab is off the top bar now that "Switch to MortensenWeb"
+ * shows the agency's site the way a client sees it. The Requests page takes
+ * over its operator half — the agent's progress and the dispatch button — by
+ * asking for the agency's requests alongside clients', each one marked.
+ */
+describe("the Requests page, with the MortensenWeb tab hidden", () => {
+  it("lists the agency's own requests when asked, marked as internal", async () => {
+    const publicId = await newInternalRequest("Refresh the pricing page");
+
+    const queue = await listAllChangeRequests(ctx, db, { limit: 200, includeInternal: true });
+
+    const own = queue.find((r) => r.publicId === publicId);
+    const client = queue.find((r) => r.title === "A paying client's request");
+    expect(own?.isInternal).toBe(true);
+    expect(client?.isInternal).toBe(false);
+  });
+
+  it("still leaves them out by default, where the Overview counts client work", async () => {
+    const publicId = await newInternalRequest("Not client work");
+
+    const queue = await listAllChangeRequests(ctx, db, { limit: 200 });
+
+    expect(queue.map((r) => r.publicId)).not.toContain(publicId);
+  });
+});
