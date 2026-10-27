@@ -10,6 +10,7 @@ import { DeleteLeadForm, LeadArchiveForm, LeadStatusForm } from "../lead-control
 import { RefreshOnRead } from "../refresh-on-read";
 import { LeadReplyForm } from "../reply-form";
 import { listLeadReplies, replyIdentity } from "@/db/repositories/client/lead-replies";
+import { buildMailDraft, mailtoHref, replySenderAddress } from "@/lib/growth/lead-reply";
 import {
   bookingCalendar,
   findBookingState,
@@ -192,6 +193,19 @@ export default async function LeadPage({
   );
 
   const telHref = lead.phone ? `tel:${lead.phone.replace(/[^\d+]/g, "")}` : null;
+  // The quote under any reply, and the "Email them" button's draft: addressed
+  // and subject-lined, with their message quoted, before a word is typed.
+  const original = { message: lead.message, receivedOn: formatDateWithYear(lead.receivedAt) };
+  const emptyDraft = buildMailDraft({
+    to: lead.email ?? "",
+    businessName: identity.businessName,
+    body: "",
+    original,
+  });
+  // Sending from the portal needs a verified sender address on the server and
+  // somewhere for the customer's answer to go. Without both, the form shows
+  // only the ways that go through the client's own email.
+  const portalSend = Boolean(replySenderAddress() && identity.replyTo);
   const request = isBooking ? readBookingRequest(lead.fields) : null;
   const who = lead.name ?? lead.email ?? lead.phone;
 
@@ -225,7 +239,7 @@ export default async function LeadPage({
                 </a>
               )}
               {lead.email && (
-                <a className={`button${telHref ? " secondary" : ""}`} href={`mailto:${lead.email}`}>
+                <a className={`button${telHref ? " secondary" : ""}`} href={mailtoHref(emptyDraft)}>
                   Email {lead.email}
                 </a>
               )}
@@ -286,6 +300,8 @@ export default async function LeadPage({
               customerEmail={lead.email}
               businessName={identity.businessName}
               replyTo={identity.replyTo}
+              original={original}
+              portalSend={portalSend}
               readOnly={ctx.impersonating}
             />
           ) : (
