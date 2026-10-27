@@ -63,6 +63,10 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "Stripe webhook",
     checks: "constructEventAsync(",
   },
+  "api/webhooks/stripe-connect/route.ts": {
+    reason: "Stripe Connect webhook (the clients' shops)",
+    checks: "constructEventAsync(",
+  },
   "api/webhooks/netlify-forms/[sitePublicId]/route.ts": {
     reason: "Netlify form webhook",
     checks: "verifyNetlifySignature(",
@@ -136,6 +140,20 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
   "api/public/sites/[sitePublicId]/events/[eventPublicId]/logo/route.ts": {
     reason: "the logo of a show that is still listed",
     checks: "findListedEventLogo(",
+  },
+  // A site's shop, read by visitors' browsers: only products the client put
+  // on the site, and a checkout that decides every amount itself.
+  "api/public/sites/[sitePublicId]/shop/route.ts": {
+    reason: "a site's products on sale, read by visitors' browsers",
+    checks: "listShopForSite(",
+  },
+  "api/public/sites/[sitePublicId]/shop/products/[productPublicId]/images/[index]/route.ts": {
+    reason: "a photo of a product that is on the site",
+    checks: "findProductImage(",
+  },
+  "api/public/sites/[sitePublicId]/shop/checkout/route.ts": {
+    reason: "starts a Stripe Checkout for a visitor; rate-limited, amounts decided server-side",
+    checks: "beginShopCheckout(",
   },
 };
 
