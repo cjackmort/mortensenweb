@@ -1,0 +1,127 @@
+/*
+ * The shop pages. Beside the pages rather than in globals.css, like the other
+ * Growth features. Panels, pills, forms and notices are the portal's own.
+ */
+
+.shop-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.shop-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.shop-step-mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font: 500 0.8rem / 1 var(--mono);
+  color: var(--muted);
+}
+
+.shop-step--done .shop-step-mark {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent, #fff);
+}
+
+.shop-step p {
+  margin: 0.15rem 0 0;
+}
+
+.shop-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 0 0 0.9rem;
+}
+
+.shop-status code {
+  font-size: 0.85rem;
+}
+
+.shop-connect {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.shop-connect .error {
+  margin: 0;
+}
+
+.shop-settings-form {
+  display: grid;
+  gap: 1.1rem;
+  justify-items: start;
+}
+
+.shop-settings-form > * {
+  width: 100%;
+}
+
+.shop-settings-form button[type="submit"] {
+  width: auto;
+}
+
+.shop-fulfilment {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.shop-fulfilment legend {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.shop-choice,
+.shop-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 400;
+  margin: 0;
+}
+
+.shop-choice input,
+.shop-check input {
+  width: auto;
+  min-height: 0;
+  margin: 0.25rem 0 0;
+  flex: none;
+}
+
+.shop-choice strong,
+.shop-check strong {
+  display: block;
+}
+
+.shop-field label {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.shop-money {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 10rem;
+}
+
+.shop-money input {
+  margin: 0;
+}

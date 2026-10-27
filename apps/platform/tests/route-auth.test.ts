@@ -63,6 +63,10 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "Stripe webhook",
     checks: "constructEventAsync(",
   },
+  "api/webhooks/stripe-connect/route.ts": {
+    reason: "Stripe Connect webhook (the clients' shops)",
+    checks: "constructEventAsync(",
+  },
   "api/webhooks/netlify-forms/[sitePublicId]/route.ts": {
     reason: "Netlify form webhook",
     checks: "verifyNetlifySignature(",
