@@ -1,11 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  PROFILE_FIELDS,
-  PROFILE_GROUPS,
-  type ProfileField,
-} from "@/lib/business-profile";
+import { BusinessProfileField } from "@/components/profile-field";
+import { PROFILE_FIELDS, PROFILE_GROUPS } from "@/lib/business-profile";
 import {
   autofillProfileAction,
   saveProfileAction,
@@ -31,62 +28,6 @@ interface ProfilePanelProps {
   lastAppliedAt: string | null;
   /** Where to read their details from: their current website, or our site's domain. */
   siteUrl: string | null;
-}
-
-function Field({
-  field,
-  value,
-  error,
-  suggested,
-}: {
-  field: ProfileField;
-  value: string;
-  error?: string;
-  /** Filled from their website and not yet saved. */
-  suggested?: boolean;
-}) {
-  const id = `profile-${field.key}`;
-  const hintId = field.hint ? `${id}-hint` : undefined;
-  const errorId = error ? `${id}-error` : undefined;
-  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
-  const common = {
-    id,
-    name: field.key,
-    defaultValue: value,
-    "aria-invalid": error ? true : undefined,
-    "aria-describedby": describedBy,
-  };
-
-  return (
-    <div
-      className={`${field.kind === "text" ? "profile-field profile-field-wide" : "profile-field"}${suggested ? " is-suggested" : ""}`}
-    >
-      <label htmlFor={id}>
-        {field.label}
-        {suggested && <span className="profile-suggested"> from their website, check before saving</span>}
-      </label>
-      {field.kind === "text" ? (
-        <textarea {...common} rows={field.key === "hours" || field.key === "address" ? 3 : 4} />
-      ) : (
-        <input
-          {...common}
-          type={field.kind === "url" ? "url" : field.kind === "email" ? "email" : field.kind === "phone" ? "tel" : "text"}
-          inputMode={field.kind === "phone" ? "tel" : undefined}
-          placeholder={field.kind === "url" ? "https://" : undefined}
-        />
-      )}
-      {field.hint && (
-        <p className="field-hint" id={hintId}>
-          {field.hint}
-        </p>
-      )}
-      {error && (
-        <p className="error" id={errorId}>
-          {error}
-        </p>
-      )}
-    </div>
-  );
 }
 
 function formatDate(iso: string | null): string | null {
@@ -163,7 +104,7 @@ export function ProfilePanel({ clientPublicId, details, sites, updatedAt, lastAp
             <legend>{group}</legend>
             <div className="profile-grid">
               {PROFILE_FIELDS.filter((f) => f.group === group).map((field) => (
-                <Field
+                <BusinessProfileField
                   key={field.key}
                   field={field}
                   value={values[field.key] ?? ""}

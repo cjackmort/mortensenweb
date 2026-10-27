@@ -68,6 +68,7 @@ async function seedAdmin(email: string): Promise<AuthenticatedUser> {
     role: "admin",
     status: "active",
     sessionEpoch: row.sessionEpoch,
+    avatarKey: null,
     mustChangePassword: false,
     organizationId: null,
   };

@@ -4,6 +4,7 @@ import { switchBackToAdmin, switchToMortensenWeb } from "@/app/client-view/actio
 import { closeClientView } from "@/lib/auth/client-view-cookie";
 import type { AuthenticatedUser } from "@/lib/auth/session";
 import { NavLinks, type NavItem } from "./nav-links";
+import { UserAvatar } from "./user-avatar";
 import { PrivacyFooter } from "./privacy-link";
 
 /**
@@ -135,9 +136,19 @@ export function AppShell({
                 </button>
               </form>
             )}
-            <span className="who" title={user.email}>
-              {user.name ?? user.email}
-            </span>
+            {isAdmin ? (
+              <span className="who" title={user.email}>
+                {user.name ?? user.email}
+              </span>
+            ) : (
+              // Their picture and name open their profile. The picture stays
+              // on a phone when the name is hidden, so the page is one tap
+              // away at every width.
+              <Link className="who who-link" href="/dashboard/profile" title="Your profile">
+                <UserAvatar user={user} />
+                <span className="who-name">{user.name ?? user.email}</span>
+              </Link>
+            )}
             <form action={endSession}>
               <button type="submit" className="secondary small">
                 Sign out

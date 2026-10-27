@@ -69,6 +69,12 @@ export const users = pgTable(
      */
     username: text("username"),
     name: text("name"),
+    /**
+     * Their picture, as a key in the avatar store (`lib/storage/driver.ts`),
+     * null for none. The key changes on every upload, so a cached copy of
+     * the old picture is never served as the new one.
+     */
+    avatarKey: text("avatar_key"),
 
     /** PHC-style string, e.g. `$pbkdf2-sha256$i=600000$<salt>$<hash>`. */
     passwordHash: text("password_hash"),

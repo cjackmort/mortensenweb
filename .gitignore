@@ -85,6 +85,7 @@ gha-creds-*.json
 
 # Local copies of booked performers' logos, for the same reason.
 .event-logos/
+.avatars/
 
 # ---- Self-hosted Umami host (infra/umami) ----
 # Real values live only on the VPS. This repo is public.
