@@ -5,15 +5,17 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireUsableGrowthFeature } from "@/db/repositories/client/growth";
 import { getShopSettings, type ShopSettingsView } from "@/db/repositories/client/shop-settings";
+import { listProducts, type ProductSummary } from "@/db/repositories/client/shop-products";
+import { money } from "@/lib/shop/money";
+import { stockLabel } from "@/lib/shop/products";
 import "./shop.css";
 
 /**
- * The shop, from the client's side.
+ * The shop, from the client's side: what is set up, and the products.
  *
- * Products and orders arrive here as they are built. Until then the page is
- * the way in: what is set up, what is not, and where to do it. It never shows
- * an empty product grid or a zero-order count, which would read as a shop
- * nobody has bought from rather than one that does not exist yet.
+ * Orders arrive here when checkout is built. Until then the page never shows
+ * an order count, which would read as a shop nobody has bought from rather
+ * than one that cannot sell yet.
  */
 
 export const dynamic = "force-dynamic";
@@ -23,7 +25,7 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function ShopPage() {
+export default async function ShopPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!user.organizationId) {
@@ -38,7 +40,8 @@ export default async function ShopPage() {
   const db = await getDb();
   if (!(await requireUsableGrowthFeature(db, ctx, "shop"))) redirect("/dashboard/growth?locked=shop#shop");
 
-  const settings = await getShopSettings(db, ctx);
+  const [settings, products, { deleted }] = await Promise.all([getShopSettings(db, ctx), listProducts(db, ctx), searchParams]);
+  const readOnly = ctx.impersonating;
 
   return (
     <main className="shell">
@@ -47,8 +50,13 @@ export default async function ShopPage() {
         <span>Sell what you make from the website you already have</span>
       </div>
 
+      {deleted === "1" && <p className="notice notice-success">Deleted. It is off your website; orders already placed keep it.</p>}
+
       {settings ? (
-        <SetupPanel settings={settings} />
+        <>
+          <SetupPanel settings={settings} products={products} />
+          <ProductsPanel products={products} readOnly={readOnly} />
+        </>
       ) : (
         <section className="panel">
           <div className="panel-body">
@@ -64,9 +72,10 @@ export default async function ShopPage() {
   );
 }
 
-function SetupPanel({ settings }: { settings: ShopSettingsView }) {
+function SetupPanel({ settings, products }: { settings: ShopSettingsView; products: ProductSummary[] }) {
   const paymentsDone = settings.chargesEnabled;
   const fulfilmentDone = settings.updatedAt !== null;
+  const onSite = products.filter((p) => p.status === "active").length;
 
   return (
     <section className="panel" aria-labelledby="shop-setup">
@@ -98,7 +107,7 @@ function SetupPanel({ settings }: { settings: ShopSettingsView }) {
                   ? "Customers collect their order."
                   : settings.shippingCents === 0
                     ? "Shipped, free of charge."
-                    : `Shipped, $${(settings.shippingCents / 100).toFixed(2)} per order.`}{" "}
+                    : `Shipped, ${money(settings.shippingCents)} per order.`}{" "}
                 <Link href="/dashboard/growth/shop/settings">Change</Link>
               </p>
             ) : (
@@ -108,10 +117,72 @@ function SetupPanel({ settings }: { settings: ShopSettingsView }) {
               </p>
             )}
           </Step>
-          <Step n={3} done={false} title="Add your products">
-            <p className="muted">We are building this now. Products, photos and stock will be added right here.</p>
+          <Step n={3} done={onSite > 0} title="Put products on your website">
+            {products.length === 0 ? (
+              <p>
+                Photos, a price and how many you have. <Link href="/dashboard/growth/shop/products/new">Add your first product</Link>
+              </p>
+            ) : onSite === 0 ? (
+              <p>
+                {products.length === 1 ? "Your product is" : `Your ${products.length} products are`} added but not on the website yet.
+                Open one below and put it on.
+              </p>
+            ) : (
+              <p className="muted">
+                {onSite} of {products.length} on your website.
+              </p>
+            )}
           </Step>
         </ol>
+      </div>
+    </section>
+  );
+}
+
+function ProductsPanel({ products, readOnly }: { products: ProductSummary[]; readOnly: boolean }) {
+  return (
+    <section className="panel" aria-labelledby="shop-products">
+      <div className="panel-head">
+        <h2 id="shop-products">Products</h2>
+        {!readOnly && (
+          <div className="panel-head-actions">
+            <Link className="button small" href="/dashboard/growth/shop/products/new">
+              Add a product
+            </Link>
+          </div>
+        )}
+      </div>
+      <div className="panel-body">
+        {products.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>
+            No products yet.
+          </p>
+        ) : (
+          <ul className="shop-products">
+            {products.map((product) => (
+              <li key={product.publicId}>
+                <Link href={`/dashboard/growth/shop/products/${product.publicId}`} className="shop-product-row">
+                  {product.coverAssetPublicId ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="shop-product-cover" src={`/api/media/assets/${product.coverAssetPublicId}/thumb`} alt="" loading="lazy" />
+                  ) : (
+                    <span className="shop-product-cover" aria-hidden="true" />
+                  )}
+                  <span>
+                    <span className="shop-product-name">{product.name}</span>
+                    <span className="shop-product-meta">
+                      {money(product.priceCents)} · {stockLabel(product.stock, product.reserved)}
+                      {product.photoCount === 0 ? " · No photo" : ""}
+                    </span>
+                  </span>
+                  <span className={`pill ${product.status === "active" ? "pill-success" : "pill-neutral"}`}>
+                    {product.status === "active" ? "On the site" : "Not on the site"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );

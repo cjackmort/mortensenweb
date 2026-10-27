@@ -60,8 +60,9 @@ vi.mock("@/lib/payments/stripe", async () => {
   };
 });
 
-const { getShopSettings, refreshStripeAccount, saveShopSettings, startStripeConnect, parseDollars, shopSiteFor } =
+const { getShopSettings, refreshStripeAccount, saveShopSettings, startStripeConnect, shopSiteFor } =
   await import("@/db/repositories/client/shop-settings");
+const { parseDollars } = await import("@/lib/shop/money");
 const { canUseFeature } = await import("@/db/repositories/client/growth");
 
 let db: Database;

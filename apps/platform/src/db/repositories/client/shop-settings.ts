@@ -4,6 +4,7 @@ import type { Database } from "@/db/client";
 import { auditLog, SHOP_FULFILMENTS, shopSettings, sites } from "@/db/schema";
 import { requireStripe, stripeConfigured } from "@/lib/payments/stripe";
 import { accountStatusOf, connectReturnUrl, portalOrigin, type ConnectedAccountStatus } from "@/lib/shop/connect";
+import { parseDollars } from "@/lib/shop/money";
 import { assertMutable, type TenantContext } from "../context";
 
 /**
@@ -146,16 +147,6 @@ export interface ShopSettingsInput {
   taxEnabled: boolean;
   refundPolicy: string;
   shippingPolicy: string;
-}
-
-/**
- * Dollars typed by a person to cents. "12", "12.5", "$12.50" and " 12.50 "
- * are all $12.50; anything else is a refusal, never a guess.
- */
-export function parseDollars(input: string): number | null {
-  const cleaned = input.trim().replace(/^\$/, "").replace(/,/g, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
-  return Math.round(Number(cleaned) * 100);
 }
 
 function cleanPolicy(text: string): string | null {
