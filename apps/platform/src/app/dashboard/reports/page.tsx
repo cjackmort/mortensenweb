@@ -114,6 +114,21 @@ export default async function ReportsPage() {
         </section>
       )}
 
+      <section className="panel" id="connections">
+        <div className="panel-head">
+          <h2>Recommendations</h2>
+        </div>
+        <div className="panel-body">
+          <p style={{ marginTop: 0 }}>
+            Connect your Stripe, Google Search Console or Instagram account and each report says what to fix
+            and what to improve in it, from a read-only look once a day.
+          </p>
+          <Link className="button secondary" href="/dashboard/connections">
+            Connect accounts
+          </Link>
+        </div>
+      </section>
+
       {(eligible || reports.length > 0) && (
         <section className="panel" id="emails">
           <div className="panel-head">

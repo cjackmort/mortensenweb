@@ -274,6 +274,13 @@
       "when": 1791000000000,
       "tag": "0038_user_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791100000000,
+      "tag": "0039_connected_accounts",
+      "breakpoints": true
     }
   ]
 }
