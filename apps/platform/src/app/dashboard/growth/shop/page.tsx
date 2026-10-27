@@ -5,17 +5,15 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireUsableGrowthFeature } from "@/db/repositories/client/growth";
 import { getShopSettings, type ShopSettingsView } from "@/db/repositories/client/shop-settings";
+import { countOrdersAwaitingShipment } from "@/db/repositories/client/shop-orders";
 import { listProducts, type ProductSummary } from "@/db/repositories/client/shop-products";
 import { money } from "@/lib/shop/money";
 import { stockLabel } from "@/lib/shop/products";
 import "./shop.css";
 
 /**
- * The shop, from the client's side: what is set up, and the products.
- *
- * Orders arrive here when checkout is built. Until then the page never shows
- * an order count, which would read as a shop nobody has bought from rather
- * than one that cannot sell yet.
+ * The shop, from the client's side: what is set up, the products, and what
+ * is waiting to be sent.
  */
 
 export const dynamic = "force-dynamic";
@@ -40,7 +38,12 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
   const db = await getDb();
   if (!(await requireUsableGrowthFeature(db, ctx, "shop"))) redirect("/dashboard/growth?locked=shop#shop");
 
-  const [settings, products, { deleted }] = await Promise.all([getShopSettings(db, ctx), listProducts(db, ctx), searchParams]);
+  const [settings, products, toSend, { deleted }] = await Promise.all([
+    getShopSettings(db, ctx),
+    listProducts(db, ctx),
+    countOrdersAwaitingShipment(db, ctx),
+    searchParams,
+  ]);
   const readOnly = ctx.impersonating;
 
   return (
@@ -55,6 +58,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       {settings ? (
         <>
           <SetupPanel settings={settings} products={products} />
+          <OrdersPanel toSend={toSend} open={settings.chargesEnabled} />
           <ProductsPanel products={products} readOnly={readOnly} />
         </>
       ) : (
@@ -134,6 +138,33 @@ function SetupPanel({ settings, products }: { settings: ShopSettingsView; produc
             )}
           </Step>
         </ol>
+      </div>
+    </section>
+  );
+}
+
+function OrdersPanel({ toSend, open }: { toSend: number; open: boolean }) {
+  return (
+    <section className="panel" aria-labelledby="shop-orders">
+      <div className="panel-head">
+        <h2 id="shop-orders">Orders</h2>
+        <div className="panel-head-actions">
+          <Link href="/dashboard/growth/shop/orders">All orders</Link>
+        </div>
+      </div>
+      <div className="panel-body">
+        {toSend > 0 ? (
+          <p style={{ margin: 0 }}>
+            <strong>
+              {toSend} {toSend === 1 ? "order" : "orders"}
+            </strong>{" "}
+            waiting to be sent. <Link href="/dashboard/growth/shop/orders">See them</Link>
+          </p>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            {open ? "Nothing waiting to be sent." : "Orders appear here once Stripe is connected and a customer pays."}
+          </p>
+        )}
       </div>
     </section>
   );

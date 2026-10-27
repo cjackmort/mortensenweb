@@ -5,15 +5,20 @@ import { webhookDeliveries } from "@/db/schema";
 import { modeMatches, requireStripe } from "@/lib/payments/stripe";
 import { accountStatusOf, connectedAccountIdOf, HANDLED_CONNECT_EVENTS } from "@/lib/shop/connect";
 import { mirrorChargesEnabled } from "../client/shop-settings";
+import { expireCheckoutSession, recordShopRefund, settleCheckoutSession } from "./shop-checkout";
 
 /**
  * Turning Connect events into shop state.
  *
- * Same rules as the platform receiver (`stripe-webhooks.ts`): the event id is
- * the idempotency key, the account's state is re-fetched rather than read off
- * the payload, and an event from the other mode is dropped. The one thing it
- * writes today is `charges_enabled` on the shop that uses the account — the
- * fact that decides whether that shop can sell.
+ * Same rules as the platform receiver (`stripe-webhooks.ts`): the event id
+ * is the idempotency key, state is re-fetched rather than read off the
+ * payload, and an event from the other mode is dropped.
+ *
+ * Four facts come through here: whether a shop can sell (`account.updated`),
+ * that a checkout was paid or abandoned (`checkout.session.*`), and that a
+ * charge was refunded. Each is applied by `shop-checkout.ts`, which is also
+ * what the scheduler's sweep calls, so a lost webhook and a late one land in
+ * the same place.
  *
  * Nothing here changes *which* account a shop pays into. An event can only
  * ever describe an account a client already connected.
@@ -90,7 +95,33 @@ async function handle(db: Database, event: Stripe.Event): Promise<ConnectOutcome
         note: `${accountId} charges ${status.chargesEnabled ? "enabled" : "disabled"}`,
       };
     }
+    case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded": {
+      // Re-fetched from the connected account: the payload is what the
+      // session looked like when the event was made, which may be stale by
+      // the time a retry delivers it.
+      const sent = event.data.object as Stripe.Checkout.Session;
+      const session = await requireStripe().checkout.sessions.retrieve(sent.id, undefined, { stripeAccount: accountId });
+      const outcome = await settleCheckoutSession(db, session, { portalBase: portalBase() });
+      return { status: outcome.status, note: outcome.note };
+    }
+    case "checkout.session.expired": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const outcome = await expireCheckoutSession(db, session.id);
+      return { status: outcome.status, note: outcome.note };
+    }
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      const outcome = await recordShopRefund(db, charge);
+      return { status: outcome.status, note: outcome.note };
+    }
     default:
       return { status: "ignored", note: `${event.type} is not handled` };
   }
+}
+
+/** The portal's https origin, for the link in the "new order" email. */
+function portalBase(): string | null {
+  const configured = (process.env.AUTH_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();
+  return configured.startsWith("https://") ? configured.replace(/[/]+$/, "") : null;
 }

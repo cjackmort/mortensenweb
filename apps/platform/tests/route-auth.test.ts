@@ -141,6 +141,20 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "the logo of a show that is still listed",
     checks: "findListedEventLogo(",
   },
+  // A site's shop, read by visitors' browsers: only products the client put
+  // on the site, and a checkout that decides every amount itself.
+  "api/public/sites/[sitePublicId]/shop/route.ts": {
+    reason: "a site's products on sale, read by visitors' browsers",
+    checks: "listShopForSite(",
+  },
+  "api/public/sites/[sitePublicId]/shop/products/[productPublicId]/images/[index]/route.ts": {
+    reason: "a photo of a product that is on the site",
+    checks: "findProductImage(",
+  },
+  "api/public/sites/[sitePublicId]/shop/checkout/route.ts": {
+    reason: "starts a Stripe Checkout for a visitor; rate-limited, amounts decided server-side",
+    checks: "beginShopCheckout(",
+  },
 };
 
 const APP_DIR = join(process.cwd(), "src", "app");

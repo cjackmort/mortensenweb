@@ -265,3 +265,48 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Orders */
+
+.shop-orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shop-order + .shop-order {
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.shop-order-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.shop-order-lines {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.shop-order-buyer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.shop-order-address {
+  font-style: normal;
+  color: var(--muted);
+}
+
+.shop-order-note {
+  margin: 0;
+}

@@ -21,10 +21,15 @@ export const SHOP_SETTINGS_PATH = "/dashboard/growth/shop/settings";
 
 /**
  * Events the Connect receiver acts on. Anything else is acknowledged and
- * dropped, the same allowlist rule as the platform receiver. The checkout and
- * refund events join this list with the checkout route.
+ * dropped, the same allowlist rule as the platform receiver.
  */
-export const HANDLED_CONNECT_EVENTS = new Set(["account.updated"]);
+export const HANDLED_CONNECT_EVENTS = new Set([
+  "account.updated",
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.expired",
+  "charge.refunded",
+]);
 
 export function connectWebhookConfigured(): boolean {
   return Boolean(process.env.STRIPE_CONNECT_WEBHOOK_SECRET);
