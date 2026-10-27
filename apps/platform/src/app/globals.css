@@ -348,8 +348,52 @@ code {
   max-width: 16rem;
 }
 
+.topbar-meta .who-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: inherit;
+  text-decoration: none;
+  overflow: visible;
+}
+
+.topbar-meta .who-link:hover .who-name {
+  color: var(--text);
+}
+
+.topbar-meta .who-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+/* A picture, or initials on the accent wash where there is none. */
+.user-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  font: 600 0.66rem / 1 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.user-avatar.is-large {
+  width: 6rem;
+  height: 6rem;
+  font-size: 1.6rem;
+}
+
 @media (max-width: 40rem) {
-  .topbar-meta .who {
+  .topbar-meta .who:not(.who-link),
+  .topbar-meta .who-name {
     display: none;
   }
 }
@@ -4624,4 +4668,57 @@ form + .field-hint {
   .campaign-table td:first-child::before {
     content: none;
   }
+}
+
+/* ------------------------------------------------------ client profile */
+
+.profile-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.profile-identity-text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.profile-identity-text p {
+  margin: 0.25rem 0 0;
+}
+
+.profile-picture-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-picture-form input[type="file"] {
+  flex: 1 1 16rem;
+  width: auto;
+  max-width: 100%;
+}
+
+.profile-details-grid {
+  display: grid;
+  gap: 1rem 1.25rem;
+}
+
+@media (min-width: 40rem) {
+  .profile-details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.profile-details-grid .is-wide {
+  grid-column: 1 / -1;
+}
+
+.divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.5rem 0;
 }
