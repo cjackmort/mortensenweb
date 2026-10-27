@@ -56,7 +56,8 @@ export type GrowthFeatureKey =
   | "reviews"
   | "winback"
   | "showcase"
-  | "google-profile";
+  | "google-profile"
+  | "shop";
 
 export interface GrowthFeature {
   key: GrowthFeatureKey;
@@ -135,6 +136,19 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
     addOnCents: 6500,
     includedFrom: "pro",
     available: true,
+  },
+  {
+    // Being built (docs/SHOP-PLAN.md in the agency repository). Not available,
+    // so it shows as coming soon and `stripe:setup` creates no price for it.
+    // The figure is provisional until docs/PRICING.md sets the add-on price;
+    // it is never charged while `available` is false.
+    key: "shop",
+    name: "Online shop",
+    summary: "Add products, photos and stock in your portal; customers buy on your site and pay through Stripe.",
+    benefit: "Sell what you make from the site you already have, with orders and stock in one place.",
+    addOnCents: 4500,
+    includedFrom: "pro",
+    available: false,
   },
 ];
 

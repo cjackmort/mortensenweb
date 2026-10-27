@@ -20,3 +20,4 @@ export * from "./winback";
 export * from "./showcase";
 export * from "./google-business";
 export * from "./reports";
+export * from "./shop";
