@@ -45,6 +45,7 @@ const jobs = {
   runWinbackSends: job("runWinbackSends"),
   runScheduledGoogleSync: job("runScheduledGoogleSync"),
   runScheduledMonthlyReports: job("runScheduledMonthlyReports"),
+  runScheduledConnectionAudits: job("runScheduledConnectionAudits"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -124,6 +125,9 @@ vi.mock("@/db/repositories/admin/google-sync", () => ({
 }));
 vi.mock("@/db/repositories/admin/report-delivery", () => ({
   runScheduledMonthlyReports: (...a: unknown[]) => jobs.runScheduledMonthlyReports(...a),
+}));
+vi.mock("@/db/repositories/admin/connection-audits", () => ({
+  runScheduledConnectionAudits: (...a: unknown[]) => jobs.runScheduledConnectionAudits(...a),
 }));
 
 const SECRET = "test-cron-secret";
