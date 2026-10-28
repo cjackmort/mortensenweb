@@ -13,6 +13,8 @@ import {
   listOrganizationUsers,
 } from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
+import { listOrganizationChecklists } from "@/db/repositories/admin/listings";
+import type { SiteChecklist } from "@/lib/listings/checklist";
 import { listClientPaymentRequests } from "@/db/repositories/admin/billing";
 import { listBriefs } from "@/db/repositories/admin/briefs";
 import { listActivePlans } from "@/db/repositories/admin/prospects";
@@ -93,7 +95,7 @@ export default async function ClientDetailPage({
   }
 
   const { client, organization, requests } = detail;
-  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews, reports] = await Promise.all([
+  const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews, reports, checklists] = await Promise.all([
     listOrganizationUsers(ctx, db, organization.id),
     listSitesWithAnalytics(ctx, db, organization.id),
     listClientPaymentRequests(ctx, db, organization.id),
@@ -102,6 +104,7 @@ export default async function ClientDetailPage({
     getBillingPlan(db, client.id),
     getClientReviews(ctx, db, client.publicId),
     getClientReports(ctx, db, client.publicId),
+    listOrganizationChecklists(ctx, db, organization.id),
   ]);
 
   const summaries = summarise({
@@ -109,6 +112,7 @@ export default async function ClientDetailPage({
     overdue: invoices.some((inv) => inv.status === "overdue"),
     filled: profileEntries(profile?.details).length,
     sites: siteRows,
+    checklists,
     briefs,
     requests,
     reviews,
@@ -153,6 +157,8 @@ export default async function ClientDetailPage({
             briefs={briefs}
             profile={profile}
             sites={siteRows}
+            checklists={checklists}
+            viewerUserId={user.userId}
             requests={requests}
             reviews={reviews}
             reports={reports}
@@ -296,6 +302,8 @@ async function Section(props: {
   briefs: Briefs;
   profile: Profile;
   sites: Sites;
+  checklists: SiteChecklist[];
+  viewerUserId: string;
   requests: Requests;
   reviews: ClientReviewsView;
   reports: ClientReportsView;
@@ -336,6 +344,8 @@ async function Section(props: {
           organizationName={props.organizationName}
           sites={sites}
           isInternal={props.isInternal}
+          checklists={props.checklists}
+          viewerUserId={props.viewerUserId}
         />
       );
     case "analytics":
@@ -418,12 +428,13 @@ function summarise(input: {
   overdue: boolean;
   filled: number;
   sites: Sites;
+  checklists: SiteChecklist[];
   briefs: Briefs;
   requests: Requests;
   reviews: ClientReviewsView;
   reports: ClientReportsView;
 }): SectionSummaries {
-  const { billingPlan: plan, sites, briefs, requests, reviews, reports } = input;
+  const { billingPlan: plan, sites, checklists, briefs, requests, reviews, reports } = input;
   const latestReport = reports.reports[0];
   const connected = sites.filter((site) => site.umamiWebsiteId).length;
   const open = requests.filter((request) => isOpen(request.status)).length;
@@ -443,7 +454,10 @@ function summarise(input: {
     },
     website: firstSite
       ? {
-          status: `${firstSite.primaryDomain ?? firstSite.name} · ${firstSite.status}${sites.length > 1 ? ` · +${sites.length - 1} more` : ""}`,
+          status: `${firstSite.primaryDomain ?? firstSite.name} · ${firstSite.status}${sites.length > 1 ? ` · +${sites.length - 1} more` : ""}${listingSummary(checklists, firstSite.publicId)}`,
+          // A live site still mostly unlisted is the one thing on this tile
+          // the operator should get to this week.
+          attention: firstSite.status === "live" && (checklists.find((c) => c.sitePublicId === firstSite.publicId)?.progress.needsReminder ?? false),
         }
       : { status: "No site yet", attention: true },
     analytics:
@@ -471,4 +485,11 @@ function summarise(input: {
         }
       : { status: reports.eligible ? "First one on the 1st" : "Not on their plan" },
   };
+}
+
+/** " · 3 of 8 listed", for the first site. */
+function listingSummary(checklists: SiteChecklist[], sitePublicId: string): string {
+  const checklist = checklists.find((c) => c.sitePublicId === sitePublicId);
+  if (!checklist) return "";
+  return ` · ${checklist.progress.done} of ${checklist.progress.total} listed`;
 }
