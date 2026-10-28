@@ -277,10 +277,11 @@ export async function startStripeConnect(db: Database, ctx: TenantContext): Prom
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     console.error("[shop] Stripe onboarding could not start", { site: site.publicId, message });
-    // The platform account has not been signed up for Connect: an operator
-    // step in the Stripe dashboard, not something the client can fix by
+    // The platform account has not been signed up for Connect, or has not
+    // finished its Connect platform profile (Stripe's questionnaire): operator
+    // steps in the Stripe dashboard, not something the client can fix by
     // trying again.
-    if (/signed up for Connect/i.test(message)) return CONNECT_UNAVAILABLE;
+    if (/signed up for Connect|platform profile/i.test(message)) return CONNECT_UNAVAILABLE;
     return { ok: false, message: "Stripe could not be reached just now. Please try again in a minute." };
   }
 }

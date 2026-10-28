@@ -23,6 +23,8 @@ const stripeState = {
   accounts: new Map<string, Stripe.Account>(),
   created: 0,
   links: [] as Stripe.AccountLinkCreateParams[],
+  /** What Stripe answers the next `accounts.create` with, when it refuses. */
+  createError: null as Error | null,
 };
 
 vi.mock("@/lib/payments/stripe", async () => {
@@ -33,6 +35,7 @@ vi.mock("@/lib/payments/stripe", async () => {
       ({
         accounts: {
           create: async () => {
+            if (stripeState.createError) throw stripeState.createError;
             stripeState.created += 1;
             const account = {
               id: `acct_test${stripeState.created}`,
@@ -223,6 +226,22 @@ describe("connecting Stripe", () => {
     expect(link.refresh_url).toBe("https://portal.example.test/dashboard/growth/shop/settings?stripe=refresh");
   });
 
+  it("says Connect is not switched on when Stripe wants the platform's profile first, not 'try again'", async () => {
+    const initech = await seedTenant(db, "Initech");
+    await addSite(initech, "live");
+    stripeState.createError = new Error(
+      "You must complete your platform profile to use Connect and create live connected accounts. Visit your dashboard at https://dashboard.stripe.com/connect/accounts/overview to answer the questionnaire.",
+    );
+    try {
+      const refused = await startStripeConnect(db, initech.ctx);
+      expect(refused).toMatchObject({ ok: false, message: expect.stringMatching(/not switched on here yet/) });
+      expect(stripeState.created).toBe(1);
+      expect((await getShopSettings(db, initech.ctx))!.stripeAccountId).toBeNull();
+    } finally {
+      stripeState.createError = null;
+    }
+  });
+
   it("continues the same onboarding on a second press rather than making a second account", async () => {
     const again = await startStripeConnect(db, acme.ctx);
     expect(again).toMatchObject({ ok: true, url: "https://connect.stripe.com/setup/acct_test1" });
@@ -306,7 +325,14 @@ describe("opening a feature that is still being built", () => {
   });
 
   it("never opens a feature the client does not have, early access or not", () => {
-    expect(canUseFeature(state(nobody, true), "shop")).toBe(false);
     expect(canUseFeature(state(nobody, true), "reviews")).toBe(false);
+  });
+
+  it("gives everyone the free shop, but opens it early only with early access", () => {
+    const shop = nobody.find((a) => a.feature.key === "shop")!;
+    expect(shop.via).toBe("free");
+    if (shop.feature.available) return; // Shipped since this was written; nothing to gate.
+    expect(canUseFeature(state(nobody, true), "shop")).toBe(true);
+    expect(canUseFeature(state(nobody, false), "shop")).toBe(false);
   });
 });
