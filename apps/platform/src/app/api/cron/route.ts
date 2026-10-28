@@ -21,6 +21,7 @@ import { runWinbackSends } from "@/db/repositories/admin/winback-sender";
 import { runScheduledGoogleSync } from "@/db/repositories/admin/google-sync";
 import { runScheduledMonthlyReports } from "@/db/repositories/admin/report-delivery";
 import { runScheduledConnectionAudits } from "@/db/repositories/admin/connection-audits";
+import { runScheduledSearchSnapshots } from "@/db/repositories/admin/search-snapshots";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -249,6 +250,10 @@ export async function POST(request: Request): Promise<Response> {
     // Connected accounts (Stripe, Search Console, Instagram): each looked at
     // once a day, five a tick, ahead of the reports that repeat the findings.
     ["connectedAccountsAudited", () => runScheduledConnectionAudits(db)],
+    // The Search card's daily figures from Search Console, for every client
+    // with Google connected: once a day each, five a tick, a failed day
+    // retried after six hours.
+    ["searchSnapshotsTaken", () => runScheduledSearchSnapshots(db)],
     ["monthlyReports", () => runScheduledMonthlyReports(db)],
     // Last: the only job here whose quota is shared with an operator's
     // edits, so it takes whatever budget the tick has left and stops itself

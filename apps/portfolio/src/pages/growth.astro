@@ -33,6 +33,7 @@ const pro = PLANS.find((p) => p.key === "pro")!;
 
 /** Each tool's section heading, phrased the way people ask about it. */
 const QUESTION: Record<GrowthFeature["key"], string> = {
+  search: "What do search rankings show?",
   leads: "What is the leads inbox?",
   campaigns: "How does QR & campaign tracking work?",
   reviews: "How do review requests work?",
@@ -43,6 +44,8 @@ const QUESTION: Record<GrowthFeature["key"], string> = {
 
 /** What each tool is, said plainly — the answer-first lead for its section. */
 const LEAD: Record<GrowthFeature["key"], string> = {
+  search:
+    "Search rankings show, in your client portal, the searches people typed into Google to find your website over the last 28 days, how many times you showed up, how many clicked, and your average position, read straight from Google Search Console rather than estimated.",
   leads:
     "The Mortensen Web Co. leads inbox puts every contact-form enquiry from your website into your client portal, where you can read it, reply to the customer by email, and mark it contacted, won or lost.",
   campaigns:
@@ -60,7 +63,7 @@ const LEAD: Record<GrowthFeature["key"], string> = {
 const faq: Array<[string, string]> = [
   [
     "What are Growth tools?",
-    `Growth tools are the parts of Mortensen Web Co. that bring a small business more customers, beyond the website itself: a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. The leads inbox is free with every site; the rest are included from the ${firstPaidPlan.name} plan up, or can be added one at a time.`,
+    `Growth tools are the parts of Mortensen Web Co. that bring a small business more customers, beyond the website itself: search rankings, a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. Search rankings and the leads inbox are free with every site; the rest are included from the ${firstPaidPlan.name} plan up, or can be added one at a time.`,
   ],
   [
     "Can I add one Growth tool without changing my plan?",
@@ -136,7 +139,7 @@ const schema = [
 
       <ul class="keyfacts">
         <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{allLive ? "All live in your portal today." : `${live.length} live today; the rest switch on as they are ready.`}</li>
-        <li><strong>The inbox is free</strong>Every enquiry in your portal, with every site we build.</li>
+        <li><strong>Rankings and the inbox are free</strong>Where you rank on Google and every enquiry, in your portal, with every site we build.</li>
         <li><strong>The rest from {firstPaidPlan.name}</strong>{dollars(firstPaidPlan.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}. Or one at a time, from {dollars(cheapestAddOn)}/month.</li>
         <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
       </ul>
