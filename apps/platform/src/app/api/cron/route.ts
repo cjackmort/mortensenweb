@@ -13,6 +13,7 @@ import { runDerivativeJobs } from "@/db/repositories/admin/media-jobs";
 import { sweepExpiredUploads } from "@/db/repositories/client/media-uploads";
 import { reconcileStorageReservations } from "@/db/repositories/client/media-quota";
 import { runScheduledReconcile } from "@/db/repositories/admin/stripe-reconcile";
+import { reconcileStaleCheckouts } from "@/db/repositories/admin/shop-checkout";
 import { runScheduledLeadImport } from "@/db/repositories/admin/leads";
 import { runScheduledLedger } from "@/db/repositories/admin/ledger-automation";
 import { runScheduledAdSync } from "@/db/repositories/admin/ad-sync";
@@ -226,6 +227,11 @@ export async function POST(request: Request): Promise<Response> {
     // something a client is waiting on, so it yields the tick's budget to the
     // jobs above and skips most runs on its own.
     ["stripeReconciled", () => runScheduledReconcile(db)],
+    // Shop checkouts past their half hour: each is asked about at Stripe
+    // first, so a lost "paid" webhook becomes a sale and only a truly
+    // abandoned one gives its units back. One index scan when nothing is
+    // pending.
+    ["shopCheckoutsReconciled", () => reconcileStaleCheckouts(db)],
     // The same kind of net, for contact-form submissions. Self-gated to every
     // six hours; one Netlify call per connected site.
     ["leadsImported", () => runScheduledLeadImport(db)],

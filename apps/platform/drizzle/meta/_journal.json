@@ -271,22 +271,29 @@
     {
       "idx": 38,
       "version": "7",
-      "when": 1791000000000,
-      "tag": "0038_user_avatar",
-      "breakpoints": true
-    },
-    {
-      "idx": 39,
-      "version": "7",
-      "when": 1791100000000,
-      "tag": "0039_connected_accounts",
+      "when": 1790900000000,
+      "tag": "0038_client_shop",
       "breakpoints": true
     },
     {
       "idx": 40,
       "version": "7",
-      "when": 1791200000000,
-      "tag": "0040_search_snapshots",
+      "when": 1791300000000,
+      "tag": "0040_user_avatar",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791400000000,
+      "tag": "0041_connected_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791500000000,
+      "tag": "0042_search_snapshots",
       "breakpoints": true
     }
   ]

@@ -4,7 +4,7 @@ import { ADS_AVAILABLE, dollars, feeTermsLabel, type GrowthFeatureKey } from "@m
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import { getGrowthState } from "@/db/repositories/client/growth";
+import { canUseFeature, getGrowthState } from "@/db/repositories/client/growth";
 import type { FeatureAccess } from "@/lib/growth/access";
 import { addAddOnAction } from "../plan/actions";
 import { PlanActionButton } from "../plan/controls";
@@ -40,6 +40,7 @@ const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
   winback: "/dashboard/growth/winback",
   showcase: "/dashboard/growth/showcase",
   "google-profile": "/dashboard/growth/google",
+  shop: "/dashboard/growth/shop",
 };
 
 const VIA_LABEL = {
@@ -138,10 +139,13 @@ function FeatureCard({
           <span className="pill pill-success">{VIA_LABEL[via]}</span>
         </div>
         <p>{feature.summary}</p>
-        {feature.available && opens ? (
-          <Link className="button" href={opens}>
-            Open {feature.name.toLowerCase()}
-          </Link>
+        {opens && canUseFeature(state, feature.key) ? (
+          <>
+            {!feature.available && <p className="hint">Being built. You are trying it early.</p>}
+            <Link className="button" href={opens}>
+              Open {feature.name.toLowerCase()}
+            </Link>
+          </>
         ) : (
           <p className="muted growth-soon">Coming soon — it switches on here the day it is ready.</p>
         )}

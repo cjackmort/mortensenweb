@@ -7,9 +7,10 @@
 --
 -- Additive only: one new table.
 --
--- `when` is 1791100000000, above 0038 (user avatars, 1791000000000). The
--- client-shop branch's 0038 (1790900000000) takes 0040 and a higher `when`
--- if it merges after this.
+-- `when` is 1791400000000, above 0040 (user avatars, 1791300000000), which
+-- itself sits above the client shop's 0038. Drizzle's migrator skips
+-- anything at or below the highest applied `when`, so this must stay the
+-- highest until it has run in production.
 --
 -- Hand-written, as 0016 onwards are: `drizzle-kit generate` cannot run on this
 -- repository.
