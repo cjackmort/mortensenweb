@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -46,6 +47,7 @@ export default async function WinbackPage() {
 
   return (
     <main className="shell">
+      <BackToGrowth />
       <div className="masthead">
         <h1>Win-back emails</h1>
         <span>Seasonal reminders and offers to your past customers</span>

@@ -4,7 +4,15 @@ import type { Database } from "@/db/client";
 import { businessProfiles, leadReplies, leads, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import type { EmailMessage, SendResult } from "@/lib/email/mailer";
-import { buildLeadReplyEmail, fromHeader, replySenderAddress, REPLIES_PER_HOUR } from "@/lib/growth/lead-reply";
+import {
+  buildLeadReplyEmail,
+  buildMailDraft,
+  fromHeader,
+  gmailComposeHref,
+  mailtoHref,
+  replySenderAddress,
+  REPLIES_PER_HOUR,
+} from "@/lib/growth/lead-reply";
 import { listLeadReplies, sendLeadReply } from "@/db/repositories/client/lead-replies";
 import { AuthorizationError, NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { createTestDb } from "./helpers/db";
@@ -106,6 +114,51 @@ describe("the reply email", () => {
       replySenderAddress({ LEADS_REPLY_FROM_ADDRESS: "replies@ours.example", RESEND_FROM_ADDRESS: "hello@ours.example" }),
     ).toBe("replies@ours.example");
     expect(replySenderAddress({})).toBeNull();
+  });
+});
+
+describe("the draft for the client's own email app", () => {
+  const draft = buildMailDraft({
+    to: "dana@example.test",
+    businessName: "Acme Plumbing",
+    body: "We can come Thursday at 9.\r\nDoes that suit?",
+    original: { message: "Leaking badly\nsince Monday", receivedOn: "Oct 1, 2026" },
+  });
+
+  it("carries the same subject and quoted original as a reply sent from here", () => {
+    expect(draft.subject).toBe("Re: Your enquiry to Acme Plumbing");
+    expect(draft.body).toBe(
+      "We can come Thursday at 9.\nDoes that suit?\n\nOn Oct 1, 2026, you wrote:\n> Leaking badly\n> since Monday",
+    );
+  });
+
+  it("is a mailto link with every part encoded and CRLF line breaks", () => {
+    const href = mailtoHref(draft);
+    expect(href.startsWith("mailto:dana%40example.test?subject=Re%3A%20Your%20enquiry%20to%20Acme%20Plumbing&body=")).toBe(true);
+    expect(href).toContain("%0D%0A%0D%0AOn%20Oct%201%2C%202026%2C%20you%20wrote%3A%0D%0A%3E%20Leaking");
+    expect(href).not.toMatch(/[\s'"<>]/);
+  });
+
+  it("is a Gmail compose link with the same fields", () => {
+    const url = new URL(gmailComposeHref(draft));
+    expect(url.origin + url.pathname).toBe("https://mail.google.com/mail/");
+    expect(url.searchParams.get("view")).toBe("cm");
+    expect(url.searchParams.get("to")).toBe("dana@example.test");
+    expect(url.searchParams.get("su")).toBe(draft.subject);
+    expect(url.searchParams.get("body")).toBe(draft.body);
+  });
+
+  it("quotes nothing when they left no message, and encodes characters mailto would misread", () => {
+    const bare = buildMailDraft({
+      to: "dana@example.test",
+      businessName: "Dave's (Plumbing)*",
+      body: "",
+      original: { message: null, receivedOn: "Oct 1, 2026" },
+    });
+    expect(bare.body).toBe("");
+    expect(mailtoHref(bare)).toBe(
+      "mailto:dana%40example.test?subject=Re%3A%20Your%20enquiry%20to%20Dave%27s%20%28Plumbing%29%2A&body=",
+    );
   });
 });
 

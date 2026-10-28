@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -45,6 +46,7 @@ export default async function ShowcaseListPage({
 
   return (
     <main className="shell">
+      <BackToGrowth />
       <div className="masthead">
         <h1>Job showcase</h1>
         <span>Your finished work, on your site, on Google and on social</span>
