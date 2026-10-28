@@ -17,6 +17,14 @@ const LOCAL_ROOT = process.env.ATTACHMENT_DIR ?? "./.attachments";
 const MEDIA_LOCAL_ROOT = process.env.MEDIA_DIR ?? "./.media";
 const THUMBNAIL_LOCAL_ROOT = process.env.THUMBNAIL_DIR ?? "./.thumbnails";
 const EVENT_LOGO_LOCAL_ROOT = process.env.EVENT_LOGO_DIR ?? "./.event-logos";
+const AVATAR_LOCAL_ROOT = process.env.AVATAR_DIR ?? "./.avatars";
+
+/**
+ * One picture per person: `u/<user public id>-<version>.webp`. The version is
+ * random per upload, so a replaced picture gets a new key and a browser that
+ * cached the old one is never shown it as the new one.
+ */
+const AVATAR_KEY_PATTERN = /^u\/[0-9A-HJKMNP-TV-Z]{26}-[0-9a-f]{8}\.webp$/;
 
 /** One home-page picture per site: `t/<site public id>.jpg`, overwritten daily. */
 const THUMBNAIL_KEY_PATTERN = /^t\/[0-9A-HJKMNP-TV-Z]{26}\.jpg$/;
@@ -403,12 +411,43 @@ export function eventLogoKey(bookingPublicId: string, extension: string): string
   return `e/${bookingPublicId}.${extension}`;
 }
 
+let cachedAvatars: StorageDriver | undefined;
+
+/**
+ * Profile pictures.
+ *
+ * Their own store for the same reason as event logos: a different key shape,
+ * and served through a route of their own, so nothing that reads avatars can
+ * be pointed at a client's private upload.
+ */
+export function avatarDriver(): StorageDriver {
+  if (cachedAvatars) return cachedAvatars;
+
+  if (onNetlify()) {
+    cachedAvatars = new NetlifyBlobsDriver("avatars", AVATAR_KEY_PATTERN);
+    return cachedAvatars;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("No production storage driver is configured for avatars.");
+  }
+
+  cachedAvatars = new LocalDiskDriver(AVATAR_LOCAL_ROOT, AVATAR_KEY_PATTERN);
+  return cachedAvatars;
+}
+
+/** Where a person's picture lives. Derived from who they are, never from the upload's name. */
+export function avatarKey(userPublicId: string, version: string): string {
+  return `u/${userPublicId}-${version}.webp`;
+}
+
 /** Testing hook: drop every cached driver. */
 export function resetStorageDrivers(): void {
   cached = undefined;
   cachedMedia = undefined;
   cachedThumbnails = undefined;
   cachedEventLogos = undefined;
+  cachedAvatars = undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,8 @@ export const LOCKOUT_MINUTES = 15;
 export interface AuthenticatedUser extends SessionLike {
   email: string;
   name: string | null;
+  /** Their profile picture's storage key, null for none. Shown in the top bar. */
+  avatarKey: string | null;
   mustChangePassword: boolean;
   /**
    * Set while an admin has switched to the agency's own client. `role` and
@@ -61,6 +63,7 @@ export async function resolveSession(
       id: users.id,
       email: users.email,
       name: users.name,
+      avatarKey: users.avatarKey,
       role: users.role,
       status: users.status,
       sessionEpoch: users.sessionEpoch,
@@ -85,6 +88,7 @@ export async function resolveSession(
     userId: user.id,
     email: user.email,
     name: user.name,
+    avatarKey: user.avatarKey ?? null,
     role: user.role,
     status: user.status,
     sessionEpoch: user.sessionEpoch,
@@ -261,6 +265,7 @@ export async function authenticate(
       userId: user.id,
       email: user.email,
       name: user.name,
+      avatarKey: user.avatarKey ?? null,
       role: user.role,
       status: user.status,
       sessionEpoch: user.sessionEpoch,
