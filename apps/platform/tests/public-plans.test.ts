@@ -110,7 +110,7 @@ describe("the price ladder", () => {
     expect(ADD_ON_FEATURES.map((f) => f.key)).not.toContain("leads");
     for (const plan of PLANS) expect(plan.growthFeatures, plan.key).toContain("leads");
     expect(FREE_PORTAL.monthlyCents).toBe(0);
-    expect(FREE_PORTAL.features).toEqual(["Visitor analytics", "Search rankings", "Leads inbox", "Online shop"]);
+    expect(FREE_PORTAL.features).toEqual(["Visitor analytics", "Search rankings", "Leads inbox"]);
   });
 
   it("reserves unlimited changes for Care and above, never an add-on", () => {
