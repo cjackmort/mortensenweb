@@ -4,6 +4,8 @@ import { LaunchPanel } from "./launch-forms";
 import { RepositoryPanel } from "./repo-forms";
 import { AddSiteForm, PreviewModeForm } from "./site-forms";
 import { FormsInboxPanel } from "./forms-inbox";
+import { ListingsPanel } from "./listings-panel";
+import type { SiteChecklist } from "@/lib/listings/checklist";
 import { formatDate } from "@/lib/time";
 
 export type SiteRow = Awaited<ReturnType<typeof listSitesWithAnalytics>>[number];
@@ -14,11 +16,16 @@ export function WebsiteSection({
   organizationName,
   sites,
   isInternal,
+  checklists,
+  viewerUserId,
 }: {
   clientPublicId: string;
   organizationName: string;
   sites: SiteRow[];
   isInternal: boolean;
+  /** One per site, from `listOrganizationChecklists`. A site without one shows no list. */
+  checklists: SiteChecklist[];
+  viewerUserId: string;
 }) {
   return (
     <>
@@ -83,6 +90,17 @@ export function WebsiteSection({
               hasRepository={Boolean(site.repoOwner)}
             />
           </section>
+
+          {checklists
+            .filter((checklist) => checklist.sitePublicId === site.publicId)
+            .map((checklist) => (
+              <ListingsPanel
+                key={checklist.sitePublicId}
+                clientPublicId={clientPublicId}
+                checklist={checklist}
+                viewerUserId={viewerUserId}
+              />
+            ))}
 
           <section className="card">
             <div className="card-head">
