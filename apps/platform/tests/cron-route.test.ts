@@ -38,6 +38,7 @@ const jobs = {
   sweepExpiredUploads: job("sweepExpiredUploads"),
   reconcileStorageReservations: job("reconcileStorageReservations"),
   runScheduledReconcile: job("runScheduledReconcile"),
+  reconcileStaleCheckouts: job("reconcileStaleCheckouts"),
   runScheduledLeadImport: job("runScheduledLeadImport"),
   runScheduledLedger: job("runScheduledLedger"),
   runScheduledAdSync: job("runScheduledAdSync"),
@@ -104,6 +105,9 @@ vi.mock("@/db/repositories/client/media-quota", () => ({
 vi.mock("@/db/repositories/admin/stripe-reconcile", () => ({
   runScheduledReconcile: (...a: unknown[]) => jobs.runScheduledReconcile(...a),
 }));
+vi.mock("@/db/repositories/admin/shop-checkout", () => ({
+  reconcileStaleCheckouts: (...a: unknown[]) => jobs.reconcileStaleCheckouts(...a),
+}));
 
 vi.mock("@/db/repositories/admin/leads", () => ({
   runScheduledLeadImport: (...a: unknown[]) => jobs.runScheduledLeadImport(...a),
@@ -143,7 +147,7 @@ const LOOP_KEYS = [
   "sharesExpired",
 ];
 const MEDIA_KEYS = ["mediaDerivatives", "mediaUploadsSwept", "storageReconciled"];
-const STRIPE_KEYS = ["stripeReconciled"];
+const STRIPE_KEYS = ["stripeReconciled", "shopCheckoutsReconciled"];
 const LEAD_KEYS = ["leadsImported"];
 const LEDGER_KEYS = ["ledgerAutomated"];
 const WINBACK_KEYS = ["winbackSent"];

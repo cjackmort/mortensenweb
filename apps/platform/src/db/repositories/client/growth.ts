@@ -60,6 +60,13 @@ export interface GrowthState {
   cancelsOn: Date | null;
   renewsOn: Date | null;
   addOns: Array<{ featureKey: GrowthFeatureKey; source: string; monthlyPriceCents: number | null; startedAt: Date }>;
+  /**
+   * The agency's own site, which opens features while they are still being
+   * built so the operator can try them exactly as a client would. Nobody
+   * else sees an unfinished feature: for every other client it stays
+   * "coming soon" until `available` flips.
+   */
+  earlyAccess: boolean;
 }
 
 interface StripeSubscriptionRow {
@@ -70,13 +77,17 @@ interface StripeSubscriptionRow {
   currentPeriodEnd: Date | null;
 }
 
-async function clientIdFor(db: Database, ctx: TenantContext): Promise<string | null> {
+async function clientRowFor(db: Database, ctx: TenantContext): Promise<{ id: string; isInternal: boolean } | null> {
   const [row] = await db
-    .select({ id: clients.id })
+    .select({ id: clients.id, isInternal: clients.isInternal })
     .from(clients)
     .where(eq(clients.organizationId, ctx.organizationId))
     .limit(1);
-  return row?.id ?? null;
+  return row ?? null;
+}
+
+async function clientIdFor(db: Database, ctx: TenantContext): Promise<string | null> {
+  return (await clientRowFor(db, ctx))?.id ?? null;
 }
 
 async function activeSubscription(db: Database, clientId: string) {
@@ -108,7 +119,8 @@ async function stripeSubscriptionFor(
 
 export async function getGrowthState(db: Database, ctx: TenantContext): Promise<GrowthState> {
   const entitlements = await getEntitlements(db, ctx);
-  const clientId = await clientIdFor(db, ctx);
+  const client = await clientRowFor(db, ctx);
+  const clientId = client?.id ?? null;
 
   const addOnRows = clientId
     ? await db
@@ -148,7 +160,28 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
     cancelsOn: sub?.cancelAtPeriodEnd ? (sub.currentPeriodEnd ?? null) : null,
     renewsOn: sub && !sub.cancelAtPeriodEnd ? (sub.currentPeriodEnd ?? null) : null,
     addOns,
+    earlyAccess: client?.isInternal ?? false,
   };
+}
+
+/**
+ * Whether a feature's pages open for this client: theirs, and either built
+ * or being tried early on the agency's own site. `hasFeature` alone is not
+ * enough — a comp grants every feature, built or not.
+ */
+export function canUseFeature(state: GrowthState, key: GrowthFeatureKey): boolean {
+  const access = state.access.find((a) => a.feature.key === key);
+  if (!access?.via) return false;
+  return access.feature.available || state.earlyAccess;
+}
+
+/** The gate on a feature's pages and actions, for features that may still be being built. */
+export async function requireUsableGrowthFeature(
+  db: Database,
+  ctx: TenantContext,
+  key: GrowthFeatureKey,
+): Promise<boolean> {
+  return canUseFeature(await getGrowthState(db, ctx), key);
 }
 
 /** Whether the caller has a Growth feature — the gate on each feature's pages. */

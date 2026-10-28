@@ -5,7 +5,7 @@ import type { Database } from "@/db/client";
 import type { GrowthFeature } from "@mortensenweb/plans";
 import { clientAddOns, clients, servicePlans, subscriptions } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
-import { GROWTH_FEATURES } from "@mortensenweb/plans";
+import { GROWTH_FEATURES, isFree } from "@mortensenweb/plans";
 import { growthAccess, hasFeature } from "@/lib/growth/access";
 
 /**
@@ -121,7 +121,7 @@ beforeEach(() => {
 
 // ---------------------------------------------------------------------------
 
-const paid = (access: ReturnType<typeof growthAccess>) => access.filter((a) => a.feature.key !== "leads");
+const paid = (access: ReturnType<typeof growthAccess>) => access.filter((a) => !isFree(a.feature));
 
 describe("who has what", () => {
   it("gives every client the leads inbox free, with or without a plan, and never sells it", () => {

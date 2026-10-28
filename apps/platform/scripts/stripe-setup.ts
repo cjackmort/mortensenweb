@@ -22,6 +22,7 @@
  */
 
 import { PLANS } from "@mortensenweb/plans";
+import { HANDLED_CONNECT_EVENTS } from "@/lib/shop/connect";
 import {
   HANDLED_STRIPE_EVENTS,
   lookupKeyForAddOn,
@@ -39,6 +40,7 @@ const apply = process.argv.includes("--apply");
 const portalArg = process.argv.find((a) => a.startsWith("--portal="));
 const portal = (portalArg?.slice("--portal=".length) ?? DEFAULT_PORTAL).replace(/\/$/, "");
 const webhookUrl = `${portal}/api/webhooks/stripe`;
+const connectWebhookUrl = `${portal}/api/webhooks/stripe-connect`;
 
 let problems = 0;
 
@@ -158,6 +160,57 @@ async function ensureWebhook(): Promise<void> {
   report("done", `${existing.id} now subscribed to ${missing.join(", ")}`);
 }
 
+/**
+ * The endpoint for the clients' shops. Events about connected accounts are
+ * delivered only to an endpoint created with `connect: true`, and are signed
+ * with its own secret: subscribing the platform endpoint to them does nothing.
+ */
+async function ensureConnectWebhook(): Promise<void> {
+  const stripe = requireStripe();
+  const wanted = [...HANDLED_CONNECT_EVENTS].sort();
+  console.log(`\nConnect webhook — ${connectWebhookUrl}`);
+
+  const endpoints = await stripe.webhookEndpoints.list({ limit: 100 });
+  const existing = endpoints.data.find((e) => e.url === connectWebhookUrl);
+
+  if (!existing) {
+    if (!apply) {
+      report("todo", `no endpoint — would create one for ${wanted.length} events`);
+      return;
+    }
+    const created = await stripe.webhookEndpoints.create({
+      url: connectWebhookUrl,
+      connect: true,
+      enabled_events: wanted as never,
+      api_version: STRIPE_API_VERSION,
+      description: "MortensenWeb portal — client shops",
+    });
+    report("done", `created ${created.id}`);
+    console.log(
+      "\n  Signing secret (shown once here; the dashboard can reveal it again):\n" +
+        `\n    ${created.secret}\n\n` +
+        "  Set it as STRIPE_CONNECT_WEBHOOK_SECRET in Netlify, then redeploy.",
+    );
+    return;
+  }
+
+  const have = new Set(existing.enabled_events);
+  const missing = wanted.filter((e) => !have.has(e));
+  if (existing.status !== "enabled") report("FIX", `${existing.id} is ${existing.status}`);
+  if (missing.length === 0) {
+    report("ok", `${existing.id} subscribed to all ${wanted.length} events`);
+    return;
+  }
+  if (!apply) {
+    report("todo", `${existing.id} missing: ${missing.join(", ")}`);
+    return;
+  }
+  await stripe.webhookEndpoints.update(existing.id, {
+    enabled_events: [...new Set([...existing.enabled_events, ...missing])] as never,
+  });
+  report("done", `${existing.id} now subscribed to ${missing.join(", ")}`);
+}
+
 async function checkCustomerPortal(): Promise<void> {
   console.log("\nCustomer portal (Manage billing)");
   const found = await requireStripe().billingPortal.configurations.list({
@@ -190,6 +243,7 @@ async function main(): Promise<void> {
 
   await ensurePrices();
   await ensureWebhook();
+  await ensureConnectWebhook();
   await checkCustomerPortal();
 
   console.log(problems === 0 ? "\nNothing left to do here." : `\n${problems} item(s) need attention.`);

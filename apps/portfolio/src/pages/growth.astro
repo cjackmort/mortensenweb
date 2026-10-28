@@ -24,6 +24,14 @@ const howToGet = (f: GrowthFeature) =>
     ? "Free with every site we build, with or without a plan."
     : `Included in ${planName(f.includedFrom)} and above, or ${dollars(f.addOnCents)} a month on its own.`;
 const live = GROWTH_FEATURES.filter((f) => f.available);
+/** "a leads inbox, review requests, …" — every tool, for sentences that list them. */
+/** "Leads inbox" → "leads inbox" mid-sentence; "QR …" and "Google …" keep their capitals. */
+const midSentence = (name: string) => (/^(QR|Google)/.test(name) ? name : name[0].toLowerCase() + name.slice(1));
+const allNames = GROWTH_FEATURES.map((f) => midSentence(f.name));
+const allNamesSentence = `${allNames.slice(0, -1).join(", ")} and ${allNames[allNames.length - 1]}`;
+/** "The leads inbox and online shop are" / "The leads inbox is" — the free ones. */
+const freeNames = GROWTH_FEATURES.filter(isFree).map((f) => midSentence(f.name));
+const freeSentence = `${freeNames.length > 1 ? `${freeNames.slice(0, -1).join(", ")} and ${freeNames[freeNames.length - 1]} are` : `${freeNames[0]} is`}`;
 /** Every tool switched on — then nothing on this page may say "being built". */
 const allLive = live.length === GROWTH_FEATURES.length;
 const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
@@ -39,6 +47,7 @@ const QUESTION: Record<GrowthFeature["key"], string> = {
   winback: "What are win-back emails?",
   showcase: "What is a job showcase?",
   "google-profile": "What does Google profile management include?",
+  shop: "How does the online shop work?",
 };
 
 /** What each tool is, said plainly — the answer-first lead for its section. */
@@ -55,12 +64,14 @@ const LEAD: Record<GrowthFeature["key"], string> = {
     "Job showcase turns a few photos of a finished job into a project page on your website, a Google Business Profile post and ready-made social graphics.",
   "google-profile":
     "Google profile management means Mortensen Web Co. keeps your Google Business Profile current for you: regular posts, accurate hours and photos, and replies to reviews.",
+  shop:
+    "The online shop lets you add products, photos and stock in your client portal and sell them from a shop page on your website. Customers pay by card through Stripe, into your own Stripe account, and every order and its stock count sits in the portal.",
 };
 
 const faq: Array<[string, string]> = [
   [
     "What are Growth tools?",
-    `Growth tools are the parts of Mortensen Web Co. that bring a small business more customers, beyond the website itself: a leads inbox, review requests, campaign tracking, win-back emails, job showcases and Google profile management. The leads inbox is free with every site; the rest are included from the ${firstPaidPlan.name} plan up, or can be added one at a time.`,
+    `Growth tools are the parts of Mortensen Web Co. that bring a small business more customers, beyond the website itself: ${allNamesSentence}. The ${freeSentence} free with every site; the rest are included from the ${firstPaidPlan.name} plan up, or can be added one at a time.`,
   ],
   [
     "Can I add one Growth tool without changing my plan?",
@@ -136,7 +147,7 @@ const schema = [
 
       <ul class="keyfacts">
         <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{allLive ? "All live in your portal today." : `${live.length} live today; the rest switch on as they are ready.`}</li>
-        <li><strong>The inbox is free</strong>Every enquiry in your portal, with every site we build.</li>
+        <li><strong>{freeNames.length > 1 ? "Inbox and shop are free" : "The inbox is free"}</strong>Every enquiry in your portal{freeNames.length > 1 ? ", and a shop when you want one" : ""}, with every site we build.</li>
         <li><strong>The rest from {firstPaidPlan.name}</strong>{dollars(firstPaidPlan.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}. Or one at a time, from {dollars(cheapestAddOn)}/month.</li>
         <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
       </ul>
