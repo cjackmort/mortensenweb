@@ -22,4 +22,5 @@ export * from "./google-business";
 export * from "./reports";
 export * from "./connections";
 export * from "./shop";
+export * from "./listings";
 export * from "./search-snapshots";

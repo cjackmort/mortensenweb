@@ -5,7 +5,10 @@
 -- is stored as JSON so the monthly report and the Connections page read the
 -- same findings.
 --
--- Additive only: one new table.
+-- Additive only: one new table. Every statement is idempotent — the
+-- foreign keys sit inside CREATE TABLE IF NOT EXISTS rather than in ALTER
+-- statements — because the preview database already ran this table in
+-- under an earlier number (0039), and an ADD CONSTRAINT cannot be repeated.
 --
 -- `when` is 1791400000000, above 0040 (user avatars, 1791300000000), which
 -- itself sits above the client shop's 0038. Drizzle's migrator skips
@@ -38,10 +41,10 @@ CREATE TABLE IF NOT EXISTS "connected_accounts" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "connected_accounts_provider" CHECK ("provider" IN ('stripe', 'google', 'instagram')),
   CONSTRAINT "connected_accounts_status" CHECK ("status" IN ('connected', 'needs_reconnect', 'revoked')),
-  CONSTRAINT "connected_accounts_audit_object" CHECK ("last_audit" IS NULL OR jsonb_typeof("last_audit") = 'object')
+  CONSTRAINT "connected_accounts_audit_object" CHECK ("last_audit" IS NULL OR jsonb_typeof("last_audit") = 'object'),
+  CONSTRAINT "connected_accounts_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action,
+  CONSTRAINT "connected_accounts_connected_by_users_id_fk" FOREIGN KEY ("connected_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action
 );--> statement-breakpoint
-ALTER TABLE "connected_accounts" ADD CONSTRAINT "connected_accounts_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "connected_accounts" ADD CONSTRAINT "connected_accounts_connected_by_users_id_fk" FOREIGN KEY ("connected_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "connected_accounts_public_id_key" ON "connected_accounts" USING btree ("public_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "connected_accounts_live_key" ON "connected_accounts" USING btree ("organization_id", "provider") WHERE "revoked_at" IS NULL;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "connected_accounts_audit_due_idx" ON "connected_accounts" USING btree ("status", "last_audit_at");

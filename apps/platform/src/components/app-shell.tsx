@@ -53,6 +53,9 @@ const CLIENT_NAV: NavItem[] = [
   // Second, because it is the one tab with something new in it on any given
   // day: a customer wrote in. See `docs/growth-plan.md`.
   { href: "/dashboard/growth", label: "Growth" },
+  // The directories a live site still has to be told about. Third because a
+  // new client's first weeks are mostly this, and it goes quiet once done.
+  { href: "/dashboard/listings", label: "Get listed" },
   { href: "/dashboard/requests", label: "Requests" },
   // Between Requests and Billing rather than at the end, because the library is
   // part of asking for a change — a client uploads photos and then refers to

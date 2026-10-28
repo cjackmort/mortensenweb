@@ -1,0 +1,117 @@
+/*
+ * The Get listed checklist. Beside its component, like the Google profile
+ * styles; the step mark follows the shop's setup steps so the two read as
+ * one family.
+ */
+
+.listing-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.listing-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.listing-step + .listing-step {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.listing-step-mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font: 500 0.8rem / 1 var(--mono);
+  color: var(--muted);
+}
+
+.listing-step--done .listing-step-mark {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent, #fff);
+}
+
+.listing-step--done > .listing-step-body > strong {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.listing-step-body > strong {
+  display: block;
+}
+
+.listing-step-why {
+  margin: 0.2rem 0 0;
+  color: var(--text-soft);
+}
+
+.listing-step-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.listing-step-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.listing-step-form {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.listing-step-form input[type="text"] {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0;
+}
+
+.listing-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.listing-step-form .error,
+.listing-step-saved {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.listing-step-saved {
+  color: var(--success);
+}
+
+.listing-progress {
+  margin: 0 0 0.9rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.listing-progress-bar {
+  height: 0.45rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.listing-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-fill);
+}
