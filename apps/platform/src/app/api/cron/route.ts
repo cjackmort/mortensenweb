@@ -21,6 +21,7 @@ import { runReviewReminders } from "@/db/repositories/admin/reviews";
 import { runWinbackSends } from "@/db/repositories/admin/winback-sender";
 import { runScheduledGoogleSync } from "@/db/repositories/admin/google-sync";
 import { runScheduledMonthlyReports } from "@/db/repositories/admin/report-delivery";
+import { runScheduledConnectionAudits } from "@/db/repositories/admin/connection-audits";
 import {
   checkGate,
   keepSchedulerAwake,
@@ -251,6 +252,9 @@ export async function POST(request: Request): Promise<Response> {
     // Near the end: nobody is waiting on it minute by minute, and it is the
     // heaviest job on the 1st (a dozen analytics calls per client). Does
     // nothing after the first week of the month, without querying anything.
+    // Connected accounts (Stripe, Search Console, Instagram): each looked at
+    // once a day, five a tick, ahead of the reports that repeat the findings.
+    ["connectedAccountsAudited", () => runScheduledConnectionAudits(db)],
     ["monthlyReports", () => runScheduledMonthlyReports(db)],
     // Last: the only job here whose quota is shared with an operator's
     // edits, so it takes whatever budget the tick has left and stops itself

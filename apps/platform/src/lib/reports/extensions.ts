@@ -2,6 +2,7 @@ import type { GrowthFeatureKey } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
 import type { ReportWindow } from "./period";
 import type { ExtraSection } from "./types";
+import { CONNECTION_REPORT_EXTENSIONS } from "@/lib/connections/report";
 
 /**
  * ===========================================================================
@@ -31,7 +32,9 @@ import type { ExtraSection } from "./types";
  *
  *  - **Gated by `feature`.** The builder runs only when the client has that
  *    Growth feature (plan, add-on or comp). A plan that does not include it
- *    gets no section at all, not an empty one.
+ *    gets no section at all, not an empty one. Leave `feature` out for a
+ *    section that depends on something other than the plan — a connected
+ *    account, say — and gate it inside `build` by returning null.
  *  - **Scoped by `organizationId`.** It is the report's tenant; filter every
  *    query on it. `window` is the month, half-open, business timezone.
  *  - **Missing is not zero.** If the integration is not connected, return
@@ -58,9 +61,9 @@ export interface ReportExtension {
   key: string;
   /** The section heading. Used for the "could not be produced" fallback too. */
   title: string;
-  /** The Growth feature a client must have for this section to appear. */
-  feature: GrowthFeatureKey;
+  /** The Growth feature a client must have for this section to appear. None: not plan-gated. */
+  feature?: GrowthFeatureKey;
   build(input: ReportExtensionInput): Promise<ExtensionSection | null>;
 }
 
-export const REPORT_EXTENSIONS: ReportExtension[] = [];
+export const REPORT_EXTENSIONS: ReportExtension[] = [...CONNECTION_REPORT_EXTENSIONS];

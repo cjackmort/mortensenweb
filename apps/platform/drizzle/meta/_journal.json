@@ -288,6 +288,13 @@
       "when": 1791300000000,
       "tag": "0040_user_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791400000000,
+      "tag": "0041_connected_accounts",
+      "breakpoints": true
     }
   ]
 }

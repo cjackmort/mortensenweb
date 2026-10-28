@@ -248,7 +248,7 @@ async function extraSections(
   for (const extension of extensions) {
     // Leave out any Growth feature the client does not have — not even an
     // empty section, which would read as "you have this and it did nothing".
-    if (!hasFeature(subject.access, extension.feature)) continue;
+    if (extension.feature && !hasFeature(subject.access, extension.feature)) continue;
     try {
       const built = await extension.build({ db, organizationId: subject.organizationId, window, now });
       if (built) sections.push({ ...built, key: extension.key, title: extension.title });
