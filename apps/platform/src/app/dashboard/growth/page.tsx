@@ -33,6 +33,7 @@ export const metadata = {
 
 /** Where an owned, built feature opens. */
 const OPENS: Partial<Record<GrowthFeatureKey, string>> = {
+  search: "/dashboard/growth/search",
   leads: "/dashboard/growth/leads",
   campaigns: "/dashboard/growth/campaigns",
   reviews: "/dashboard/growth/reviews",

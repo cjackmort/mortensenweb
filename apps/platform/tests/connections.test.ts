@@ -334,6 +334,7 @@ describe("the Search Console audit", () => {
       { key: "water heater repair provo", clicks: 6, impressions: 300, ctr: 0.02, position: 7.4 },
     ],
     pages: [{ key: "https://acmeplumbing.example/services", clicks: 2, impressions: 400, ctr: 0.005, position: 9 }],
+    daily: [],
   };
   const ctx = { ...WINDOW, siteHost: "acmeplumbing.example" };
 

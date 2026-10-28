@@ -47,6 +47,7 @@ const jobs = {
   runScheduledGoogleSync: job("runScheduledGoogleSync"),
   runScheduledMonthlyReports: job("runScheduledMonthlyReports"),
   runScheduledConnectionAudits: job("runScheduledConnectionAudits"),
+  runScheduledSearchSnapshots: job("runScheduledSearchSnapshots"),
 };
 
 const getDb = vi.fn(async () => ({}));
@@ -133,6 +134,9 @@ vi.mock("@/db/repositories/admin/report-delivery", () => ({
 vi.mock("@/db/repositories/admin/connection-audits", () => ({
   runScheduledConnectionAudits: (...a: unknown[]) => jobs.runScheduledConnectionAudits(...a),
 }));
+vi.mock("@/db/repositories/admin/search-snapshots", () => ({
+  runScheduledSearchSnapshots: (...a: unknown[]) => jobs.runScheduledSearchSnapshots(...a),
+}));
 
 const SECRET = "test-cron-secret";
 
@@ -155,6 +159,7 @@ const ADS_KEYS = ["adStatsSynced"];
 const REVIEW_KEYS = ["reviewReminders"];
 const REPORT_KEYS = ["monthlyReports"];
 const GOOGLE_KEYS = ["googleProfilesSynced"];
+const CONNECTION_KEYS = ["connectedAccountsAudited", "searchSnapshotsTaken"];
 const ALL_KEYS = [
   ...LOOP_KEYS,
   ...MEDIA_KEYS,
@@ -166,6 +171,7 @@ const ALL_KEYS = [
   ...REVIEW_KEYS,
   ...REPORT_KEYS,
   ...GOOGLE_KEYS,
+  ...CONNECTION_KEYS,
 ];
 
 function request(

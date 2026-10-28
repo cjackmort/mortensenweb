@@ -30,8 +30,10 @@ const REQUESTED_SCOPES = ["openid", "email", SEARCH_CONSOLE_SCOPE].join(" ");
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const API = "https://www.googleapis.com/webmasters/v3";
 /** Search Console reports lag by about two days; the window ends there. */
-const DATA_LAG_DAYS = 2;
-const WINDOW_DAYS = 28;
+export const DATA_LAG_DAYS = 2;
+export const WINDOW_DAYS = 28;
+/** The top queries kept per snapshot: enough to act on, small enough to store daily. */
+export const TOP_QUERIES = 25;
 
 type FetchLike = typeof fetch;
 
@@ -127,6 +129,14 @@ export interface SearchRow {
   position: number;
 }
 
+/** One day of the window, for the trend. Google omits days with nothing to report. */
+export interface SearchDay {
+  date: string;
+  clicks: number;
+  impressions: number;
+  position: number;
+}
+
 export interface SearchSnapshot {
   /** The Search Console property that matched the site, or null for none. */
   property: string | null;
@@ -138,6 +148,8 @@ export interface SearchSnapshot {
   previous: { clicks: number; impressions: number };
   queries: SearchRow[];
   pages: SearchRow[];
+  /** Day by day across the window, oldest first. Absent on snapshots stored before it was added. */
+  daily?: SearchDay[];
 }
 
 function dateOnly(date: Date): string {
@@ -232,6 +244,7 @@ export async function fetchSearchSnapshot(
         previous: { clicks: 0, impressions: 0 },
         queries: [],
         pages: [],
+        daily: [],
       },
       update,
     };
@@ -240,11 +253,12 @@ export async function fetchSearchSnapshot(
   const url = `${API}/sites/${encodeURIComponent(property)}/searchAnalytics/query`;
   type Rows = { rows?: Array<{ keys?: string[]; clicks: number; impressions: number; ctr: number; position: number }> };
   const query = (body: Record<string, unknown>) => googleGet<Rows>(url, accessToken, fetchImpl, body);
-  const [current, previous, byQuery, byPage] = await Promise.all([
+  const [current, previous, byQuery, byPage, byDay] = await Promise.all([
     query({ startDate: dateOnly(start), endDate: dateOnly(end) }),
     query({ startDate: dateOnly(previousStart), endDate: dateOnly(previousEnd) }),
-    query({ startDate: dateOnly(start), endDate: dateOnly(end), dimensions: ["query"], rowLimit: 25 }),
-    query({ startDate: dateOnly(start), endDate: dateOnly(end), dimensions: ["page"], rowLimit: 25 }),
+    query({ startDate: dateOnly(start), endDate: dateOnly(end), dimensions: ["query"], rowLimit: TOP_QUERIES }),
+    query({ startDate: dateOnly(start), endDate: dateOnly(end), dimensions: ["page"], rowLimit: TOP_QUERIES }),
+    query({ startDate: dateOnly(start), endDate: dateOnly(end), dimensions: ["date"], rowLimit: WINDOW_DAYS }),
   ]);
   const toRows = (r: Rows): SearchRow[] =>
     (r.rows ?? []).map((row) => ({
@@ -267,6 +281,9 @@ export async function fetchSearchSnapshot(
       previous: { clicks: prior.clicks, impressions: prior.impressions },
       queries: toRows(byQuery),
       pages: toRows(byPage),
+      daily: toRows(byDay)
+        .map((row) => ({ date: row.key, clicks: row.clicks, impressions: row.impressions, position: row.position }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
     },
     update,
   };

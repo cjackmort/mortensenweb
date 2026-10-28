@@ -32,6 +32,8 @@ const allNamesSentence = `${allNames.slice(0, -1).join(", ")} and ${allNames[all
 /** "The leads inbox and online shop are" / "The leads inbox is" — the free ones. */
 const freeNames = GROWTH_FEATURES.filter(isFree).map((f) => midSentence(f.name));
 const freeSentence = `${freeNames.length > 1 ? `${freeNames.slice(0, -1).join(", ")} and ${freeNames[freeNames.length - 1]} are` : `${freeNames[0]} is`}`;
+/** The same, starting a sentence: "Search rankings, leads inbox and online shop are". */
+const freeSentenceCapitalised = freeSentence[0].toUpperCase() + freeSentence.slice(1);
 /** Every tool switched on — then nothing on this page may say "being built". */
 const allLive = live.length === GROWTH_FEATURES.length;
 const cheapestAddOn = Math.min(...ADD_ON_FEATURES.map((f) => f.addOnCents));
@@ -41,6 +43,7 @@ const pro = PLANS.find((p) => p.key === "pro")!;
 
 /** Each tool's section heading, phrased the way people ask about it. */
 const QUESTION: Record<GrowthFeature["key"], string> = {
+  search: "What do search rankings show?",
   leads: "What is the leads inbox?",
   campaigns: "How does QR & campaign tracking work?",
   reviews: "How do review requests work?",
@@ -52,6 +55,8 @@ const QUESTION: Record<GrowthFeature["key"], string> = {
 
 /** What each tool is, said plainly — the answer-first lead for its section. */
 const LEAD: Record<GrowthFeature["key"], string> = {
+  search:
+    "Search rankings show, in your client portal, the searches people typed into Google to find your website over the last 28 days, how many times you showed up, how many clicked, and your average position, read straight from Google Search Console rather than estimated.",
   leads:
     "The Mortensen Web Co. leads inbox puts every contact-form enquiry from your website into your client portal, where you can read it, reply to the customer by email, and mark it contacted, won or lost.",
   campaigns:
@@ -147,7 +152,7 @@ const schema = [
 
       <ul class="keyfacts">
         <li><strong>{GROWTH_FEATURES.length} Growth tools</strong>{allLive ? "All live in your portal today." : `${live.length} live today; the rest switch on as they are ready.`}</li>
-        <li><strong>{freeNames.length > 1 ? "Inbox and shop are free" : "The inbox is free"}</strong>Every enquiry in your portal{freeNames.length > 1 ? ", and a shop when you want one" : ""}, with every site we build.</li>
+        <li><strong>{freeNames.length > 1 ? `${freeNames.length} are free` : "The inbox is free"}</strong>{freeSentenceCapitalised} free with every site we build.</li>
         <li><strong>The rest from {firstPaidPlan.name}</strong>{dollars(firstPaidPlan.monthlyCents)}/month, with every tool in {pro.name} at {dollars(pro.monthlyCents)}. Or one at a time, from {dollars(cheapestAddOn)}/month.</li>
         <li><strong>No contracts</strong>Month to month. Cancel any time.</li>
       </ul>

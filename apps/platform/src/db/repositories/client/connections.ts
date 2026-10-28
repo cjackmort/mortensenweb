@@ -200,6 +200,59 @@ export async function siteHostFor(db: Database, organizationId: string): Promise
   return hostOf(site?.primaryDomain);
 }
 
+export interface LiveConnection {
+  id: string;
+  status: ConnectionStatus;
+  tokens: ProviderTokens;
+}
+
+/**
+ * The live connection for a provider with its tokens opened — for the one
+ * call that needs them. Not tenant-scoped on purpose: the scheduled jobs
+ * walk every client. Anything that renders must go through the views above.
+ */
+export async function readLiveConnection(
+  db: Database,
+  organizationId: string,
+  provider: ConnectionProvider,
+): Promise<LiveConnection | null> {
+  const [row] = await db
+    .select({
+      id: connectedAccounts.id,
+      status: connectedAccounts.status,
+      externalId: connectedAccounts.externalId,
+      accessTokenSealed: connectedAccounts.accessTokenSealed,
+      refreshTokenSealed: connectedAccounts.refreshTokenSealed,
+      tokenExpiresAt: connectedAccounts.tokenExpiresAt,
+    })
+    .from(connectedAccounts)
+    .where(liveFor(organizationId, provider))
+    .limit(1);
+  if (!row) return null;
+  return { id: row.id, status: row.status, tokens: await openTokens(row) };
+}
+
+/** Keep tokens a provider refreshed mid-call, sealed. */
+export async function storeTokenUpdate(db: Database, connectionId: string, update: TokenUpdate | undefined, now: Date): Promise<void> {
+  if (!update) return;
+  await db
+    .update(connectedAccounts)
+    .set({ ...(await sealedUpdate(update)), updatedAt: now })
+    .where(eq(connectedAccounts.id, connectionId));
+}
+
+/**
+ * A provider saying the grant is no longer good: the row asks to be
+ * reconnected and the page offers Connect again. Called by every job that
+ * uses the tokens, so a lapse found by one is not retried by another.
+ */
+export async function markNeedsReconnect(db: Database, connectionId: string, message: string, now: Date): Promise<void> {
+  await db
+    .update(connectedAccounts)
+    .set({ status: "needs_reconnect", lastError: message.slice(0, 500), lastErrorAt: now, updatedAt: now })
+    .where(eq(connectedAccounts.id, connectionId));
+}
+
 export type AuditRun =
   | { ok: true; audit: Audit }
   | { ok: false; reason: "not_connected" | "needs_reconnect" | "unavailable"; message: string };
@@ -218,18 +271,7 @@ export async function runAudit(
   deps: { adapter?: ProviderAdapter; now?: Date; fetchImpl?: typeof fetch } = {},
 ): Promise<AuditRun> {
   const now = deps.now ?? new Date();
-  const [row] = await db
-    .select({
-      id: connectedAccounts.id,
-      status: connectedAccounts.status,
-      externalId: connectedAccounts.externalId,
-      accessTokenSealed: connectedAccounts.accessTokenSealed,
-      refreshTokenSealed: connectedAccounts.refreshTokenSealed,
-      tokenExpiresAt: connectedAccounts.tokenExpiresAt,
-    })
-    .from(connectedAccounts)
-    .where(liveFor(organizationId, provider))
-    .limit(1);
+  const row = await readLiveConnection(db, organizationId, provider);
   if (!row) return { ok: false, reason: "not_connected", message: "Not connected." };
   if (row.status === "needs_reconnect") {
     return { ok: false, reason: "needs_reconnect", message: "The connection lapsed. Connect it again." };
@@ -237,7 +279,7 @@ export async function runAudit(
 
   const adapter = deps.adapter ?? providerAdapter(provider);
   try {
-    const tokens = await openTokens(row);
+    const { tokens } = row;
     const siteHost = await siteHostFor(db, organizationId);
     const outcome = await adapter.audit(tokens, { siteHost, now, fetchImpl: deps.fetchImpl });
     await db

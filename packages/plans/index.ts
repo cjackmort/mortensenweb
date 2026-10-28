@@ -57,6 +57,7 @@ export type GrowthFeatureKey =
   | "winback"
   | "showcase"
   | "google-profile"
+  | "search"
   | "shop";
 
 export interface GrowthFeature {
@@ -83,6 +84,18 @@ export interface GrowthFeature {
 }
 
 export const GROWTH_FEATURES: GrowthFeature[] = [
+  {
+    key: "search",
+    name: "Search rankings",
+    summary: "What people typed into Google to find you, how often you showed up, and where you ranked.",
+    benefit: "See the searches that bring you customers and where you stand on Google, straight from Google.",
+    // Free since it launched: rankings are analytics, and analytics come
+    // with every site (the 2026-10-21 decision). To sell it instead, set
+    // `includedFrom` to a plan and a price here; nothing else changes.
+    addOnCents: 0,
+    includedFrom: "free",
+    available: true,
+  },
   {
     key: "leads",
     name: "Leads inbox",
