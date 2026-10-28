@@ -139,15 +139,15 @@ export const GROWTH_FEATURES: GrowthFeature[] = [
   },
   {
     // Being built (docs/SHOP-PLAN.md in the agency repository). Not available,
-    // so it shows as coming soon and `stripe:setup` creates no price for it.
-    // The figure is provisional until docs/PRICING.md sets the add-on price;
-    // it is never charged while `available` is false.
+    // so it shows as coming soon. Free with every site (operator decision
+    // 2026-10-27): Stripe Connect costs the platform nothing, the client pays
+    // Stripe's card fee on each sale, and the feed is cached at the edge.
     key: "shop",
     name: "Online shop",
     summary: "Add products, photos and stock in your portal; customers buy on your site and pay through Stripe.",
     benefit: "Sell what you make from the site you already have, with orders and stock in one place.",
-    addOnCents: 4500,
-    includedFrom: "pro",
+    addOnCents: 0,
+    includedFrom: "free",
     available: false,
   },
 ];
@@ -350,7 +350,8 @@ export const FREE_PORTAL: FreePortal = {
   name: "Performance tracking",
   monthlyCents: 0,
   description: "See how your site is doing and every enquiry it brings in. Free with every site we build.",
-  features: ["Visitor analytics", ...GROWTH_FEATURES.filter(isFree).map((f) => f.name)],
+  // Only the free tools that are built: this list promises, it never previews.
+  features: ["Visitor analytics", ...GROWTH_FEATURES.filter((f) => isFree(f) && f.available).map((f) => f.name)],
 };
 
 // ---------------------------------------------------------------------------
