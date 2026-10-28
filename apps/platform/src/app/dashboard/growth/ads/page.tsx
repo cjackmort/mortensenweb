@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { ADS_AVAILABLE, AD_CHANNELS, AD_UNSPENT_POLICY, adChannel, feeTermsLabel } from "@mortensenweb/plans";
 import { currentUser } from "@/auth";
@@ -30,6 +31,7 @@ export default async function AdsPage() {
 
   return (
     <main className="shell">
+      <BackToGrowth />
       <div className="masthead">
         <h1>Ads</h1>
         <span>

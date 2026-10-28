@@ -3880,7 +3880,8 @@ form + .field-hint {
   border-top: 1px solid var(--border);
 }
 
-.lead-back {
+.lead-back,
+.page-back {
   margin: 0 0 1rem;
 }
 
