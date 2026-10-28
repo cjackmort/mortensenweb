@@ -29,7 +29,17 @@ CREATE TABLE IF NOT EXISTS "search_snapshots" (
   CONSTRAINT "search_snapshots_data_object" CHECK ("data" IS NULL OR jsonb_typeof("data") = 'object'),
   CONSTRAINT "search_snapshots_outcome" CHECK (("data" IS NOT NULL AND "error" IS NULL AND "fetched_at" IS NOT NULL) OR ("data" IS NULL AND "error" IS NOT NULL))
 );--> statement-breakpoint
-ALTER TABLE "search_snapshots" ADD CONSTRAINT "search_snapshots_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "search_snapshots" ADD CONSTRAINT "search_snapshots_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+-- The foreign keys tolerate a second run. The preview database keeps its
+-- state from one push to the next, and this table first landed there as
+-- 0040 before the base branch renumbered its own migrations above it, so
+-- the renumbered 0042 meets a table that already has both constraints.
+DO $$ BEGIN
+  ALTER TABLE "search_snapshots" ADD CONSTRAINT "search_snapshots_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "search_snapshots" ADD CONSTRAINT "search_snapshots_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "search_snapshots_site_day_key" ON "search_snapshots" USING btree ("site_id", "taken_on");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "search_snapshots_org_day_idx" ON "search_snapshots" USING btree ("organization_id", "taken_on");
