@@ -1265,6 +1265,13 @@ button:disabled {
   cursor: progress;
 }
 
+/* A link styled as a button, while the page is read-only. */
+.button.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* Buttons that sit inline rather than filling a form column. */
 .actions {
   display: flex;
@@ -3968,6 +3975,10 @@ form + .field-hint {
 /* A hint under a textarea, not tucked up under an input. */
 .lead-reply-hint {
   margin-top: 0.5rem;
+}
+
+.lead-reply-actions {
+  margin-top: 1rem;
 }
 
 /* -------------------------------------------------- booking requests */
