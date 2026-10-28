@@ -19,6 +19,7 @@ import { VisitorsSkeleton } from "@/components/skeletons";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
+import { needsListingReminder } from "@/db/repositories/client/listings";
 import { resolveClientAnalytics } from "@/lib/analytics/resolve";
 import {
   RANGES,
@@ -109,6 +110,15 @@ export default async function ClientDashboard({
   // so this page and that one cannot disagree about what is waiting.
   const awaitingApproval = await listPreviewsAwaitingDecision(db, ctx);
 
+  // One line while the site is still mostly unlisted. A failure loses the
+  // line, never the page: the list itself is one tab away.
+  let remindListings = false;
+  try {
+    remindListings = await needsListingReminder(db, ctx);
+  } catch (error) {
+    console.error("[dashboard] listing reminder failed", error);
+  }
+
   return (
     <>
       <main className="shell">
@@ -118,6 +128,13 @@ export default async function ClientDashboard({
             <SiteLink analytics={analytics} />
           </Suspense>
         </div>
+
+        {remindListings && (
+          <p className="notice notice-action">
+            Your website is not listed everywhere yet. Fewer than half the listings on{" "}
+            <Link href="/dashboard/listings">Get listed</Link> are done, and each one is a place people look.
+          </p>
+        )}
 
         <MakeARequest waiting={awaitingApproval.map((p) => p.requestTitle)} />
 
