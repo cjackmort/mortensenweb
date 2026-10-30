@@ -107,6 +107,29 @@ describe("two charts on one page do not share a gradient", () => {
 });
 
 /**
+ * The shading under the line is the line's own colour.
+ *
+ * The area always faded from the visits blue, so the dashboard's page-views
+ * chart drew a rust line over a blue wash. The gradient now says which series
+ * it shades; the stylesheet colours it.
+ */
+describe("the shaded area matches the line above it", () => {
+  function gradientTag(metric: "visits" | "pageviews" | "both"): string {
+    const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { series: days(30), metric }));
+    return /<linearGradient[^>]*>/.exec(markup)?.[0] ?? "";
+  }
+
+  it("marks the shading as page views when only page views are drawn", () => {
+    expect(gradientTag("pageviews")).toContain("chart-grad-series-2");
+  });
+
+  it("keeps the visits colour whenever visits are drawn", () => {
+    expect(gradientTag("visits")).not.toContain("chart-grad-series-2");
+    expect(gradientTag("both")).not.toContain("chart-grad-series-2");
+  });
+});
+
+/**
  * The dates along the bottom, at the widths the chart is actually shown.
  *
  * Drawn at a fixed 720 and scaled down into the dashboard's half-width

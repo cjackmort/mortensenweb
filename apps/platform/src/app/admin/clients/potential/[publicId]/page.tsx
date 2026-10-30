@@ -88,8 +88,11 @@ export default async function EditPotentialClientPage({
           <p className="field-hint" style={{ marginTop: 0 }}>
             Hides them from the Clients page. The record is kept, not deleted.
           </p>
-          <button type="submit" className="secondary">
-            Remove {prospect.businessName}
+          {/* The name is in the page heading; spelled out in an uppercase
+              button, a long one wrapped to three lines. A screen reader still
+              hears whom it removes. */}
+          <button type="submit" className="secondary" aria-label={`Remove ${prospect.businessName}`}>
+            Remove them
           </button>
         </form>
       </main>

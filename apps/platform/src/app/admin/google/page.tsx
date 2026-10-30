@@ -111,37 +111,44 @@ export default async function GoogleAdminPage({ searchParams }: { searchParams: 
             <p>No client has Google profile management yet. It comes with Pro, or as an add-on from a client&rsquo;s Billing section.</p>
           </div>
         ) : (
-          <div className="table-wrap">
-            <table className="stack">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Google profile</th>
-                  <th>Last synced</th>
-                </tr>
-              </thead>
-              <tbody>
-                {withFeature.map((c) => (
-                  <tr key={c.clientPublicId}>
-                    <td data-label="Client">
-                      <Link href={`/admin/google/${c.clientPublicId}`}>{c.organizationName}</Link>
-                      {c.isDemo && <span className="badge"> Demo</span>}
-                      {!c.hasFeature && <span className="muted"> · not in their plan</span>}
-                    </td>
-                    <td data-label="Google profile">{c.location ? (c.location.title ?? c.location.locationName) : <span className="muted">Not linked</span>}</td>
-                    <td data-label="Last synced">
-                      {c.location?.lastSyncError ? (
-                        <span className="gp-change-failed">Failing</span>
-                      ) : c.location?.lastSyncedAt ? (
-                        formatDateTime(c.location.lastSyncedAt)
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
+          <div className="panel-body">
+            <div className="table-wrap">
+              <table className="stack">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Google profile</th>
+                    <th>Last synced</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {withFeature.map((c) => (
+                    <tr key={c.clientPublicId}>
+                      <td data-label="Client">
+                        <Link href={`/admin/google/${c.clientPublicId}`}>{c.organizationName}</Link>
+                        {c.isDemo && (
+                          <>
+                            {" "}
+                            <span className="badge">Demo</span>
+                          </>
+                        )}
+                        {!c.hasFeature && <span className="muted"> · not in their plan</span>}
+                      </td>
+                      <td data-label="Google profile">{c.location ? (c.location.title ?? c.location.locationName) : <span className="muted">Not linked</span>}</td>
+                      <td data-label="Last synced">
+                        {c.location?.lastSyncError ? (
+                          <span className="gp-change-failed">Failing</span>
+                        ) : c.location?.lastSyncedAt ? (
+                          formatDateTime(c.location.lastSyncedAt)
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
