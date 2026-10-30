@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/auth";
-import { isConnectionProvider, providerAdapter } from "@/lib/connections";
+import { connectionHome, isConnectionProvider, providerAdapter } from "@/lib/connections";
 import { OAUTH_TTL_SECONDS, sealOAuthState } from "@/lib/google-business/oauth-state";
 import { CONNECT_COOKIE, CONNECT_COOKIE_PATH } from "../cookie";
 
@@ -24,12 +24,12 @@ export async function GET(
   const { provider } = await params;
   if (!isConnectionProvider(provider)) return new Response(null, { status: 404 });
   if (user.role !== "client" || !user.organizationId || user.viewingAs) {
-    return NextResponse.redirect(new URL(`/dashboard/connections?connect=${provider}:not_allowed`, request.url));
+    return NextResponse.redirect(new URL(`${connectionHome(provider)}?connect=${provider}:not_allowed`, request.url));
   }
 
   const adapter = providerAdapter(provider);
   if (!adapter.configured().ok) {
-    return NextResponse.redirect(new URL(`/dashboard/connections?connect=${provider}:not_configured`, request.url));
+    return NextResponse.redirect(new URL(`${connectionHome(provider)}?connect=${provider}:not_configured`, request.url));
   }
 
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, "0")).join("");

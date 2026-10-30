@@ -63,9 +63,11 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/** `scopes` defaults to Search Console's; Google Calendar asks for its own (`google-calendar.ts`). */
 export async function googleAuthorization(
   config: GoogleBusinessConfig,
   state: string,
+  scopes: string = REQUESTED_SCOPES,
 ): Promise<{ url: string; codeVerifier: string }> {
   const codeVerifier = base64Url(crypto.getRandomValues(new Uint8Array(48)));
   const challenge = base64Url(
@@ -75,7 +77,7 @@ export async function googleAuthorization(
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: REQUESTED_SCOPES,
+    scope: scopes,
     access_type: "offline",
     prompt: "consent",
     state,
@@ -188,7 +190,7 @@ export function matchProperty(properties: string[], siteHost: string | null): st
   );
 }
 
-async function usableAccessToken(
+export async function usableAccessToken(
   tokens: ProviderTokens,
   config: GoogleBusinessConfig,
   now: Date,
