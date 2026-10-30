@@ -61,6 +61,14 @@
   gap: var(--stack);
 }
 
+/* The heading sits inside the intro's first column, so `.card > h2` misses it
+   and it fell back to the browser's bold default. Same face as every pane. */
+.ad-intro h2 {
+  margin: 0 0 1.1rem;
+  font: 500 clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem) / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
 .ad-intro-points {
   margin: 0 0 1.25rem;
   padding-left: 1.1rem;
@@ -730,19 +738,32 @@
   justify-self: start;
 }
 
+/* Number, kind and text in three columns, so a description that wraps lines
+   up under its own first word rather than under the number and the label. */
 .ad-copy-list {
   margin: 0 0 1rem;
-  padding-left: 1.2rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: ad-copy;
 }
 
 .ad-copy-list li {
+  display: grid;
+  grid-template-columns: 1.25rem 6.5rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  align-items: baseline;
   margin-bottom: 0.3rem;
   user-select: all;
+  counter-increment: ad-copy;
+}
+
+.ad-copy-list li::before {
+  content: counter(ad-copy) ".";
+  color: var(--muted);
+  user-select: none;
 }
 
 .ad-copy-list .muted {
-  display: inline-block;
-  min-width: 6.5rem;
   font: 500 0.72rem/1.4 var(--mono);
   text-transform: uppercase;
   user-select: none;

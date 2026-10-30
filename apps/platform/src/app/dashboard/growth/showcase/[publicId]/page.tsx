@@ -63,20 +63,24 @@ export default async function ShowcasePage({ params }: { params: Promise<{ publi
         </span>
       </div>
 
-      <section className="panel">
-        <div className="panel-body">
-          <ul className="showcase-photos">
-            {showcase.photos.map((photo) => (
-              <li key={photo.assetPublicId} className={photo.usable ? undefined : "is-missing"}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/media/assets/${photo.assetPublicId}/thumb`} alt={photo.title} loading="lazy" />
-                {ROLE_LABEL[photo.role] && <span className="pill pill-neutral">{ROLE_LABEL[photo.role]}</span>}
-                {!photo.usable && <span className="showcase-photo-note">No longer in your library</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      {/* Only when there is something in it: a photo purged from the library
+          leaves the showcase with it, and an empty strip drew a blank box. */}
+      {showcase.photos.length > 0 && (
+        <section className="panel">
+          <div className="panel-body">
+            <ul className="showcase-photos">
+              {showcase.photos.map((photo) => (
+                <li key={photo.assetPublicId} className={photo.usable ? undefined : "is-missing"}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/media/assets/${photo.assetPublicId}/thumb`} alt={photo.title} loading="lazy" />
+                  {ROLE_LABEL[photo.role] && <span className="pill pill-neutral">{ROLE_LABEL[photo.role]}</span>}
+                  {!photo.usable && <span className="showcase-photo-note">No longer in your library</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {draft ? <DraftPanel showcase={showcase} readOnly={readOnly} /> : <Outputs showcase={showcase} readOnly={readOnly} />}
 
