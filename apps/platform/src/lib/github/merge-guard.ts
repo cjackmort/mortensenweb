@@ -119,9 +119,11 @@ const NEVER_AUTO_MERGE = [
   // Netlify's other way of setting headers, for a site that uses it instead of
   // netlify.toml. Guarded for the same reason: it decides who may frame the
   // site, and one permitted answer is the portal, whose grid tile depends on
-  // it. A content change has no business editing either.
+  // it. A content change has no business editing either. Astro sites keep
+  // theirs in `public/`, which the build copies to the root of the output.
   "_headers",
   "src/_headers",
+  "public/_headers",
   "wrangler.toml",
   "wrangler.jsonc",
   "package.json",

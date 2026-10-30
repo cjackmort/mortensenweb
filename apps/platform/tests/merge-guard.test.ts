@@ -67,6 +67,9 @@ describe("protected paths", () => {
     // be able to withdraw that — or any other security header — on its own.
     expect(isProtectedPath("_headers")).toBe(true);
     expect(isProtectedPath("src/_headers")).toBe(true);
+    // Where an Astro site keeps it; the build copies it to the output root.
+    expect(isProtectedPath("public/_headers")).toBe(true);
+    expect(isProtectedPath("./Public/_Headers")).toBe(true);
   });
 
   it("is not defeated by a leading ./ or by casing", () => {
