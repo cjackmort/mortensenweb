@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   appointmentBookings,
@@ -6,7 +6,10 @@ import {
   availabilitySettings,
   availabilityWeeklyHours,
   clients,
+  sites,
 } from "@/db/schema";
+import { BOOK_PAGE_PATH } from "@/lib/availability/public";
+import { siteOrigins } from "@/lib/shop/public";
 import { newPublicId } from "@/lib/ids";
 import {
   DEFAULT_RULES,
@@ -76,6 +79,23 @@ export async function isAvailabilitySetUp(db: Database, ctx: TenantContext): Pro
     )
     .limit(1);
   return Boolean(row);
+}
+
+/**
+ * Where the client's customers book: the first site's book page, at the
+ * address bookings are accepted from. Null when there is no site yet, or no
+ * address it can take bookings at.
+ */
+export async function bookingPageFor(db: Database, ctx: TenantContext): Promise<{ hasSite: boolean; url: string | null }> {
+  const [site] = await db
+    .select({ primaryDomain: sites.primaryDomain, productionUrl: sites.productionUrl, netlifySiteName: sites.netlifySiteName })
+    .from(sites)
+    .where(and(eq(sites.organizationId, ctx.organizationId), isNull(sites.archivedAt)))
+    .orderBy(asc(sites.createdAt))
+    .limit(1);
+  if (!site) return { hasSite: false, url: null };
+  const origin = siteOrigins(site)[0];
+  return { hasSite: true, url: origin ? `${origin}${BOOK_PAGE_PATH}` : null };
 }
 
 // ---------------------------------------------------------------------------
