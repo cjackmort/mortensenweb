@@ -78,11 +78,12 @@ export default async function ChangePasswordPage({
       redirect(`/change-password?error=${result.reason}`);
     }
 
-    // A client setting their first password goes on to choose a plan; the
-    // page sends them to their site instead when there is nothing to choose.
+    // A client setting their first password goes on to pay for their site
+    // and choose any extras; the welcome page sends them on to Get started
+    // when there is nothing to pay or choose.
     const next =
       session.mustChangePassword && session.role === "client"
-        ? "/dashboard/choose-plan?welcome=1"
+        ? "/dashboard/welcome?first=1"
         : "/";
 
     // The epoch advanced, so the current token is now stale by design.

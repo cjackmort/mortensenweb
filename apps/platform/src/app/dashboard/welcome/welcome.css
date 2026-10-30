@@ -1,0 +1,345 @@
+/*
+ * The welcome checkout. Beside its page, like the Growth features' styles.
+ * Panels, pills, notices and buttons are the portal's own; this lays out the
+ * choices beside a total that stays in view, and on a phone a bar at the foot
+ * of the screen carries the total and the button.
+ */
+
+.welcome-layout {
+  display: grid;
+  gap: var(--stack);
+  align-items: start;
+}
+
+.welcome-choices > .panel:last-child,
+.welcome-summary {
+  margin-bottom: 0;
+}
+
+@media (min-width: 60rem) {
+  .welcome-layout {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+  }
+
+  /* Below the sticky header, which is the brand row plus the tabs. */
+  .welcome-summary {
+    position: sticky;
+    top: 8.5rem;
+  }
+}
+
+.welcome-lead {
+  margin: 0 0 1rem;
+  color: var(--text-soft);
+}
+
+/* ---------------------------------------------------------- the website */
+
+.welcome-build-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.welcome-build-price strong {
+  font: 500 2.1rem / 1 var(--display);
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.welcome-invoice .pay-panel,
+.welcome-invoice > :last-child {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------- plan choice */
+
+.welcome-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.welcome-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+}
+
+.welcome-option:hover {
+  border-color: var(--border-strong);
+}
+
+.welcome-option.is-chosen {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: var(--accent-wash);
+}
+
+.welcome-option input,
+.welcome-addon input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+
+.welcome-option-body {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.welcome-option-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+}
+
+.welcome-option-head strong {
+  font: 500 1.1rem / 1.2 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.welcome-option-price {
+  margin-left: auto;
+  font: 500 0.95rem / 1.2 var(--mono);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.welcome-option-desc {
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.welcome-option-features {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------- add-ons */
+
+.welcome-nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+
+.welcome-nudge p {
+  margin: 0;
+}
+
+.welcome-addons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.welcome-addon {
+  display: grid;
+  grid-template-columns: 1.15rem minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+  padding: 0.85rem 0;
+}
+
+.welcome-addon + .welcome-addon {
+  border-top: 1px solid var(--border);
+}
+
+.welcome-addon:first-child {
+  padding-top: 0;
+}
+
+.welcome-addon:last-child {
+  padding-bottom: 0;
+}
+
+.welcome-addon-mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.2rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  color: var(--success);
+}
+
+.welcome-addon-body {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  font-weight: 400;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.welcome-addon-body strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.welcome-addon--available .welcome-addon-body {
+  cursor: pointer;
+}
+
+.welcome-addon--needs_plan .welcome-addon-body {
+  color: var(--muted);
+}
+
+.welcome-addon--needs_plan .welcome-addon-body strong {
+  color: var(--text-soft);
+}
+
+.welcome-addon-price {
+  font: 500 0.88rem / 1.5 var(--mono);
+  color: var(--text);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.welcome-addon--needs_plan .welcome-addon-price {
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------- the total */
+
+.welcome-lines {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+  font-size: 0.92rem;
+}
+
+.welcome-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.welcome-lines li > span:last-child {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.welcome-lines small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.welcome-due {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0 0 0.35rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.welcome-due strong {
+  font: 500 1.9rem / 1 var(--display);
+  letter-spacing: -0.03em;
+}
+
+.welcome-then {
+  margin: 0 0 0.75rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.welcome-empty {
+  margin: 0 0 1rem;
+  color: var(--text-soft);
+}
+
+.welcome-fine {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.welcome-unconfigured {
+  margin: 0.75rem 0 0;
+}
+
+.welcome-pay {
+  margin-top: 1rem;
+}
+
+.welcome-pay button {
+  width: 100%;
+}
+
+.welcome-skip {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------- phone bar */
+
+.welcome-bar {
+  display: none;
+}
+
+@media (max-width: 59.99rem) {
+  /* Room for the bar, so it never sits over the last of the page. */
+  .welcome {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+  }
+
+  .welcome-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem var(--gutter) calc(0.75rem + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 24px -16px rgb(16 20 24 / 35%);
+  }
+
+  .welcome-bar span {
+    display: grid;
+    line-height: 1.1;
+  }
+
+  .welcome-bar small {
+    font: 500 0.66rem / 1.2 var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .welcome-bar strong {
+    font: 500 1.45rem / 1.1 var(--display);
+    letter-spacing: -0.02em;
+  }
+}

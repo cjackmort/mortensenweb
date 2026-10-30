@@ -56,8 +56,22 @@ export async function getPlanChoice(db: Database, ctx: TenantContext): Promise<P
     .limit(1);
   if (billed[0]) return { open: false, reason: "subscribed" };
 
+  return { open: true, ...(await sellablePlanCards(db, client.clientId)) };
+}
+
+/**
+ * The plans a client may buy, as cards, and the payment day an operator set.
+ *
+ * Shared with the welcome checkout, which offers the same plans on a new
+ * client's first visit: one list, so the two pages cannot offer different
+ * plans or a different test-plan rule.
+ */
+export async function sellablePlanCards(
+  db: Database,
+  clientId: string,
+): Promise<{ plans: PlanCard[]; billingDay: number | null }> {
   const [assigned, sellable] = await Promise.all([
-    assignedPlanFor(db, client.clientId),
+    assignedPlanFor(db, clientId),
     db
       .select({ key: servicePlans.key })
       .from(servicePlans)
@@ -94,5 +108,5 @@ export async function getPlanChoice(db: Database, ctx: TenantContext): Promise<P
     });
   }
 
-  return { open: true, plans, billingDay: assigned?.billingDay ?? null };
+  return { plans, billingDay: assigned?.billingDay ?? null };
 }
