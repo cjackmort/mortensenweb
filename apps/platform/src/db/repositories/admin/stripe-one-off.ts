@@ -15,9 +15,9 @@ import type { StripeOutcome } from "./stripe-webhooks";
  * *invoices*. A one-off payment has no Stripe invoice: it is a Checkout
  * Session in `payment` mode, created by `client/stripe-payment.ts` against one
  * of our payment requests. This turns that session into the same thing a Venmo
- * confirmation or a Square payment becomes — `confirmPaymentReceived`, the one
- * place a payment request is ever marked paid, which is also where an extra
- * change is credited.
+ * confirmation becomes — `confirmPaymentReceived`, the one place a payment
+ * request is ever marked paid, which is also where an extra change is
+ * credited.
  *
  * ## What has to be true before anything is recorded
  *
@@ -180,8 +180,7 @@ export async function settleOneOffCheckout(
     },
   });
 
-  // Recorded, not rejected — the same stance as the Square receiver. A client
-  // who paid has paid, whatever the figure.
+  // Recorded, not rejected. A client who paid has paid, whatever the figure.
   if (session.amount_total !== null && session.amount_total !== request.amountCents) {
     await db.insert(auditLog).values({
       actorUserId: actor.userId,

@@ -5,7 +5,6 @@ import {
   isProtectedPath,
 } from "@/lib/github/merge-guard";
 import { previewUrlFor, toSiteName } from "@/lib/netlify/api";
-import { referenceFromNote } from "@/lib/payments/square";
 import {
   apexDomain,
   buildDnsRecords,
@@ -133,26 +132,6 @@ describe("Netlify naming", () => {
     expect(previewUrlFor("acme-abc123", 42)).toBe(
       "https://pr-42--acme-abc123.netlify.app",
     );
-  });
-});
-
-describe("Square reconciliation", () => {
-  it("finds a reference code inside a longer note", () => {
-    expect(referenceFromNote("MW-7F3K — website services")).toBe("MW-7F3K");
-    expect(referenceFromNote("payment for MW-7F3K thanks")).toBe("MW-7F3K");
-  });
-
-  it("uppercases a lowercased code", () => {
-    expect(referenceFromNote("mw-7f3k")).toBe("MW-7F3K");
-  });
-
-  it("returns null rather than guessing at an unlabelled payment", () => {
-    // Guessing which invoice an unlabelled payment settles is how a client gets
-    // marked paid for someone else's money.
-    expect(referenceFromNote("thanks!")).toBeNull();
-    expect(referenceFromNote(undefined)).toBeNull();
-    // I, L, O and U are not in the alphabet, so this is not a real code.
-    expect(referenceFromNote("MW-ILOU")).toBeNull();
   });
 });
 

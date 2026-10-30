@@ -7,7 +7,7 @@ import { requireStripe, stripeConfigured } from "@/lib/payments/stripe";
 /**
  * Stripe's webhook endpoint.
  *
- * Same shape as the GitHub and Square receivers: the raw body is read once and
+ * Same shape as the GitHub receiver: the raw body is read once and
  * verified before anything parses it, a bad signature is the one case that
  * answers with an error, and processing failures answer 500 so the sender
  * retries.

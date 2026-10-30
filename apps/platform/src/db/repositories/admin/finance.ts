@@ -24,9 +24,9 @@ import type { AdminContext } from "../context";
  *
  * Money in is `payments`, money out is `expenses`, and they stay two tables
  * (see the schema comment on `expenses`). The ledger reads both, so a payment
- * appears as income the moment it is recorded — by the Stripe receiver, by a
- * Square webhook, or by the operator confirming a Venmo — with nothing copied
- * across that could drift from the original.
+ * appears as income the moment it is recorded — by the Stripe receiver or by
+ * the operator confirming a Venmo — with nothing copied across that could
+ * drift from the original.
  *
  * Only `recorded` payments count. `void` exists so a correction is never a
  * subtraction someone has to remember, and a demo payment is not money.

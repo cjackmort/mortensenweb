@@ -13,13 +13,13 @@ import { seedTenant, type SeededTenant } from "./helpers/tenant";
  * The portal with no Stripe credentials.
  *
  * This is not a hypothetical edge case: it is the state production is in the
- * moment this ships, and it may stay that way for a while. Square and manual
- * invoicing are still how most clients pay, so the billing page has to keep
- * working with `STRIPE_SECRET_KEY` unset.
+ * moment this ships, and it may stay that way for a while. Manual invoicing
+ * is still how most clients pay, so the billing page has to keep working with
+ * `STRIPE_SECRET_KEY` unset.
  *
  * Two failures would be worse than the feature not existing:
  *
- *  - the billing page 500s, taking away the Square path that does work
+ *  - the billing page 500s, taking away the Venmo path that does work
  *  - something enrols a client, or looks like it did, with no processor behind
  *    it
  *

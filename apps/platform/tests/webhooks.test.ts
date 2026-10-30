@@ -14,9 +14,7 @@ import { processGithubDelivery } from "@/db/repositories/admin/webhooks";
 import {
   constantTimeEqual,
   githubSignatureFor,
-  squareSignatureFor,
   verifyGithubSignature,
-  verifySquareSignature,
 } from "@/lib/webhooks/signature";
 import {
   agentJobMarker,
@@ -197,33 +195,6 @@ describe("signature verification", () => {
     expect(await verifyGithubSignature(body, null, SECRET)).toBe(false);
     expect(await verifyGithubSignature(body, "sha256=zzzz", SECRET)).toBe(false);
     expect(await verifyGithubSignature(body, "sha256=", SECRET)).toBe(false);
-  });
-
-  it("verifies a Square signature over notification URL plus body", async () => {
-    const url = "https://portal.example.com/api/webhooks/square";
-    const body = JSON.stringify({ type: "payment.created" });
-    const signature = await squareSignatureFor(body, SECRET, url);
-
-    expect(await verifySquareSignature(body, signature, SECRET, url)).toBe(true);
-  });
-
-  it("rejects a Square signature captured from a different endpoint", async () => {
-    const body = JSON.stringify({ type: "payment.created" });
-    const signature = await squareSignatureFor(
-      body,
-      SECRET,
-      "https://portal.example.com/api/webhooks/square",
-    );
-
-    // The URL is in the signed string precisely so this replay fails.
-    expect(
-      await verifySquareSignature(
-        body,
-        signature,
-        SECRET,
-        "https://portal.example.com/api/webhooks/other",
-      ),
-    ).toBe(false);
   });
 
   it("compares in constant time without short-circuiting on length", () => {

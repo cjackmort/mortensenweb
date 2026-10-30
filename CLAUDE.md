@@ -57,12 +57,12 @@ migrations to Neon on merge to `main`. Nothing needs running by hand.
 | Template | `cjackmort/client-site-template`, marked as a template |
 | First client | Scott Mortensen Fine Arts — `cjackmort/ScottMortensenWebsite` |
 
-Square is configured in **sandbox**: token, location, webhook subscription and
-signature key are set, and `/api/webhooks/square` answers 401 to an unsigned
-request rather than 503. No payment has been taken end to end yet, so the
-unlock path is armed but unproven. Going to production means replacing all five
-values — sandbox and production share nothing. `docs/square-setup.md` is the
-setup, `docs/github-app-setup.md` the equivalent for GitHub.
+Cards are taken through Stripe; `docs/stripe-setup.md` is the setup and
+`docs/github-app-setup.md` the equivalent for GitHub. Venmo is a manual
+hand-off: the client is sent to Venmo with a reference code, and the operator
+confirms receipt by hand. An earlier Square integration was removed without
+ever having taken a payment; the `square` enum values and the
+`service_plans.square_plan_variation_id` column remain in the schema, unused.
 
 Prospecting has moved **out of the portal**. `/pitch` in the agency repo
 researches keywords, rebuilds the site on the Astro template and previews it
@@ -192,7 +192,6 @@ by a real person:
 
 ## Known gaps
 
-- No payment has been taken through Square, in sandbox or production
 - **Nothing above has been exercised through the UI by a person** — the suite
   covers the logic, but no one has clicked cancel or watched an escalation
 - Client repositories scaffolded before the reusable workflows still carry a

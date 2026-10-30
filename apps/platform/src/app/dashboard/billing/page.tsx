@@ -4,26 +4,25 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { getBillingOverview } from "@/db/repositories/client/billing";
 import { getEntitlements } from "@/db/repositories/client/entitlements";
-import { recurringAvailable } from "@/db/repositories/client/checkout";
 import {
   buildVenmoPaymentUrl,
   configuredVenmoHandle,
   formatCurrency,
 } from "@/lib/payments/venmo";
-import { cardProvider } from "@/lib/payments/card-provider";
+import { stripeConfigured } from "@/lib/payments/stripe";
 import { getStripeBillingPanel } from "@/db/repositories/client/stripe-billing";
 import { ExtraChangePanel } from "./extra-change-panel";
 import { PayPanel } from "./pay-panel";
 import { StripePanel } from "./stripe-panel";
-import { UnlockPanel } from "./unlock-panel";
 
 export const dynamic = "force-dynamic";
 
 /**
  * How a payment was made, in the client's words. The ledger's own labels
- * (`lib/finance/ledger-csv.ts`) are the operator's — "Stripe", "Square" — but
- * the client paid by card either way, and the history used to show the raw
- * stored value: "stripe", "venmo", "bank_transfer".
+ * (`lib/finance/ledger-csv.ts`) are the operator's, but the history used to
+ * show the raw stored value: "stripe", "venmo", "bank_transfer".
+ *
+ * `square` stays because the enum still holds it and a row could carry it.
  */
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -72,10 +71,9 @@ export default async function BillingPage({
 
   const ctx = tenantContextFrom(user, user.organizationId);
   const db = await getDb();
-  const [overview, entitlements, canRecur, stripePanel] = await Promise.all([
+  const [overview, entitlements, stripePanel] = await Promise.all([
     getBillingOverview(db, ctx),
     getEntitlements(db, ctx),
-    recurringAvailable(db, ctx),
     getStripeBillingPanel(db, ctx),
   ]);
 
@@ -96,20 +94,7 @@ export default async function BillingPage({
    */
   const offerPlanKey = entitlements?.planKey ?? null;
 
-  // The unlock panel is for a client who has never paid. Once they have, the
-  // ordinary "amount due" flow takes over — showing both would offer someone
-  // an "unlock" they already own.
   const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
-  const card = cardProvider();
-  // Only when nothing has been raised yet. Once an invoice exists the "amount
-  // due" panel owns paying, and showing both would offer two routes to the
-  // same money — with two references, only one of which gets reconciled.
-  //
-  // Square only. With Stripe, starting the subscription *is* the first
-  // payment, and the automatic-payments panel above already offers it; a
-  // one-off "first month" beside it would let a client pay that month twice.
-  const showUnlock =
-    locked && card === "square" && !overview.current && overview.monthlyPriceCents !== null;
 
   // Back from Stripe's payment page. Wording only: the invoice is settled by
   // the webhook, and until it lands the invoice still reads as due — this says
@@ -151,8 +136,8 @@ export default async function BillingPage({
         )}
 
         {/* Card subscriptions. Hidden entirely when Stripe has no credentials
-            in this environment, so the Square and Venmo paths below are
-            unaffected by it being switched off. */}
+            in this environment, so the Venmo path below is unaffected by it
+            being switched off. */}
         {stripePanel.available && (
           <StripePanel
             state={stripePanel.status.state}
@@ -174,15 +159,6 @@ export default async function BillingPage({
             history={stripePanel.history}
             canManage={stripePanel.canManage}
             offerPlanKey={offerPlanKey}
-          />
-        )}
-
-        {showUnlock && (
-          <UnlockPanel
-            amountLabel={formatCurrency(overview.monthlyPriceCents!)}
-            planName={entitlements?.planName ?? null}
-            recurringAvailable={canRecur}
-            includesAnalytics={entitlements?.planIncludesAnalytics ?? true}
           />
         )}
 
@@ -220,7 +196,7 @@ export default async function BillingPage({
                 <PayPanel
                   requestPublicId={overview.current.publicId}
                   venmoUrl={venmoUrl}
-                  cardProvider={card}
+                  cardAvailable={stripeConfigured()}
                   reference={overview.current.reference}
                   amount={formatCurrency(
                     overview.current.amountCents,

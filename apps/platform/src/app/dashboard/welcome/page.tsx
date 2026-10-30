@@ -187,7 +187,7 @@ function InvoiceDetail({ due, offer }: { due: Extract<SiteDue, { kind: "invoice"
         <PayPanel
           requestPublicId={due.publicId}
           venmoUrl={venmoUrl}
-          cardProvider={offer.cardProvider}
+          cardAvailable={offer.stripeReady}
           reference={due.reference}
           amount={formatMoney(due.amountCents)}
         />

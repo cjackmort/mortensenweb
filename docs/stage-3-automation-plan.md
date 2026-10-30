@@ -126,6 +126,10 @@ the last change — so they use the same pattern rather than a read-then-write.
 
 ### D5 — Square is a driver behind a narrow interface, and recurring stays operator-visible
 
+> **Superseded.** Square was built, never took a payment, and was removed once
+> Stripe went live (`docs/stripe-setup.md`). Kept for the reasoning on
+> `awaiting_confirmation`, which still applies to Venmo.
+
 Verified against Square's docs: `POST /v2/online-checkout/payment-links` creates a
 hosted checkout; subscription checkout requires a subscription **plan variation**
 id plus `price_money`; webhooks are `x-square-hmacsha256-signature`, HMAC-SHA256
