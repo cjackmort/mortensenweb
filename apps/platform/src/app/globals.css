@@ -632,7 +632,10 @@ code {
   text-transform: uppercase;
 }
 
-.card h3 {
+/* Sub-headings inside a pane. `.panel-body` too: there they fell back to the
+   browser's 1.17em bold and came out larger than the panel's own title. */
+.card h3,
+.panel-body h3 {
   font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: -0.01em;
