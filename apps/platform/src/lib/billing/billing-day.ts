@@ -56,6 +56,19 @@ export function shiftedAnchor(billingDay: number, periodEndSeconds: number): num
   return Math.floor(next.getTime() / 1000);
 }
 
+/**
+ * The next date a client billed by hand should be billed: this month's
+ * billing day if it is today or still ahead, otherwise next month's. Both
+ * `YYYY-MM-DD` calendar labels in the business timezone; no instants.
+ */
+export function nextBillingDate(billingDay: number, today: string): string {
+  const [year, month, day] = today.split("-").map(Number) as [number, number, number];
+  const index = year * 12 + (month - 1) + (day <= billingDay ? 0 : 1);
+  const y = Math.floor(index / 12);
+  const m = (index % 12) + 1;
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(billingDay).padStart(2, "0")}`;
+}
+
 /** 1st, 2nd, 3rd, 4th … 21st, 22nd, 23rd … 28th. */
 export function ordinal(day: number): string {
   const teen = day % 100 >= 11 && day % 100 <= 13;

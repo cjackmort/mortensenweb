@@ -411,6 +411,7 @@ describe("the accountant's CSV", () => {
       {
         kind: "income",
         key: "p:1",
+        publicId: "P1",
         date: "2026-10-06",
         clientPublicId: "C1",
         counterparty: "Scott Mortensen Fine Arts",
@@ -419,6 +420,8 @@ describe("the accountant's CSV", () => {
         note: null,
         amountCents: 100,
         currency: "USD",
+        provider: "stripe",
+        settlesInvoice: null,
       },
     ]);
 
