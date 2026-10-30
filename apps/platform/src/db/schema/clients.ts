@@ -528,6 +528,18 @@ export const payments = pgTable(
     status: paymentStatusEnum("status").notNull().default("recorded"),
     note: text("note"),
     isDemo: boolean("is_demo").notNull().default(false),
+
+    /**
+     * Who deleted this row from the ledger, when, and why. Set together with
+     * `status = 'void'` by `voidPayment`; the row itself stays, because its
+     * idempotency key is what stops a Stripe resync writing it again.
+     */
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidedBy: uuid("voided_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    voidReason: text("void_reason"),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -683,6 +695,17 @@ export const expenses = pgTable(
     recordedBy: uuid("recorded_by").references(() => users.id, {
       onDelete: "set null",
     }),
+
+    /**
+     * Deleted from the ledger. Hidden from every total rather than removed:
+     * the fee and monthly-repeat jobs re-create an automatic row whose public
+     * id is missing, so a removed row would come back within the hour.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
