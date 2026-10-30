@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { organizations, shopOrderItems, shopOrders, shopProducts } from "@/db/schema";
+import { shopOrderItems, shopOrders, shopProducts } from "@/db/schema";
 import { salesWindowStart, summariseSales, type SaleStatus, type SalesSummary } from "@/lib/shop/sales";
 import { businessTimeZone } from "@/lib/time";
 import type { TenantContext } from "../context";
@@ -50,17 +50,12 @@ export interface ShopSalesView {
   /** All time, by units sold. */
   bestSellers: BestSeller[];
   recent: RecentOrder[];
-  /** The client's own, so "this month" starts on their 1st, not UTC's. */
+  /**
+   * The business's, so "this month" starts on the 1st where the client is,
+   * not in UTC — and in the zone every date on the page is printed in
+   * (`lib/time.ts`), so a sale dated the 1st is never counted in last month.
+   */
   timeZone: string;
-}
-
-async function timeZoneFor(db: Database, ctx: TenantContext): Promise<string> {
-  const [row] = await db
-    .select({ timezone: organizations.timezone })
-    .from(organizations)
-    .where(eq(organizations.id, ctx.organizationId))
-    .limit(1);
-  return row?.timezone ?? businessTimeZone();
 }
 
 async function windowRows(db: Database, ctx: TenantContext, since: Date) {
@@ -166,7 +161,7 @@ export async function getShopSales(
   options: { now?: Date } = {},
 ): Promise<ShopSalesView> {
   const now = options.now ?? new Date();
-  const timeZone = await timeZoneFor(db, ctx);
+  const timeZone = businessTimeZone();
   const [rows, best, recent] = await Promise.all([
     windowRows(db, ctx, salesWindowStart(now, timeZone)),
     bestSellers(db, ctx),

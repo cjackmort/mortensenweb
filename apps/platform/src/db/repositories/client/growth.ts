@@ -218,6 +218,17 @@ export function canUseFeature(state: GrowthState, key: GrowthFeatureKey): boolea
 }
 
 /**
+ * Whether a feature is open only because this is the agency's own site —
+ * the "you are trying it early" note. A store has the shop outright, so it
+ * gets no such note even on the agency's site.
+ */
+export function openedEarly(state: GrowthState, key: GrowthFeatureKey): boolean {
+  const access = state.access.find((a) => a.feature.key === key);
+  if (!access?.via || access.feature.available || !state.earlyAccess) return false;
+  return !SECTION_FEATURES[key]?.(state);
+}
+
+/**
  * The cards on the Growth page. A feature that belongs to a kind of site is
  * left off for every other client — a "coming soon" shop on a plumber's
  * Growth page is a promise nobody made them.

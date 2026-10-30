@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
-import { organizations, shopOrderItems, shopOrders, shopProducts, shopSettings, sites } from "@/db/schema";
+import { shopOrderItems, shopOrders, shopProducts, shopSettings, sites } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
 import { itemsLabel, monthStart, salesWindowStart, summariseSales, type SaleRow } from "@/lib/shop/sales";
 import { getShopSales } from "@/db/repositories/client/shop-sales";
@@ -160,7 +159,7 @@ describe("a store's sales, from the database", () => {
     acme = await seedTenant(db, "Acme Pottery");
     globex = await seedTenant(db, "Globex Glass");
     empty = await seedTenant(db, "Empty Shop");
-    await db.update(organizations).set({ timezone: DENVER }).where(eq(organizations.id, acme.organizationId));
+    vi.stubEnv("BUSINESS_TIMEZONE", DENVER);
 
     const site = await shop(acme);
     const mug = await product(acme, site, "Mug");
@@ -182,6 +181,7 @@ describe("a store's sales, from the database", () => {
   });
 
   afterAll(async () => {
+    vi.unstubAllEnvs();
     await close();
   });
 

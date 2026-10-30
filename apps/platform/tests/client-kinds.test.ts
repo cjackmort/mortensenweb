@@ -9,6 +9,7 @@ import {
   canUseFeature,
   getGrowthState,
   growthHubFeatures,
+  openedEarly,
   requireUsableGrowthFeature,
   type GrowthState,
 } from "@/db/repositories/client/growth";
@@ -206,6 +207,13 @@ describe("the Growth page", () => {
 
   it("shows it on the agency's own site, where it is tried early", () => {
     expect(keys(stateWith({ earlyAccess: true }))).toContain("shop");
+  });
+
+  it("says 'trying it early' on the agency's site, not to a store that simply has the shop", () => {
+    expect(openedEarly(stateWith({ shopEnabled: true }), "shop")).toBe(false);
+    expect(openedEarly(stateWith({ earlyAccess: true }), "shop")).toBe(true);
+    expect(openedEarly(stateWith({ earlyAccess: true, shopEnabled: true }), "shop")).toBe(false);
+    expect(openedEarly(stateWith({ earlyAccess: true }), "search")).toBe(false);
   });
 
   it("keeps every other card", () => {
