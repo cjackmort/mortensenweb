@@ -7,10 +7,27 @@
 
 name: CI
 
+# Docs, markdown and the client-repo templates cannot change what `verify`
+# checks, so a change confined to them skips CI entirely. A change that touches
+# any other path still runs everything: the filter only skips when every changed
+# file matches.
+#
+# `paths-ignore` leaves no check run at all, which would hang a pull request
+# forever if `verify` were ever made a required status check. Branch protection
+# on `main` requires none today. If that changes, replace this with a paths
+# filter inside the workflow so the required job still reports success.
 on:
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "templates/**"
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "templates/**"
 
 # Least privilege. Neither job writes to the repository, opens a pull request,
 # or publishes a package, so nothing beyond reading the code is granted.
