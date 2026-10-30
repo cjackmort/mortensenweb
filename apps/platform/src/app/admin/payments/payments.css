@@ -1,0 +1,847 @@
+/* The payments page. Built from the portal's cards, pills, stat tiles and
+   stacking tables; what is new is the dialog, the ledger's selection, the
+   month strip and the bulk-add preview. Tokens only, from globals.css. */
+
+/* ------------------------------------------------------------ tables */
+
+.pay-table td {
+  vertical-align: middle;
+}
+
+.pay-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.pay-stack .muted,
+.pay-inline .muted {
+  font-size: 0.84rem;
+}
+
+.pay-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pay-name a {
+  font-weight: 600;
+}
+
+.pay-name .badge {
+  margin-left: 0.5rem;
+}
+
+.pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.pay-row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Desktop: a row's buttons stay on one line, so every row is one height. */
+@media (min-width: 40.01rem) {
+  .pay-clients .pay-actions,
+  .pay-overdue .pay-actions {
+    flex-wrap: nowrap;
+  }
+}
+
+.pay-money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pay-num {
+  text-align: right;
+}
+
+.pay-money.is-in {
+  color: var(--success);
+}
+
+.pay-late {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.pay-late-bad {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* They are waiting on us: tinted so the eye finds them first. */
+.pay-says-paid {
+  background: color-mix(in srgb, var(--info-wash) 60%, transparent);
+}
+
+.pay-tag {
+  margin-left: 0.45rem;
+  vertical-align: 0.1em;
+}
+
+.pay-check {
+  width: 2rem;
+}
+
+.pay-check input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  margin: 0;
+  box-shadow: none;
+  accent-color: var(--accent-fill);
+  cursor: pointer;
+}
+
+.pay-ledger tr.is-selected {
+  background: color-mix(in srgb, var(--accent-wash) 70%, transparent);
+}
+
+/* Phone: the shared table.stack rule turns each row into labelled lines. */
+@media (max-width: 40rem) {
+  table.stack.pay-table td {
+    align-items: center;
+  }
+
+  table.stack.pay-table .pay-stack {
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  table.stack.pay-table td.pay-name {
+    font-size: 1.02rem;
+  }
+
+  table.stack.pay-table td.pay-row-actions {
+    padding-top: 0.65rem;
+  }
+
+  table.stack.pay-table td.pay-row-actions::before {
+    display: none;
+  }
+
+  table.stack.pay-table .pay-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  table.stack.pay-table .pay-actions > .small {
+    flex: 1 1 auto;
+  }
+
+  /* The import preview's checkbox sits in the row's gutter. */
+  table.stack.pay-import tr {
+    position: relative;
+    padding-left: 2.25rem;
+  }
+
+  table.stack.pay-import td.pay-check {
+    position: absolute;
+    left: 0;
+    top: 0.95rem;
+    padding: 0;
+  }
+
+  table.stack.pay-import td.pay-check::before {
+    display: none;
+  }
+
+  /*
+   * The three main tables are laid out as compact cards rather than one
+   * labelled line per column: a dozen clients at six lines each was a long
+   * scroll to find one name. The name and the answer (status, amount) share
+   * the first line; the detail sits under it.
+   */
+  table.stack.pay-grid tr {
+    display: grid;
+    gap: 0.4rem 0.75rem;
+    align-items: start;
+    padding: 0.95rem 0;
+  }
+
+  table.stack.pay-grid td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+    overflow-wrap: break-word;
+  }
+
+  table.stack.pay-grid td::before {
+    display: none;
+  }
+
+  table.stack.pay-grid .pay-stack {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  table.stack.pay-grid td.pay-row-actions {
+    grid-area: actions;
+    padding-top: 0.35rem;
+  }
+
+  /* Clients: name and status, then plan / billing / next, then buttons. */
+  table.stack.pay-clients tr {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "name name status"
+      "plan billing next"
+      "actions actions actions";
+  }
+
+  .pay-clients td.pay-name {
+    grid-area: name;
+    align-self: center;
+  }
+
+  .pay-clients td.pay-status {
+    grid-area: status;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .pay-clients td.pay-plan {
+    grid-area: plan;
+  }
+
+  .pay-clients td.pay-billing {
+    grid-area: billing;
+  }
+
+  .pay-clients td.pay-next {
+    grid-area: next;
+  }
+
+  table.stack.pay-clients td.pay-plan::before,
+  table.stack.pay-clients td.pay-billing::before,
+  table.stack.pay-clients td.pay-next::before {
+    display: block;
+    margin-bottom: 0.15rem;
+  }
+
+  .pay-clients .pay-inline {
+    gap: 0.3rem;
+  }
+
+  /* Overdue: who and how much, then what for and how late, then buttons. */
+  table.stack.pay-overdue tr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name owed"
+      "for when"
+      "actions actions";
+  }
+
+  .pay-overdue td.pay-name {
+    grid-area: name;
+  }
+
+  .pay-overdue td.pay-money {
+    grid-area: owed;
+    justify-self: end;
+    font-weight: 600;
+  }
+
+  .pay-overdue td.pay-for {
+    grid-area: for;
+  }
+
+  .pay-overdue td.pay-for .pay-stack {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .pay-overdue td.pay-when {
+    grid-area: when;
+    justify-self: end;
+    text-align: right;
+  }
+
+  table.stack.pay-overdue td.pay-when .pay-stack {
+    align-items: flex-end;
+  }
+
+  /* Ledger: tick, what, amount; then date, category, delete. */
+  table.stack.pay-ledger tr {
+    grid-template-columns: 1.5rem auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check what what amount"
+      "check date cat actions";
+    align-items: center;
+    gap: 0.35rem 0.6rem;
+  }
+
+  .pay-ledger td.pay-check {
+    grid-area: check;
+    align-self: start;
+    padding-top: 0.1rem;
+  }
+
+  .pay-ledger td.pay-what {
+    grid-area: what;
+  }
+
+  .pay-ledger td.pay-num {
+    grid-area: amount;
+    justify-self: end;
+    align-self: start;
+    font-weight: 600;
+  }
+
+  .pay-ledger td.pay-date {
+    grid-area: date;
+    color: var(--muted);
+    font-size: 0.86rem;
+  }
+
+  .pay-ledger td.pay-cat {
+    grid-area: cat;
+  }
+
+  table.stack.pay-ledger td.pay-row-actions {
+    justify-self: end;
+    padding-top: 0;
+  }
+
+  table.stack.pay-ledger .pay-actions {
+    justify-content: flex-end;
+    gap: 0.9rem;
+  }
+}
+
+/* -------------------------------------------------------------- tiles */
+
+.pay-stat-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.18s var(--ease-out);
+}
+
+.pay-stat-link:hover {
+  border-color: var(--border-strong);
+}
+
+.pay-quiet {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 1rem 0 0;
+  max-width: 48rem;
+}
+
+/* ------------------------------------------------------------- dialog */
+
+.pay-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--pane-shadow-lift);
+}
+
+.pay-dialog::backdrop {
+  background: rgb(16 20 24 / 50%);
+}
+
+.pay-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pay-dialog-head h2 {
+  margin: 0;
+  font: 500 1.4rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.pay-dialog-head p {
+  margin: 0.3rem 0 0;
+}
+
+.pay-dialog .pay-dialog-x,
+.pay-dialog .pay-dialog-x:hover {
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-height: var(--tap);
+  margin: -0.5rem -0.75rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--muted);
+  font: 400 1.6rem / 1 var(--font);
+}
+
+.pay-dialog .pay-dialog-x:hover {
+  color: var(--text);
+}
+
+.pay-dialog-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.pay-dialog-lede {
+  margin: 0 0 1.1rem;
+  color: var(--text-soft);
+  font-size: 0.94rem;
+}
+
+.pay-dialog-body .hint {
+  display: block;
+  margin: -0.4rem 0 0;
+}
+
+.pay-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+/* A bottom sheet on a phone: thumbs reach it and it never runs off the side. */
+@media (max-width: 40rem) {
+  .pay-dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+  }
+
+  .pay-dialog-head,
+  .pay-dialog-body {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .pay-dialog-body {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+
+  .pay-dialog-foot > button {
+    flex: 1 1 0;
+  }
+}
+
+.pay-methods,
+.pay-choices {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1.1rem;
+  min-width: 0;
+}
+
+.pay-methods legend,
+.pay-choices legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.pay-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pay-chip {
+  position: relative;
+  margin: 0;
+  font-weight: 500;
+}
+
+.pay-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pay-chip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  background: var(--field);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.pay-chip input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.pay-chip input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pay-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+@media (max-width: 22rem) {
+  .pay-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pay-choices {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pay-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pay-choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0.2rem 0 0;
+  box-shadow: none;
+  accent-color: var(--accent-fill);
+}
+
+.pay-choice > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.pay-choice .muted {
+  font-size: 0.86rem;
+}
+
+.pay-choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.pay-delete-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+}
+
+.pay-delete-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.92rem;
+}
+
+.pay-delete-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.pay-consequences {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1.1rem;
+  padding-left: 1.1rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+/* ------------------------------------------------------------- ledger */
+
+.pay-csv {
+  display: flex;
+  gap: 1.1rem;
+  font: 500 0.7rem / 1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pay-csv a {
+  text-decoration: none;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid currentColor;
+}
+
+.pay-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.pay-month-nav a,
+.pay-month-off {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--border-strong);
+  text-decoration: none;
+}
+
+.pay-month-off {
+  color: var(--border-strong);
+  border-color: var(--border);
+}
+
+.pay-month-nav strong {
+  min-width: 9.5rem;
+  text-align: center;
+  font: 500 1.15rem / 1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.pay-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.pay-strip > div {
+  padding: 0.9rem 1rem;
+  min-width: 0;
+}
+
+.pay-strip > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.pay-strip dt {
+  font: 500 0.64rem / 1.3 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pay-strip dd {
+  margin: 0.35rem 0 0;
+  font: 400 1.45rem / 1.1 var(--display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.pay-strip dd.muted {
+  margin-top: 0.2rem;
+  font: 400 0.78rem / 1.3 var(--font);
+  letter-spacing: normal;
+}
+
+@media (max-width: 40rem) {
+  .pay-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pay-strip > div:nth-child(3) {
+    border-left: none;
+  }
+
+  .pay-strip > div:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+.pay-year {
+  margin: 0 0 1.25rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.pay-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+
+.pay-fold {
+  flex: 1 1 16rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pay-fold[open] {
+  flex-basis: 100%;
+}
+
+.pay-fold > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0.6rem 1rem;
+  list-style: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.94rem;
+}
+
+.pay-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pay-fold > summary::after {
+  content: "+";
+  font: 500 1.15rem / 1 var(--mono);
+  color: var(--muted);
+}
+
+.pay-fold[open] > summary::after {
+  content: "−";
+}
+
+.pay-fold > summary:hover {
+  background: var(--surface-sunk);
+}
+
+.pay-fold > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pay-fold[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.pay-fold > :not(summary) {
+  padding: 1rem;
+}
+
+#ledger > .pay-fold {
+  margin-top: 1.25rem;
+}
+
+.pay-expense-fields {
+  display: grid;
+  gap: 0 1rem;
+}
+
+@media (min-width: 48rem) {
+  .pay-expense-fields {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+}
+
+.pay-deleted {
+  list-style: none;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pay-deleted li {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+}
+
+.pay-deleted .muted {
+  font-size: 0.82rem;
+}
+
+.pay-empty-month {
+  margin: 1rem 0;
+}
+
+/* Several rows ticked: what they add up to, and the one thing to do with them. */
+.pay-selection {
+  position: sticky;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-top: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--pane-shadow-lift);
+}
+
+.pay-selection .muted {
+  margin-left: 0.25rem;
+}
+
+/* ----------------------------------------------------------- bulk add */
+
+.pay-bulk textarea {
+  min-height: 9rem;
+  font: 400 max(0.9rem, 16px) / 1.5 var(--mono);
+}
+
+.pay-bulk-summary {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.pay-bulk-preview {
+  margin-top: 0.5rem;
+}
+
+.pay-import tr.is-error {
+  background: color-mix(in srgb, var(--danger-wash) 60%, transparent);
+}
+
+.pay-row-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  white-space: normal;
+}
+
+.pay-raw {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+
+.pay-bulk-foot {
+  margin-top: 1rem;
+}
+
+.pay-sync {
+  margin-top: var(--stack);
+}
