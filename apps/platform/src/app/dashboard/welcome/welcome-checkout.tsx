@@ -151,8 +151,9 @@ export function WelcomeCheckout({
                 {nudge && (
                   <div className="notice notice-info welcome-nudge">
                     <p>
-                      {nudge.planName} includes {chosenAddOns.length === 1 ? "that" : "those"} for{" "}
-                      {formatMoney(nudge.savesCents)} a month less.
+                      {nudge.planName} includes {chosenAddOns.length === 1 ? "that add-on" : "these add-ons"}, for{" "}
+                      {formatMoney(nudge.savesCents)} a month less than adding{" "}
+                      {chosenAddOns.length === 1 ? "it" : "them"} to {chosenPlan?.name ?? "your plan"}.
                     </p>
                     <button type="button" className="secondary small" onClick={() => setPlanKey(nudge.planKey)}>
                       Switch to {nudge.planName}
