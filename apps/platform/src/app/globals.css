@@ -4125,12 +4125,16 @@ form + .field-hint {
 }
 
 .lead-contact .button {
-  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 /* The address in its own case and face: in the button's spaced-out capitals a
-   long one wrapped over four lines and was hard to check by eye. */
+   long one wrapped over four lines and was hard to check by eye. Only the
+   address may break anywhere — on the whole button that let the word "Email"
+   collapse to a letter per line. */
 .lead-contact-address {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font: 500 0.9rem / 1.35 var(--font);
   letter-spacing: 0;
   text-transform: none;
