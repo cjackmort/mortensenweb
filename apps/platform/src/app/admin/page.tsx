@@ -8,7 +8,7 @@ import {
   listAllChangeRequests,
   listClientsWithPrimarySite,
 } from "@/db/repositories/admin/clients";
-import { listOverduePaymentRequests } from "@/db/repositories/admin/billing";
+import { paymentsOverview } from "@/db/repositories/admin/payments-overview";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
 import { formatCurrency } from "@/lib/payments/venmo";
 
@@ -48,19 +48,18 @@ export default async function AdminOverview() {
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const [clients, requests, moneyQueue] = await Promise.all([
+  const [clients, requests, money] = await Promise.all([
     listClientsWithPrimarySite(ctx, db),
     listAllChangeRequests(ctx, db, { limit: 100 }),
-    listOverduePaymentRequests(ctx, db),
+    paymentsOverview(ctx, db),
   ]);
 
   const openRequests = requests.filter((r) => isOpen(r.status));
-  // One money tile, matching Payments: a client who says they paid is still
-  // unpaid until it is marked paid there, so they count as overdue, flagged.
-  const saidPaid = moneyQueue.filter((r) => r.awaitingConfirmation).length;
-  const owed = moneyQueue.reduce((sum, r) => sum + r.amountCents, 0);
+  // The same figures as the top of Payments, from the same read, so the two
+  // pages can never disagree about who is late.
+  const { overdueCents, overdueClients, saysPaidCount } = money.totals;
 
-  const needsAttention = moneyQueue.length + openRequests.length;
+  const needsAttention = money.overdue.length + openRequests.length;
 
   return (
     <>
@@ -81,12 +80,12 @@ export default async function AdminOverview() {
           <div className="grid grid-2">
             <Tile
               label="Overdue"
-              value={formatCurrency(owed)}
-              note={`${moneyQueue.length} invoice${moneyQueue.length === 1 ? "" : "s"}${
-                saidPaid > 0 ? ` · ${saidPaid} say${saidPaid === 1 ? "s" : ""} they paid` : ""
+              value={formatCurrency(overdueCents)}
+              note={`${overdueClients} client${overdueClients === 1 ? "" : "s"} late${
+                saysPaidCount > 0 ? ` · ${saysPaidCount} say${saysPaidCount === 1 ? "s" : ""} they paid` : ""
               }`}
-              href="/admin/payments"
-              tone={moneyQueue.length > 0 ? "pill-danger" : undefined}
+              href="/admin/payments#overdue"
+              tone={money.overdue.length > 0 ? "pill-danger" : undefined}
             />
             <Tile
               label="Open requests"
