@@ -36,6 +36,8 @@ export async function GET(
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
   const { provider } = await params;
   if (!isConnectionProvider(provider)) return new Response(null, { status: 404 });
+  const adapter = providerAdapter(provider);
+  if (adapter.connectWith !== "oauth") return new Response(null, { status: 404 });
   if (user.role !== "client" || !user.organizationId || user.viewingAs) return back(request, provider, "not_allowed");
 
   const url = new URL(request.url);
@@ -58,7 +60,7 @@ export async function GET(
   const db = await getDb();
   const ctx = tenantContextFrom(user, user.organizationId);
   try {
-    const grant = await providerAdapter(provider).complete({ code, codeVerifier: check.value.codeVerifier });
+    const grant = await adapter.complete({ code, codeVerifier: check.value.codeVerifier });
     await completeConnect(db, ctx, provider, grant);
   } catch (error) {
     console.error("[connections] connect failed", {

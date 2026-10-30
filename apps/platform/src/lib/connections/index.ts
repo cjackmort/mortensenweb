@@ -15,20 +15,16 @@ import {
   revokeGoogle,
 } from "./providers/google";
 import { checkCalendar, exchangeCalendarCode, googleCalendarConfig, CALENDAR_REQUESTED_SCOPES } from "./providers/google-calendar";
-import {
-  auditStripe,
-  deauthorizeStripe,
-  exchangeStripeCode,
-  fetchStripeSnapshot,
-  stripeAuthorizationUrl,
-  stripeConnectConfig,
-} from "./providers/stripe";
+import { acceptStripeKey, auditStripe, checkStripeKey, fetchStripeSnapshot, stripeForKey } from "./providers/stripe";
 import { connectionTokenKey } from "./seal";
-import { auditWindow, type AuditOutcome, type ProviderGrant, type ProviderTokens } from "./types";
+import { auditWindow, ProviderError, type AuditOutcome, type ProviderGrant, type ProviderTokens } from "./types";
 
 /**
- * The providers behind one shape, so the routes, the repository and the page
- * never branch on which one they hold.
+ * The providers behind one shape, so the routes, the repository and the
+ * report never branch on which one they hold. Only how a client connects
+ * differs: Google, Google Calendar and Instagram send them to a consent
+ * screen (`oauth`), Stripe asks for a restricted key they make themselves
+ * (`key`).
  *
  * Each is "available" only when its keys are set. The page still shows the
  * card for an unavailable one — what it would look at, and that it is not
@@ -58,7 +54,7 @@ export interface AuditContext {
   fetchImpl?: typeof fetch;
 }
 
-export interface ProviderAdapter {
+interface AdapterBase {
   key: ConnectionProvider;
   name: string;
   /** What the client is connecting, in their words. */
@@ -69,9 +65,6 @@ export interface ProviderAdapter {
   never: string;
   /** Set up on this server? Missing names the env vars, for the operator. */
   configured(): { ok: true } | { ok: false; missing: string[] };
-  /** Where to send the client; PKCE verifier where the provider uses one. */
-  begin(input: { state: string }): Promise<{ url: string; codeVerifier: string }>;
-  complete(input: { code: string; codeVerifier: string }): Promise<ProviderGrant>;
   audit(tokens: ProviderTokens, context: AuditContext): Promise<AuditOutcome>;
   /** Tell the provider the access is over. Best effort; the row is revoked either way. */
   revoke(tokens: ProviderTokens): Promise<void>;
@@ -86,13 +79,34 @@ export function connectionHome(provider: ConnectionProvider): string {
   return PROVIDERS[provider].home ?? CONNECTIONS_HOME;
 }
 
+export interface OAuthAdapter extends AdapterBase {
+  connectWith: "oauth";
+  /** Where to send the client; PKCE verifier where the provider uses one. */
+  begin(input: { state: string }): Promise<{ url: string; codeVerifier: string }>;
+  complete(input: { code: string; codeVerifier: string }): Promise<ProviderGrant>;
+}
+
+export interface KeyAdapter extends AdapterBase {
+  connectWith: "key";
+  /**
+   * Check a pasted key and read with it once. A `ProviderError` of kind
+   * `invalid` carries a message meant for the client; it never contains the key.
+   */
+  acceptKey(raw: string): Promise<ProviderGrant>;
+  /** What the client should do at the provider once disconnected, since we cannot do it for them. */
+  afterDisconnect: string;
+}
+
+export type ProviderAdapter = OAuthAdapter | KeyAdapter;
+
 /** The key every token needs, checked alongside each provider's own keys. */
 function sealKeyMissing(): string[] {
   return connectionTokenKey() ? [] : ["CONNECTION_TOKEN_KEY"];
 }
 
-const stripe: ProviderAdapter = {
+const stripe: KeyAdapter = {
   key: "stripe",
+  connectWith: "key",
   name: "Stripe",
   what: "the Stripe account your customers pay into",
   looksAt: [
@@ -101,35 +115,33 @@ const stripe: ProviderAdapter = {
     "Whether payouts are on and Stripe is waiting on anything",
     "What customers see on their statement and receipts",
   ],
-  never: "Read-only. We cannot move money, refund, or change anything in your Stripe account.",
+  never: "Read-only: the key you make for us can only read. We cannot move money, refund, or change anything in your Stripe account.",
+  afterDisconnect: "Expire the MortensenWeb key in Stripe as well: Developers, API keys, then the key's menu, Expire key.",
   configured() {
-    const check = stripeConnectConfig();
-    return check.ok ? { ok: true } : { ok: false, missing: check.missing };
+    const missing = sealKeyMissing();
+    return missing.length === 0 ? { ok: true } : { ok: false, missing };
   },
-  async begin({ state }) {
-    const check = stripeConnectConfig();
-    if (!check.ok) throw new Error("Stripe Connect is not configured.");
-    return {
-      url: stripeAuthorizationUrl({ clientId: check.clientId, redirectUri: callbackUrl("stripe"), state }),
-      codeVerifier: "",
-    };
-  },
-  complete({ code }) {
-    return exchangeStripeCode(code);
+  async acceptKey(raw) {
+    const check = checkStripeKey(raw);
+    if (!check.ok) throw new ProviderError("invalid", check.message);
+    return acceptStripeKey(check.key);
   },
   async audit(tokens, context) {
+    if (!tokens.accessToken) throw new ProviderError("auth", "No Stripe key is kept for this account. Connect it again.");
     const window = auditWindow(context.now);
-    const snapshot = await fetchStripeSnapshot(tokens.externalId, window);
+    const snapshot = await fetchStripeSnapshot(window, { stripe: stripeForKey(tokens.accessToken) });
     return { audit: auditStripe(snapshot, { ...window, siteHost: context.siteHost, now: context.now }) };
   },
-  async revoke(tokens) {
-    const check = stripeConnectConfig();
-    if (check.ok) await deauthorizeStripe(tokens.externalId, check.clientId);
+  async revoke() {
+    // Nothing to call: a restricted key can only be deleted in the client's
+    // own dashboard. Clearing the sealed copy ends our access; the page tells
+    // the client to delete the key too.
   },
 };
 
-const google: ProviderAdapter = {
+const google: OAuthAdapter = {
   key: "google",
+  connectWith: "oauth",
   name: "Google Search Console",
   what: "the Google account that owns your site in Search Console",
   looksAt: [
@@ -169,8 +181,9 @@ const google: ProviderAdapter = {
   },
 };
 
-const instagram: ProviderAdapter = {
+const instagram: OAuthAdapter = {
   key: "instagram",
+  connectWith: "oauth",
   name: "Instagram",
   what: "your Instagram business or creator account",
   looksAt: [
@@ -209,8 +222,9 @@ const instagram: ProviderAdapter = {
   },
 };
 
-const googleCalendar: ProviderAdapter = {
+const googleCalendar: OAuthAdapter = {
   key: "google_calendar",
+  connectWith: "oauth",
   name: "Google Calendar",
   what: "the Google Calendar you keep your appointments in",
   looksAt: ["When you are busy, so your website does not offer those times"],
@@ -256,10 +270,4 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderAdapter> = {
 
 export function providerAdapter(provider: ConnectionProvider): ProviderAdapter {
   return PROVIDERS[provider];
-}
-
-/** Where a provider sends the client back. Must be registered with the provider exactly. */
-export function callbackUrl(provider: ConnectionProvider): string {
-  const base = (process.env.AUTH_URL ?? "").trim().replace(/\/$/, "");
-  return `${base}/api/connections/${provider}/callback`;
 }

@@ -28,6 +28,8 @@ export async function GET(
   }
 
   const adapter = providerAdapter(provider);
+  // A provider connected by key has no consent screen to send anyone to.
+  if (adapter.connectWith !== "oauth") return new Response(null, { status: 404 });
   if (!adapter.configured().ok) {
     return NextResponse.redirect(new URL(`${connectionHome(provider)}?connect=${provider}:not_configured`, request.url));
   }
