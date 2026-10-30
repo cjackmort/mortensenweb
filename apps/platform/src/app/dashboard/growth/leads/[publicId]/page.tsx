@@ -240,7 +240,7 @@ export default async function LeadPage({
               )}
               {lead.email && (
                 <a className={`button${telHref ? " secondary" : ""}`} href={mailtoHref(emptyDraft)}>
-                  Email {lead.email}
+                  Email <span className="lead-contact-address">{lead.email}</span>
                 </a>
               )}
             </div>

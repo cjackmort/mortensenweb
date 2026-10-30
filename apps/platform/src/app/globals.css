@@ -1035,9 +1035,12 @@ tbody tr:last-child td {
     border-bottom: none;
   }
 
+  /* Baseline-aligned, so the small mono label sits on the same line as its
+     value instead of riding above it. */
   table.stack td {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
     gap: 1rem;
     padding: 0.2rem 0;
     border: none;
@@ -4123,6 +4126,14 @@ form + .field-hint {
 
 .lead-contact .button {
   overflow-wrap: anywhere;
+}
+
+/* The address in its own case and face: in the button's spaced-out capitals a
+   long one wrapped over four lines and was hard to check by eye. */
+.lead-contact-address {
+  font: 500 0.9rem / 1.35 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .lead-message {

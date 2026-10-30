@@ -103,7 +103,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                       {c.suppressed && <span className="pill pill-warning">{SUPPRESSED[c.suppressed] ?? c.suppressed}</span>}
                     </td>
                     <td data-label="How">{c.howBecameCustomer}</td>
-                    <td data-label="Last job">{c.lastJobOn ? formatDateWithYear(`${c.lastJobOn}T12:00:00Z`) : "—"}</td>
+                    <td data-label="Last job" className="nowrap">
+                      {c.lastJobOn ? formatDateWithYear(`${c.lastJobOn}T12:00:00Z`) : "—"}
+                    </td>
                     <td data-label="">
                       <form action={removeContactAction}>
                         <input type="hidden" name="contact" value={c.publicId} />
