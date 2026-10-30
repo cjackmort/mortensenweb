@@ -156,6 +156,13 @@ export interface ConfirmPaymentInput {
   provider?: string;
   providerReference?: string;
   receiptUrl?: string | null;
+  /**
+   * What actually arrived, when the operator says it differs from the
+   * invoice: a client who sent $20 of $25 by Venmo. The ledger records the
+   * money, not the ask; the invoice is settled either way, because "Mark
+   * paid" is the operator saying this one is done. Defaults to the invoice.
+   */
+  amountCents?: number;
 }
 
 export async function confirmPaymentReceived(
@@ -204,6 +211,14 @@ export async function confirmPaymentReceived(
     return { ok: false, reason: "not_confirmable" };
   }
 
+  if (
+    input.amountCents !== undefined &&
+    (!Number.isInteger(input.amountCents) || input.amountCents <= 0)
+  ) {
+    throw new Error("Amount must be a positive whole number of cents.");
+  }
+  const receivedCents = input.amountCents ?? request.amountCents;
+
   const now = new Date();
 
   // The ledger row comes first so the request can point at it, but it carries
@@ -230,7 +245,7 @@ export async function confirmPaymentReceived(
         publicId: newPublicId(),
         clientId: request.clientId,
         subscriptionId: request.subscriptionId,
-        amountCents: request.amountCents,
+        amountCents: receivedCents,
         currency: request.currency,
         method: input.method,
         provider: input.provider ?? null,
@@ -302,6 +317,7 @@ export async function confirmPaymentReceived(
     entityId: requestPublicId,
     metadata: {
       amountCents: request.amountCents,
+      receivedCents,
       method: input.method,
       receivedOn: input.receivedOn,
     },
