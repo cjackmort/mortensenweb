@@ -117,9 +117,11 @@ export function LedgerSection({
       <MonthTotals totals={summary.month} />
       <p className="pay-year">
         {year}
-        {soFar}: {formatCurrency(summary.year.incomeCents)} in,{" "}
-        {formatCurrency(summary.year.feesCents + summary.year.expensesCents)} out,{" "}
-        {signed(summary.year.profitCents)} profit.
+        {soFar}: <span className="pay-nowrap">{formatCurrency(summary.year.incomeCents)} in</span>,{" "}
+        <span className="pay-nowrap">
+          {formatCurrency(summary.year.feesCents + summary.year.expensesCents)} out
+        </span>
+        , <span className="pay-nowrap">{signed(summary.year.profitCents)} profit</span>.
       </p>
 
       <div className="pay-tools">

@@ -157,7 +157,10 @@ export function MarkPaidForm({
       <p className="pay-dialog-lede">
         {invoiceLine(invoice)}
         {invoice.saysPaid && invoice.saysPaidLabel && (
-          <> They said they paid on {invoice.saysPaidLabel}.</>
+          <>
+            <br />
+            They said they paid on {invoice.saysPaidLabel}.
+          </>
         )}
       </p>
       <Failure state={state} />

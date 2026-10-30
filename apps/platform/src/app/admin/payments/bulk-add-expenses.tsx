@@ -86,7 +86,7 @@ function PreviewTable({
               <td data-label="Line">{row.line}</td>
               {row.ok ? (
                 <>
-                  <td data-label="Date">{row.occurredOn}</td>
+                  <td data-label="Date" className="pay-nowrap">{row.occurredOn}</td>
                   <td data-label="What">
                     {row.description}
                     {row.note && <span className="muted"> · {row.note}</span>}

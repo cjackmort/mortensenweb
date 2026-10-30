@@ -971,3 +971,7 @@
     flex: 1 1 auto;
   }
 }
+
+.pay-nowrap {
+  white-space: nowrap;
+}
