@@ -96,7 +96,7 @@ const stripe: KeyAdapter = {
     "What customers see on their statement and receipts",
   ],
   never: "Read-only: the key you make for us can only read. We cannot move money, refund, or change anything in your Stripe account.",
-  afterDisconnect: "Delete the MortensenWeb key in Stripe under Developers, API keys, as well.",
+  afterDisconnect: "Expire the MortensenWeb key in Stripe as well: Developers, API keys, then the key's menu, Expire key.",
   configured() {
     const missing = sealKeyMissing();
     return missing.length === 0 ? { ok: true } : { ok: false, missing };

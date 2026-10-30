@@ -28,18 +28,19 @@ export async function disconnectAction(
   const provider = String(formData.get("provider") ?? "");
   if (!isConnectionProvider(provider)) return { ok: false, message: "Unknown account." };
 
+  let gone: boolean;
   try {
-    const gone = await disconnect(session.db, session.ctx, provider);
-    revalidatePath("/dashboard/connections");
-    const adapter = providerAdapter(provider);
-    const after = adapter.connectWith === "key" ? ` ${adapter.afterDisconnect}` : "";
-    return gone
-      ? { ok: true, message: `${adapter.name} is disconnected. Nothing from it will be in your next report.${after}` }
-      : { ok: false, message: "That account was not connected." };
+    gone = await disconnect(session.db, session.ctx, provider);
   } catch (error) {
     if (error instanceof AuthorizationError) return { ok: false, message: READ_ONLY };
     throw error;
   }
+  if (!gone) return { ok: false, message: "That account was not connected." };
+
+  // The buttons this message would sit under go with the connected card, so
+  // the outcome goes to the page's notice instead, where it survives the redraw.
+  revalidatePath("/dashboard/connections");
+  redirect(`/dashboard/connections?connect=${provider}:disconnected`);
 }
 
 export async function auditNowAction(

@@ -39,6 +39,7 @@ const OUTCOMES: Record<string, { tone: "success" | "info" | "warning"; text: str
   failed: { tone: "warning", text: "The connection couldn't be completed. Try again, and let us know if it keeps happening." },
   not_configured: { tone: "info", text: "That account can't be connected yet. We will switch it on and let you know." },
   not_allowed: { tone: "info", text: "Connections are made by the client themselves, not while viewing as them." },
+  disconnected: { tone: "success", text: "Disconnected. Nothing from it will be in your next report." },
 };
 
 const SEVERITY: Record<Finding["severity"], { label: string; pill: string }> = {
@@ -76,6 +77,10 @@ export default async function ConnectionsPage({
   const { connect } = await searchParams;
   const outcome = parseOutcome(connect);
   const notice = outcome ? OUTCOMES[outcome.outcome] : null;
+  // A key the client made is theirs to delete; say so where they will see it.
+  const adapter = outcome ? PROVIDERS[outcome.provider] : null;
+  const afterward =
+    outcome?.outcome === "disconnected" && adapter?.connectWith === "key" ? ` ${adapter.afterDisconnect}` : "";
 
   return (
     <main className="shell">
@@ -93,6 +98,7 @@ export default async function ConnectionsPage({
       {notice && outcome && (
         <p className={`notice notice-${notice.tone}`} role="status">
           <strong>{PROVIDERS[outcome.provider].name}:</strong> {notice.text}
+          {afterward}
         </p>
       )}
 

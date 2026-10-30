@@ -68,7 +68,7 @@ export function StripeKeyForm({ permissions, reconnect }: { permissions: readonl
         aria-invalid={state && !state.ok ? true : undefined}
       />
       <p className="field-hint" id="stripe-key-hint">
-        We keep it encrypted and only ever read with it. Delete it in Stripe at any time and the connection stops.
+        We keep it encrypted and only ever read with it. Expire it in Stripe at any time and the connection stops.
       </p>
       <button type="submit" disabled={pending}>
         {pending ? "Checking the key…" : reconnect ? "Reconnect Stripe" : "Connect Stripe"}
