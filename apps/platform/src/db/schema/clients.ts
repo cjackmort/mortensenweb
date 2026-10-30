@@ -159,6 +159,15 @@ export const clients = pgTable(
     isInternal: boolean("is_internal").notNull().default(false),
 
     /**
+     * What kind of site this is, chosen by the operator when adding the
+     * client. Each one opens a section of the portal: a booking portal gets
+     * "Set your availability", a store gets the online shop. Both may be on.
+     * Off by default, so every existing client keeps the portal they have.
+     */
+    bookingEnabled: boolean("booking_enabled").notNull().default(false),
+    shopEnabled: boolean("shop_enabled").notNull().default(false),
+
+    /**
      * How much media this client may store, in bytes.
      *
      * Null means the platform default (`DEFAULT_STORAGE_QUOTA_BYTES` in

@@ -302,6 +302,13 @@
       "when": 1791500000000,
       "tag": "0042_search_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0043_client_sections",
+      "breakpoints": true
     }
   ]
 }

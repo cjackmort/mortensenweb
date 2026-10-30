@@ -3,6 +3,7 @@ import { signOut } from "@/auth";
 import { switchBackToAdmin, switchToMortensenWeb } from "@/app/client-view/actions";
 import { closeClientView } from "@/lib/auth/client-view-cookie";
 import type { AuthenticatedUser } from "@/lib/auth/session";
+import { NO_CLIENT_SECTIONS, type ClientSections } from "@/db/repositories/client/sections";
 import { NavLinks, type NavItem } from "./nav-links";
 import { UserAvatar } from "./user-avatar";
 import { PrivacyFooter } from "./privacy-link";
@@ -69,14 +70,37 @@ const CLIENT_NAV: NavItem[] = [
   { href: "/dashboard/billing", label: "Billing" },
 ];
 
+/**
+ * The client's tabs, with the optional sections in place: "Get started"
+ * first while setup is unfinished, then the sections the operator opened for
+ * this kind of site right after Growth.
+ */
+function clientNav(sections: ClientSections, unreadLeads: number): NavItem[] {
+  const optional: NavItem[] = [
+    ...(sections.availability ? [{ href: "/dashboard/availability", label: "Availability" }] : []),
+    ...(sections.shop ? [{ href: "/dashboard/growth/shop", label: "Shop" }] : []),
+  ];
+  const items = CLIENT_NAV.flatMap((item) =>
+    item.href === "/dashboard/growth"
+      ? [{ ...item, count: unreadLeads }, ...optional]
+      : [item],
+  );
+  return sections.getStarted
+    ? [{ href: "/dashboard/get-started", label: "Get started" }, ...items]
+    : items;
+}
+
 export function AppShell({
   user,
   unreadLeads = 0,
+  clientSections = NO_CLIENT_SECTIONS,
   children,
 }: {
   user: AuthenticatedUser;
   /** Shown on the Growth tab. Counted by the client layout; admins have no inbox. */
   unreadLeads?: number;
+  /** Which optional tabs this client has. Read by the client layout. */
+  clientSections?: ClientSections;
   children: React.ReactNode;
 }) {
   const isAdmin = user.role === "admin";
@@ -160,15 +184,7 @@ export function AppShell({
           </div>
         </div>
 
-        <NavLinks
-          items={
-            isAdmin
-              ? ADMIN_NAV
-              : CLIENT_NAV.map((item) =>
-                  item.href === "/dashboard/growth" ? { ...item, count: unreadLeads } : item,
-                )
-          }
-        />
+        <NavLinks items={isAdmin ? ADMIN_NAV : clientNav(clientSections, unreadLeads)} />
       </header>
 
       {children}
