@@ -15,6 +15,7 @@ import {
   type PaymentsTotals,
 } from "@/db/repositories/admin/payments-overview";
 import { stripeSyncStatus } from "@/db/repositories/admin/stripe-reconcile";
+import { freeBuildCandidates, writeOffsForYear } from "@/db/repositories/admin/write-offs";
 import { businessDate, currentPeriod } from "@/lib/billing/period";
 import { stripeConfigured } from "@/lib/payments/stripe";
 import { formatCurrency } from "@/lib/payments/venmo";
@@ -23,6 +24,7 @@ import { LedgerSection } from "./ledger-section";
 import { OverdueTable } from "./overdue-table";
 import { PaymentDialogs } from "./payment-dialogs";
 import { StripeSync } from "./stripe-sync";
+import { WriteOffsSection } from "./write-offs-section";
 import { monthName, plural } from "./format";
 import "./payments.css";
 
@@ -38,34 +40,48 @@ export const dynamic = "force-dynamic";
  * section of their own made the page about our data model instead of about
  * who has paid.
  */
+/**
+ * What the URL asks to see: the ledger month (`?month=YYYY-MM`) and the
+ * write-offs year (`?wyear=YYYY`). Anything else, or a period that has not
+ * happened yet, is the current one.
+ */
+function viewFrom(params: { month?: string; wyear?: string }, thisMonth: string) {
+  const month = params.month ?? "";
+  const year = params.wyear ?? "";
+  const thisYear = thisMonth.slice(0, 4);
+  return {
+    ledgerMonth: /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && month <= thisMonth ? month : thisMonth,
+    writeOffYear: Number(/^\d{4}$/.test(year) && year >= "2000" && year <= thisYear ? year : thisYear),
+  };
+}
+
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; wyear?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
 
-  // The ledger month, from `?month=YYYY-MM`. Anything else, or a month that
-  // has not happened yet, is this month.
   const thisMonth = currentMonth();
-  const requested = (await searchParams).month ?? "";
-  const ledgerMonth =
-    /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && requested <= thisMonth ? requested : thisMonth;
+  const { ledgerMonth, writeOffYear } = viewFrom(await searchParams, thisMonth);
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
   const range = monthRange(ledgerMonth);
-  const [overview, receivedThisMonth, summary, entries, deleted, stripeSync] = await Promise.all([
-    paymentsOverview(ctx, db),
-    sumPaymentsReceivedInMonth(ctx, db),
-    ledgerSummary(ctx, db, ledgerMonth),
-    ledgerEntries(ctx, db, range),
-    listDeletedLedgerRows(ctx, db, range),
-    stripeConfigured() ? stripeSyncStatus(db) : Promise.resolve(null),
-  ]);
+  const [overview, received, summary, entries, deleted, writeOffs, candidates, stripeSync] =
+    await Promise.all([
+      paymentsOverview(ctx, db),
+      sumPaymentsReceivedInMonth(ctx, db),
+      ledgerSummary(ctx, db, ledgerMonth),
+      ledgerEntries(ctx, db, range),
+      listDeletedLedgerRows(ctx, db, range),
+      writeOffsForYear(ctx, db, writeOffYear),
+      freeBuildCandidates(ctx, db),
+      stripeConfigured() ? stripeSyncStatus(db) : Promise.resolve(null),
+    ]);
 
   const today = businessDate();
   const thisYear = thisMonth.slice(0, 4);
@@ -79,7 +95,7 @@ export default async function AdminPaymentsPage({
       <PaymentDialogs today={today}>
         <Totals
           totals={overview.totals}
-          received={receivedThisMonth}
+          received={received}
           month={monthName(thisMonth).split(" ")[0] ?? "this month"}
         />
 
@@ -110,16 +126,24 @@ export default async function AdminPaymentsPage({
             portal: check Venmo for the reference, then mark it paid or not.
           </p>
         </section>
-      </PaymentDialogs>
 
-      <LedgerSection
-        yearMonth={ledgerMonth}
-        thisMonth={thisMonth}
-        today={today}
-        summary={summary}
-        entries={entries}
-        deleted={deleted}
-      />
+        <LedgerSection
+          yearMonth={ledgerMonth}
+          thisMonth={thisMonth}
+          today={today}
+          summary={summary}
+          entries={entries}
+          deleted={deleted}
+        />
+
+        <WriteOffsSection
+          summary={writeOffs}
+          candidates={candidates}
+          thisYear={thisYear}
+          today={today}
+          ledgerMonth={ledgerMonth === thisMonth ? null : ledgerMonth}
+        />
+      </PaymentDialogs>
 
       {stripeSync && <StripeSync status={stripeSync} />}
     </main>

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { MarkPaidForm, NotPaidForm, RecordPaymentForm, BillForm } from "./payment-forms";
+import { FreeBuildForm, RemoveFreeBuildForm } from "./write-off-forms";
 
 /**
  * One dialog for the whole page, opened by the buttons in each row.
@@ -53,7 +54,17 @@ export type DialogRequest =
       clientName: string;
       amountCents: number;
       dueOn: string;
-    };
+    }
+  | {
+      /** Add a site built for free (`clientPublicId` null: pick one) or edit one. */
+      kind: "free_build";
+      clientPublicId: string | null;
+      clientName: string;
+      candidates: { clientPublicId: string; organizationName: string }[];
+      valueCents: number;
+      builtOn: string;
+    }
+  | { kind: "free_build_remove"; clientPublicId: string; clientName: string; valueCents: number };
 
 const OpenDialog = createContext<(request: DialogRequest) => void>(() => {});
 
@@ -62,6 +73,8 @@ const TITLES: Record<DialogRequest["kind"], string> = {
   not_paid: "Not paid",
   record: "Record a payment",
   bill: "Send this month's bill",
+  free_build: "Site built for free",
+  free_build_remove: "Remove from write-offs",
 };
 
 /** A fresh key per opening: each opening gets clean forms and a new double-submit guard. */
@@ -91,6 +104,10 @@ function DialogBody({
       return <RecordPaymentForm request={request} today={today} formKey={formKey} close={close} />;
     case "bill":
       return <BillForm request={request} close={close} />;
+    case "free_build":
+      return <FreeBuildForm request={request} close={close} />;
+    case "free_build_remove":
+      return <RemoveFreeBuildForm request={request} close={close} />;
   }
 }
 

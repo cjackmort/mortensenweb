@@ -29,7 +29,7 @@ const METHODS = [
 ] as const;
 
 /** After a successful action: what happened, and a way out. */
-function Done({ message, close }: { message: string; close: () => void }) {
+export function Done({ message, close }: { message: string; close: () => void }) {
   return (
     <div className="pay-dialog-body">
       <p className="notice notice-success" role="status">
@@ -44,7 +44,7 @@ function Done({ message, close }: { message: string; close: () => void }) {
   );
 }
 
-function Failure({ state }: { state: PaymentActionResult | null }) {
+export function Failure({ state }: { state: PaymentActionResult | null }) {
   if (!state || state.ok) return null;
   return (
     <p className="error" role="alert">
@@ -53,7 +53,7 @@ function Failure({ state }: { state: PaymentActionResult | null }) {
   );
 }
 
-function Footer({
+export function Footer({
   pending,
   label,
   pendingLabel,
