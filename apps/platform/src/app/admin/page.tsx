@@ -8,7 +8,7 @@ import {
   listAllChangeRequests,
   listClientsWithPrimarySite,
 } from "@/db/repositories/admin/clients";
-import { listOverduePaymentRequests } from "@/db/repositories/admin/billing";
+import { paymentsOverview } from "@/db/repositories/admin/payments-overview";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
 import { formatCurrency } from "@/lib/payments/venmo";
 
@@ -48,18 +48,18 @@ export default async function AdminOverview() {
   const ctx = adminContextFrom(user);
   const db = await getDb();
 
-  const [clients, requests, moneyQueue] = await Promise.all([
+  const [clients, requests, money] = await Promise.all([
     listClientsWithPrimarySite(ctx, db),
     listAllChangeRequests(ctx, db, { limit: 100 }),
-    listOverduePaymentRequests(ctx, db),
+    paymentsOverview(ctx, db),
   ]);
 
   const openRequests = requests.filter((r) => isOpen(r.status));
-  const awaiting = moneyQueue.filter((r) => r.awaitingConfirmation);
-  const overdue = moneyQueue.filter((r) => !r.awaitingConfirmation);
-  const owed = overdue.reduce((sum, r) => sum + r.amountCents, 0);
+  // The same figures as the top of Payments, from the same read, so the two
+  // pages can never disagree about who is late.
+  const { overdueCents, overdueClients, saysPaidCount } = money.totals;
 
-  const needsAttention = awaiting.length + overdue.length + openRequests.length;
+  const needsAttention = money.overdue.length + openRequests.length;
 
   return (
     <>
@@ -74,23 +74,18 @@ export default async function AdminOverview() {
         {needsAttention === 0 ? (
           <p className="notice notice-success">
             <strong>Nothing needs you right now.</strong> No open requests, no
-            overdue invoices, nobody waiting on a confirmation.
+            overdue invoices.
           </p>
         ) : (
-          <div className="grid grid-3">
-            <Tile
-              label="Waiting on you"
-              value={String(awaiting.length)}
-              note="clients say they paid"
-              href="/admin/payments"
-              tone={awaiting.length > 0 ? "pill-warning" : undefined}
-            />
+          <div className="grid grid-2">
             <Tile
               label="Overdue"
-              value={formatCurrency(owed)}
-              note={`${overdue.length} invoice${overdue.length === 1 ? "" : "s"}`}
-              href="/admin/payments"
-              tone={overdue.length > 0 ? "pill-danger" : undefined}
+              value={formatCurrency(overdueCents)}
+              note={`${overdueClients} client${overdueClients === 1 ? "" : "s"} late${
+                saysPaidCount > 0 ? ` · ${saysPaidCount} say${saysPaidCount === 1 ? "s" : ""} they paid` : ""
+              }`}
+              href="/admin/payments#overdue"
+              tone={money.overdue.length > 0 ? "pill-danger" : undefined}
             />
             <Tile
               label="Open requests"

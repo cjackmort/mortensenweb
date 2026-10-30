@@ -1,4 +1,4 @@
-import { CONNECTION_PROVIDERS, type ConnectionProvider } from "@/db/schema/connections";
+import { CONNECTION_PROVIDERS as ALL_CONNECTION_PROVIDERS, type ConnectionProvider } from "@/db/schema/connections";
 import {
   auditInstagram,
   exchangeInstagramCode,
@@ -14,15 +14,17 @@ import {
   googleSearchConfig,
   revokeGoogle,
 } from "./providers/google";
+import { checkCalendar, exchangeCalendarCode, googleCalendarConfig, CALENDAR_REQUESTED_SCOPES } from "./providers/google-calendar";
 import { acceptStripeKey, auditStripe, checkStripeKey, fetchStripeSnapshot, stripeForKey } from "./providers/stripe";
 import { connectionTokenKey } from "./seal";
 import { auditWindow, ProviderError, type AuditOutcome, type ProviderGrant, type ProviderTokens } from "./types";
 
 /**
- * The three providers behind one shape, so the repository and the report
- * never branch on which one they hold. Only how a client connects differs:
- * Google and Instagram send them to a consent screen (`oauth`), Stripe asks
- * for a restricted key they make themselves (`key`).
+ * The providers behind one shape, so the routes, the repository and the
+ * report never branch on which one they hold. Only how a client connects
+ * differs: Google, Google Calendar and Instagram send them to a consent
+ * screen (`oauth`), Stripe asks for a restricted key they make themselves
+ * (`key`).
  *
  * Each is "available" only when its keys are set. The page still shows the
  * card for an unavailable one — what it would look at, and that it is not
@@ -30,10 +32,19 @@ import { auditWindow, ProviderError, type AuditOutcome, type ProviderGrant, type
  * learns it is wanted.
  */
 
-export { CONNECTION_PROVIDERS, type ConnectionProvider };
+export type { ConnectionProvider };
+
+/**
+ * The accounts on the Connections page and in the monthly report: the ones
+ * the portal audits and advises on. Google Calendar is not among them — it is
+ * connected from Availability, for busy times, and has nothing to report —
+ * but it is a provider all the same, so the start and callback routes, the
+ * daily check and disconnecting work for it unchanged.
+ */
+export const CONNECTION_PROVIDERS = ["stripe", "google", "instagram"] as const satisfies readonly ConnectionProvider[];
 
 export function isConnectionProvider(value: unknown): value is ConnectionProvider {
-  return typeof value === "string" && (CONNECTION_PROVIDERS as readonly string[]).includes(value);
+  return typeof value === "string" && (ALL_CONNECTION_PROVIDERS as readonly string[]).includes(value);
 }
 
 export interface AuditContext {
@@ -57,6 +68,15 @@ interface AdapterBase {
   audit(tokens: ProviderTokens, context: AuditContext): Promise<AuditOutcome>;
   /** Tell the provider the access is over. Best effort; the row is revoked either way. */
   revoke(tokens: ProviderTokens): Promise<void>;
+  /** The page the client connects it from, and returns to. The Connections page when unset. */
+  home?: string;
+}
+
+export const CONNECTIONS_HOME = "/dashboard/connections";
+
+/** Where a provider's connect flow sends the client back to. */
+export function connectionHome(provider: ConnectionProvider): string {
+  return PROVIDERS[provider].home ?? CONNECTIONS_HOME;
 }
 
 export interface OAuthAdapter extends AdapterBase {
@@ -202,7 +222,51 @@ const instagram: OAuthAdapter = {
   },
 };
 
-export const PROVIDERS: Record<ConnectionProvider, ProviderAdapter> = { stripe, google, instagram };
+const googleCalendar: OAuthAdapter = {
+  key: "google_calendar",
+  connectWith: "oauth",
+  name: "Google Calendar",
+  what: "the Google Calendar you keep your appointments in",
+  looksAt: ["When you are busy, so your website does not offer those times"],
+  never:
+    "Busy or free only. We cannot see what your events are, who is in them or where, and we cannot add, change or delete anything in your calendar.",
+  home: "/dashboard/availability",
+  configured() {
+    const check = googleCalendarConfig();
+    const missing = [...(check.ok ? [] : check.missing), ...sealKeyMissing()];
+    return missing.length === 0 ? { ok: true } : { ok: false, missing: [...new Set(missing)] };
+  },
+  async begin({ state }) {
+    const check = googleCalendarConfig();
+    if (!check.ok) throw new Error("Google Calendar is not configured.");
+    return googleAuthorization(check.config, state, CALENDAR_REQUESTED_SCOPES);
+  },
+  complete({ code, codeVerifier }) {
+    const check = googleCalendarConfig();
+    if (!check.ok) throw new Error("Google Calendar is not configured.");
+    return exchangeCalendarCode(check.config, code, codeVerifier);
+  },
+  async audit(tokens, context) {
+    const check = googleCalendarConfig();
+    if (!check.ok) throw new Error("Google Calendar is not configured.");
+    const { audit, update } = await checkCalendar(tokens, check.config, context);
+    return { audit, tokens: update };
+  },
+  revoke(tokens) {
+    // Google ends every grant this OAuth client holds for the account when
+    // any one of its tokens is revoked — Search Console's too, if the client
+    // connected it with the same Google account. Disconnecting from
+    // Availability checks for that and skips this call when it would.
+    return revokeGoogle(tokens);
+  },
+};
+
+export const PROVIDERS: Record<ConnectionProvider, ProviderAdapter> = {
+  stripe,
+  google,
+  instagram,
+  google_calendar: googleCalendar,
+};
 
 export function providerAdapter(provider: ConnectionProvider): ProviderAdapter {
   return PROVIDERS[provider];

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -6,8 +5,9 @@ import { NotFoundError, tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { getCampaign, sendingIdentity } from "@/db/repositories/client/winback-campaigns";
 import { countReachable, listContacts } from "@/db/repositories/client/winback-contacts";
-import { MISSING_MESSAGE, winbackSenderAddress } from "@/lib/winback/readiness";
+import { winbackSenderAddress } from "@/lib/winback/readiness";
 import { businessTimeZone, formatDateTime, formatDateWithYear } from "@/lib/time";
+import { MissingReason } from "../missing";
 import { CampaignResults, CampaignStatusPill, EmailPreview } from "../parts";
 import { CampaignEditor } from "./editor";
 import { CancelCampaignForm } from "./cancel-form";
@@ -66,9 +66,6 @@ export default async function CampaignPage({
 
   return (
     <main className="shell">
-      <p className="lead-back">
-        <Link href="/dashboard/growth/winback">← Win-back emails</Link>
-      </p>
       <div className="masthead">
         <h1>{campaign.name}</h1>
         <span>
@@ -91,7 +88,7 @@ export default async function CampaignPage({
           reachable={reachable}
           blocked={
             !identity.ready
-              ? MISSING_MESSAGE[identity.missing[0]!]
+              ? <MissingReason missing={identity.missing[0]!} />
               : reachable === 0
                 ? "Add customers to your list before approving."
                 : null

@@ -1,14 +1,13 @@
 import Link from "next/link";
-import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { winbackOverview } from "@/db/repositories/client/winback-campaigns";
-import { MISSING_MESSAGE } from "@/lib/winback/readiness";
 import { businessTimeZone, formatDate } from "@/lib/time";
 import { createDraftAction } from "./actions";
+import { MissingReason } from "./missing";
 import { CampaignStatusPill, resultsLine } from "./parts";
 import "./winback.css";
 
@@ -47,7 +46,6 @@ export default async function WinbackPage() {
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Win-back emails</h1>
         <span>Seasonal reminders and offers to your past customers</span>
@@ -60,7 +58,9 @@ export default async function WinbackPage() {
           </p>
           <ul style={{ margin: "0.4rem 0 0" }}>
             {overview.readiness.missing.map((m) => (
-              <li key={m}>{MISSING_MESSAGE[m]}</li>
+              <li key={m}>
+                <MissingReason missing={m} />
+              </li>
             ))}
           </ul>
         </div>

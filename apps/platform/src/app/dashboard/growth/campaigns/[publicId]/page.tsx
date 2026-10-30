@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { BarList } from "@/components/charts";
@@ -65,9 +64,6 @@ export default async function CampaignPage({
             {campaign.placementLabel} · {campaign.siteName}
           </span>
         </h1>
-        <span>
-          <Link href="/dashboard/growth/campaigns">← Campaigns</Link>
-        </span>
       </div>
 
       {created === "1" && (

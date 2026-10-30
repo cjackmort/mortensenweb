@@ -1,380 +1,190 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
-import { discountApplies } from "@/lib/payments/promos";
-import {
-  listClientBillingStatus,
-  listOverduePaymentRequests,
-} from "@/db/repositories/admin/billing";
 import {
   currentMonth,
   ledgerEntries,
   ledgerSummary,
-  listActiveSubscriptions,
   monthRange,
   sumPaymentsReceivedInMonth,
 } from "@/db/repositories/admin/finance";
-import { formatCurrency } from "@/lib/payments/venmo";
-import { DEFAULT_DUNNING_CONFIG } from "@/lib/billing/dunning";
+import { listDeletedLedgerRows } from "@/db/repositories/admin/ledger-deletes";
 import {
-  stripeSyncStatus,
-  type StripeSyncStatus,
-} from "@/db/repositories/admin/stripe-reconcile";
+  paymentsOverview,
+  type PaymentsTotals,
+} from "@/db/repositories/admin/payments-overview";
+import { stripeSyncStatus } from "@/db/repositories/admin/stripe-reconcile";
+import { freeBuildCandidates, writeOffsForYear } from "@/db/repositories/admin/write-offs";
+import { businessDate, currentPeriod } from "@/lib/billing/period";
 import { stripeConfigured } from "@/lib/payments/stripe";
-import { MonthlyBillingTable } from "./monthly-billing";
+import { formatCurrency } from "@/lib/payments/venmo";
+import { ClientsTable } from "./clients-table";
 import { LedgerSection } from "./ledger-section";
+import { OverdueTable } from "./overdue-table";
+import { PaymentDialogs } from "./payment-dialogs";
+import { StripeSync } from "./stripe-sync";
+import { WriteOffsSection } from "./write-offs-section";
+import { monthName, plural } from "./format";
+import "./payments.css";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The money queue.
+ * Money, on one page, in the order the operator asks about it: how much came
+ * in, who pays how, who owes, and the books.
  *
- * Two lists, and the split is the whole point. "Waiting on you" holds clients
- * who have said they paid — those are a task for *us*, not a debt, and must
- * never be chased. "Overdue" is the actual chase list.
- *
- * Mixing them would eventually produce the one failure the plan calls out
- * explicitly: an overdue email sent to someone who already paid.
+ * There is no "Waiting on you" section any more. A client who said they paid
+ * is on the overdue list with a "Says they paid" badge and the same two
+ * buttons as everyone else — they are a task, and the badge says so, but a
+ * section of their own made the page about our data model instead of about
+ * who has paid.
  */
+/**
+ * What the URL asks to see: the ledger month (`?month=YYYY-MM`) and the
+ * write-offs year (`?wyear=YYYY`). Anything else, or a period that has not
+ * happened yet, is the current one.
+ */
+function viewFrom(params: { month?: string; wyear?: string }, thisMonth: string) {
+  const month = params.month ?? "";
+  const year = params.wyear ?? "";
+  const thisYear = thisMonth.slice(0, 4);
+  return {
+    ledgerMonth: /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && month <= thisMonth ? month : thisMonth,
+    writeOffYear: Number(/^\d{4}$/.test(year) && year >= "2000" && year <= thisYear ? year : thisYear),
+  };
+}
+
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; wyear?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
 
-  // The ledger month, from `?month=YYYY-MM`. Anything else, or a month that
-  // has not happened yet, is this month.
   const thisMonth = currentMonth();
-  const requested = (await searchParams).month ?? "";
-  const ledgerMonth =
-    /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && requested <= thisMonth ? requested : thisMonth;
+  const { ledgerMonth, writeOffYear } = viewFrom(await searchParams, thisMonth);
 
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [rows, billingStatus, activeSubscriptions, receivedThisMonth, summary, entries, stripeSync] =
+  const range = monthRange(ledgerMonth);
+  const [overview, received, summary, entries, deleted, writeOffs, candidates, stripeSync] =
     await Promise.all([
-      listOverduePaymentRequests(ctx, db),
-      listClientBillingStatus(ctx, db),
-      listActiveSubscriptions(ctx, db),
+      paymentsOverview(ctx, db),
       sumPaymentsReceivedInMonth(ctx, db),
       ledgerSummary(ctx, db, ledgerMonth),
-      ledgerEntries(ctx, db, monthRange(ledgerMonth)),
+      ledgerEntries(ctx, db, range),
+      listDeletedLedgerRows(ctx, db, range),
+      writeOffsForYear(ctx, db, writeOffYear),
+      freeBuildCandidates(ctx, db),
       stripeConfigured() ? stripeSyncStatus(db) : Promise.resolve(null),
     ]);
 
-  const awaiting = rows.filter((r) => r.awaitingConfirmation);
-  const overdue = rows
-    .filter((r) => !r.awaitingConfirmation)
-    .sort((a, b) => b.daysOverdue - a.daysOverdue);
-
-  const owed = overdue.reduce((sum, r) => sum + r.amountCents, 0);
-  const pending = awaiting.reduce((sum, r) => sum + r.amountCents, 0);
+  const today = businessDate();
+  const thisYear = thisMonth.slice(0, 4);
 
   return (
-    <>
-      <main className="shell">
-        <div className="masthead">
-          <h1>Payments</h1>
-        </div>
+    <main className="shell pay-page">
+      <div className="masthead">
+        <h1>Payments</h1>
+      </div>
 
-        <div className="grid grid-4">
-          <div className="stat">
-            <p className="stat-label">Received this month</p>
-            <p className="stat-value">{formatCurrency(receivedThisMonth)}</p>
-            <p className="stat-note">confirmed payments only</p>
-          </div>
-          <div className="stat">
-            <p className="stat-label">Awaiting your confirmation</p>
-            <p className="stat-value">{formatCurrency(pending)}</p>
-            <p className="stat-note">
-              {awaiting.length} client{awaiting.length === 1 ? "" : "s"} say they
-              paid
-            </p>
-          </div>
-          <div className="stat">
-            <p className="stat-label">Overdue</p>
-            <p className="stat-value">{formatCurrency(owed)}</p>
-            <p className="stat-note">
-              {overdue.length} invoice{overdue.length === 1 ? "" : "s"} past due
-            </p>
-          </div>
-          <div className="stat">
-            <p className="stat-label">Work pauses at</p>
-            <p className="stat-value">{DEFAULT_DUNNING_CONFIG.pauseManagementDays}d</p>
-            <p className="stat-note">hosting is never affected</p>
-          </div>
-        </div>
+      <PaymentDialogs today={today}>
+        <Totals
+          totals={overview.totals}
+          received={received}
+          month={monthName(thisMonth).split(" ")[0] ?? "this month"}
+        />
 
-        {stripeSync && <StripeSyncCard status={stripeSync} />}
-
-        <section className="card">
+        <section className="card" id="clients">
           <div className="card-head">
-            <h2>Active subscriptions</h2>
-            <span className="muted">{activeSubscriptions.length}</span>
+            <h2>Clients</h2>
+            <span className="muted">{plural(overview.clients.length, "client")}</span>
           </div>
-
-          {activeSubscriptions.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>
-              No active subscriptions yet.
-            </p>
-          ) : (
-            <div className="table-wrap">
-              <table className="stack">
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Plan</th>
-                    <th>Billing day</th>
-                    <th>Charged via</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeSubscriptions.map((s) => (
-                    <tr key={s.publicId}>
-                      <td data-label="Client">
-                        <Link href={`/admin/clients/${s.clientPublicId}`}>
-                          {s.organizationName}
-                        </Link>
-                      </td>
-                      <td data-label="Plan">
-                        {discountApplies(s) ? (
-                          <>
-                            {formatCurrency(s.discountedPriceCents!, s.currency)}/mo{" "}
-                            <span className="muted">
-                              <s>{formatCurrency(s.monthlyPriceCents, s.currency)}</s> {s.discountLabel}
-                            </span>
-                          </>
-                        ) : (
-                          <>{formatCurrency(s.monthlyPriceCents, s.currency)}/mo</>
-                        )}
-                      </td>
-                      <td data-label="Billing day">day {s.billingDay}</td>
-                      <td data-label="Charged via">
-                        {s.provider ? (
-                          <span className="pill pill-accent">{s.provider}</span>
-                        ) : (
-                          <span className="muted">manual</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="muted" style={{ fontSize: "0.82rem", margin: "0.9rem 0 0" }}>
-            &ldquo;Manual&rdquo; is a plan you collect by hand, by Venmo or cash.
-            A client paying by card shows the processor that charges them.
-          </p>
+          <ClientsTable
+            rows={overview.clients}
+            thisYear={thisYear}
+            today={today}
+            monthEnd={currentPeriod().end}
+          />
         </section>
 
-        <section className="card">
-          <div className="card-head">
-            <h2>Monthly billing</h2>
-            <span className="muted">{billingStatus.length} active clients</span>
-          </div>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Set a due date to raise this month&rsquo;s invoice for a client who
-            doesn&rsquo;t have one open yet. Everyone else already has one open,
-            awaiting confirmation, or settled — shown as their status instead.
-          </p>
-          <MonthlyBillingTable rows={billingStatus} />
-        </section>
-
-        <section className="card">
-          <div className="card-head">
-            <h2>Waiting on you</h2>
-            <span className="muted">do not chase</span>
-          </div>
-
-          {awaiting.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>
-              Nobody is waiting on a confirmation.
-            </p>
-          ) : (
-            <>
-              <p className="muted" style={{ marginTop: 0 }}>
-                These clients have told us they&rsquo;ve paid. Reminders are
-                suppressed until you confirm. Check Venmo against the reference,
-                then confirm on the client&rsquo;s page.
-              </p>
-              <QueueTable rows={awaiting} showDays={false} />
-            </>
-          )}
-        </section>
-
-        <section className="card">
+        <section className="card" id="overdue">
           <div className="card-head">
             <h2>Overdue</h2>
-            <span className="muted">{overdue.length}</span>
+            <span className="muted">
+              {overview.overdue.length === 0 ? "all clear" : plural(overview.overdue.length, "bill")}
+            </span>
           </div>
-
-          {overdue.length === 0 ? (
-            <div className="empty">
-              <p className="empty-title">Nothing overdue.</p>
-              <p>Every invoice is either paid or not yet due.</p>
-            </div>
-          ) : (
-            <QueueTable rows={overdue} showDays />
-          )}
+          <OverdueTable items={overview.overdue} thisYear={thisYear} />
+          <p className="pay-quiet">
+            Reminder emails are not sent automatically yet, so chasing is up to you. &ldquo;Says
+            they paid&rdquo; means the client pressed &ldquo;I&rsquo;ve paid&rdquo; in their
+            portal: check Venmo for the reference, then mark it paid or not.
+          </p>
         </section>
-
-        <p className="muted" style={{ fontSize: "0.8rem" }}>
-          Reminders are not being sent automatically yet — the dunning ladder is
-          written and tested, but nothing runs it on a schedule. Until that
-          exists, this page is the queue and chasing is manual.
-        </p>
 
         <LedgerSection
           yearMonth={ledgerMonth}
           thisMonth={thisMonth}
+          today={today}
           summary={summary}
           entries={entries}
+          deleted={deleted}
         />
-      </main>
-    </>
+
+        <WriteOffsSection
+          summary={writeOffs}
+          candidates={candidates}
+          thisYear={thisYear}
+          today={today}
+          ledgerMonth={ledgerMonth === thisMonth ? null : ledgerMonth}
+        />
+      </PaymentDialogs>
+
+      {stripeSync && <StripeSync status={stripeSync} />}
+    </main>
   );
 }
 
-/**
- * Whether Stripe and the portal agree, from the hourly check.
- *
- * Shown only when there is something to say. A healthy sync is one line of
- * muted text; a payment that reached the portal only through the check is
- * spelled out with what to fix, because the usual cause, a signing secret
- * that does not match, is invisible from anywhere else in the portal.
- */
-function StripeSyncCard({ status }: { status: StripeSyncStatus }) {
-  if (!status.lastRunAt) {
-    return (
-      <p className="muted" style={{ fontSize: "0.82rem" }}>
-        Stripe has not been checked against the portal yet.
-      </p>
-    );
-  }
-
-  const lastRun = status.lastRunAt.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const healthy =
-    status.ok && status.needsReview.length === 0 && status.recoveredRecently === 0;
-
-  if (healthy) {
-    return (
-      <p className="muted" style={{ fontSize: "0.82rem" }}>
-        Stripe and the portal agree. Last checked {lastRun}.
-      </p>
-    );
-  }
-
-  return (
-    <section className="card">
-      <div className="card-head">
-        <h2>Stripe sync</h2>
-        <span className="muted">checked {lastRun}</span>
-      </div>
-
-      {!status.ok && (
-        <p className="error" style={{ marginTop: 0 }}>
-          The last check could not reach Stripe{status.error ? `: ${status.error}` : "."}
-        </p>
-      )}
-
-      {status.recoveredRecently > 0 && (
-        <p style={{ marginTop: 0 }}>
-          <span className="pill pill-warning">webhooks not arriving</span>{" "}
-          {status.recoveredRecently} payment{status.recoveredRecently === 1 ? "" : "s"} reached the portal only through this hourly check, not from Stripe
-          directly. In Stripe, open Developers → Webhooks → the portal endpoint and look at a
-          failed delivery: a 401 means <code>STRIPE_WEBHOOK_SECRET</code> on Netlify does not
-          match that endpoint&rsquo;s signing secret (change it, then redeploy).
-        </p>
-      )}
-
-      {status.repaired.length > 0 && (
-        <>
-          <p className="muted" style={{ marginBottom: "0.4rem" }}>Fixed by the last check</p>
-          <ul style={{ marginTop: 0 }}>
-            {status.repaired.map((f) => (
-              <li key={`${f.kind}:${f.reference}`}>{f.detail}</li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {status.needsReview.length > 0 && (
-        <>
-          <p className="muted" style={{ marginBottom: "0.4rem" }}>Needs you</p>
-          <ul style={{ marginTop: 0 }}>
-            {status.needsReview.map((f) => (
-              <li key={`${f.kind}:${f.reference}`}>{f.detail}</li>
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
-  );
-}
-
-function QueueTable({
-  rows,
-  showDays,
+function Totals({
+  totals,
+  received,
+  month,
 }: {
-  rows: Awaited<ReturnType<typeof listOverduePaymentRequests>>;
-  showDays: boolean;
+  totals: PaymentsTotals;
+  received: number;
+  month: string;
 }) {
+  const owedNote =
+    totals.overdueClients === 0
+      ? "nobody is late"
+      : `${plural(totals.overdueClients, "client")} late`;
   return (
-    <div className="table-wrap">
-      <table className="stack">
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Ref</th>
-            <th>Amount</th>
-            <th>Due</th>
-            {showDays && <th>Overdue</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.publicId}>
-              <td data-label="Client">
-                <Link href={`/admin/clients/${r.clientPublicId}`}>
-                  {r.organizationName}
-                </Link>
-              </td>
-              <td data-label="Ref">
-                <code>{r.reference}</code>
-              </td>
-              <td data-label="Amount">{formatCurrency(r.amountCents)}</td>
-              <td data-label="Due">{r.dueOn ?? "—"}</td>
-              {showDays && (
-                <td data-label="Overdue">
-                  <span
-                    className={`pill ${
-                      r.daysOverdue >= DEFAULT_DUNNING_CONFIG.pauseManagementDays
-                        ? "pill-danger"
-                        : r.daysOverdue >= DEFAULT_DUNNING_CONFIG.finalNoticeDays
-                          ? "pill-warning"
-                          : "pill-neutral"
-                    }`}
-                  >
-                    {r.daysOverdue} days
-                  </span>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="grid grid-3">
+      <div className="stat">
+        <p className="stat-label">Received in {month}</p>
+        <p className="stat-value">{formatCurrency(received)}</p>
+        <p className="stat-note">money that has arrived</p>
+      </div>
+      <a className="stat pay-stat-link" href="#overdue">
+        <p className="stat-label">Overdue</p>
+        <p className="stat-value">{formatCurrency(totals.overdueCents)}</p>
+        <p className="stat-note">
+          {owedNote}
+          {totals.saysPaidCount > 0 && ` · ${totals.saysPaidCount} say they paid`}
+        </p>
+      </a>
+      <div className="stat">
+        <p className="stat-label">Plans, each month</p>
+        <p className="stat-value">{formatCurrency(totals.monthlyPlanCents)}</p>
+        <p className="stat-note">
+          {totals.autoCount} automatic · {totals.invoicedCount} billed by you · {totals.compCount} free
+        </p>
+      </div>
     </div>
   );
 }

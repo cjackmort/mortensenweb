@@ -1,6 +1,14 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { clients, expenses, organizations, payments, subscriptions } from "@/db/schema";
+import {
+  auditLog,
+  clients,
+  expenses,
+  organizations,
+  paymentRequests,
+  payments,
+  subscriptions,
+} from "@/db/schema";
 import { businessDate } from "@/lib/billing/period";
 import { newPublicId } from "@/lib/ids";
 import type { AdminContext } from "../context";
@@ -22,6 +30,16 @@ import type { AdminContext } from "../context";
  *
  * Only `recorded` payments count. `void` exists so a correction is never a
  * subtraction someone has to remember, and a demo payment is not money.
+ *
+ * ## Deleting
+ *
+ * "Delete" on a ledger row hides it from the ledger and from every total, and
+ * keeps the row with who deleted it, when and why. Neither table loses the
+ * row, for the same reason: something would re-create it. A payment's
+ * idempotency key is what stops the Stripe resync recording an invoice a
+ * second time, and an automatic expense's derived public id is what stops the
+ * fee and monthly-repeat jobs adding it again (`ledger-automation.ts`). The
+ * deleting itself lives in `ledger-deletes.ts`.
  *
  * Months are the business's calendar months (`businessDate`), not UTC ones.
  * A UTC month ends at 6pm in Denver, which put the last evening's payments in
@@ -83,6 +101,9 @@ export function currentMonth(now: Date = new Date()): string {
 
 const COUNTED_PAYMENT = and(eq(payments.status, "recorded"), eq(payments.isDemo, false));
 
+/** An expense still in the ledger: not deleted. */
+const COUNTED_EXPENSE = isNull(expenses.deletedAt);
+
 /** Confirmed money received this business month. */
 export async function sumPaymentsReceivedInMonth(
   _ctx: AdminContext,
@@ -120,8 +141,62 @@ export async function addExpense(ctx: AdminContext, db: Database, input: NewExpe
   return row;
 }
 
-export async function deleteExpense(_ctx: AdminContext, db: Database, publicId: string) {
-  await db.delete(expenses).where(eq(expenses.publicId, publicId));
+/** Many expenses at once, from the bulk add. One audit entry for the batch. */
+export async function addExpenses(
+  ctx: AdminContext,
+  db: Database,
+  rows: NewExpenseInput[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const inserted = await db
+    .insert(expenses)
+    .values(
+      rows.map((input) => ({
+        publicId: newPublicId(),
+        description: input.description,
+        category: input.category,
+        amountCents: input.amountCents,
+        occurredOn: input.occurredOn,
+        isRecurring: input.isRecurring,
+        note: input.note || null,
+        recordedBy: ctx.userId,
+      })),
+    )
+    .returning({ publicId: expenses.publicId });
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    action: "expense.imported",
+    entityType: "expense",
+    entityId: null,
+    metadata: {
+      count: inserted.length,
+      totalCents: rows.reduce((sum, r) => sum + r.amountCents, 0),
+    },
+  });
+
+  return inserted.length;
+}
+
+/**
+ * Expenses still in the ledger on any of these dates: what a bulk add is
+ * checked against for receipts already entered.
+ */
+export async function liveExpensesOn(
+  _ctx: AdminContext,
+  db: Database,
+  dates: string[],
+): Promise<{ occurredOn: string; amountCents: number; description: string }[]> {
+  if (dates.length === 0) return [];
+  return db
+    .select({
+      occurredOn: expenses.occurredOn,
+      amountCents: expenses.amountCents,
+      description: expenses.description,
+    })
+    .from(expenses)
+    .where(and(COUNTED_EXPENSE, inArray(expenses.occurredOn, [...new Set(dates)])));
 }
 
 /**
@@ -149,6 +224,7 @@ export type LedgerEntry =
   | {
       kind: "income";
       key: string;
+      publicId: string;
       date: string;
       clientPublicId: string;
       counterparty: string;
@@ -157,6 +233,10 @@ export type LedgerEntry =
       note: string | null;
       amountCents: number;
       currency: string;
+      /** `stripe`, `square`, or null for money recorded by hand. */
+      provider: string | null;
+      /** The invoice this payment settled, which deleting it reopens. */
+      settlesInvoice: string | null;
     }
   | {
       kind: "expense";
@@ -192,10 +272,13 @@ export async function ledgerEntries(
       note: payments.note,
       amountCents: payments.amountCents,
       currency: payments.currency,
+      provider: payments.provider,
+      settlesInvoice: paymentRequests.reference,
     })
     .from(payments)
     .innerJoin(clients, eq(clients.id, payments.clientId))
     .innerJoin(organizations, eq(organizations.id, clients.organizationId))
+    .leftJoin(paymentRequests, eq(paymentRequests.paymentId, payments.id))
     .where(
       and(COUNTED_PAYMENT, gte(payments.receivedOn, range.from), lt(payments.receivedOn, range.to)),
     );
@@ -214,12 +297,15 @@ export async function ledgerEntries(
       recordedBy: expenses.recordedBy,
     })
     .from(expenses)
-    .where(and(gte(expenses.occurredOn, range.from), lt(expenses.occurredOn, range.to)));
+    .where(
+      and(COUNTED_EXPENSE, gte(expenses.occurredOn, range.from), lt(expenses.occurredOn, range.to)),
+    );
 
   const entries: (LedgerEntry & { createdAt: Date })[] = [
     ...income.map((p) => ({
       kind: "income" as const,
       key: `p:${p.publicId}`,
+      publicId: p.publicId,
       date: p.date,
       createdAt: p.createdAt,
       clientPublicId: p.clientPublicId,
@@ -229,6 +315,8 @@ export async function ledgerEntries(
       note: p.note,
       amountCents: p.amountCents,
       currency: p.currency,
+      provider: p.provider,
+      settlesInvoice: p.settlesInvoice,
     })),
     ...outgoing.map((e) => ({
       kind: "expense" as const,
@@ -279,7 +367,9 @@ async function periodTotals(db: Database, range: DateRange): Promise<PeriodTotal
       other: sql<number>`coalesce(sum(case when ${expenses.category} <> 'fees' then ${expenses.amountCents} end), 0)::int`,
     })
     .from(expenses)
-    .where(and(gte(expenses.occurredOn, range.from), lt(expenses.occurredOn, range.to)));
+    .where(
+      and(COUNTED_EXPENSE, gte(expenses.occurredOn, range.from), lt(expenses.occurredOn, range.to)),
+    );
 
   const incomeCents = Number(income?.total ?? 0);
   const feesCents = Number(out?.fees ?? 0);

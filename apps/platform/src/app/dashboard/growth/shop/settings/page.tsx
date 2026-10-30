@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -61,9 +60,6 @@ export default async function ShopSettingsPage({
         <h1>
           Shop<span className="masthead-sub">Settings</span>
         </h1>
-        <span className="muted">
-          <Link href="/dashboard/growth/shop">← Back to your shop</Link>
-        </span>
       </div>
 
       {cameFrom === "refresh" && (
@@ -117,7 +113,12 @@ function Payments({ settings, readOnly }: { settings: ShopSettingsView; readOnly
   }
 
   if (!stripeConfigured()) {
-    return <p className="muted" style={{ margin: 0 }}>Connecting Stripe is not switched on here yet. We will let you know when it is.</p>;
+    return (
+      <p className="muted" style={{ margin: 0 }}>
+        Connecting Stripe is not switched on here yet. We will let you know when it is; you can add products and set
+        up shipping in the meantime.
+      </p>
+    );
   }
 
   if (settings.stripeAccountId) {

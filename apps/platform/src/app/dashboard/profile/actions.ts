@@ -10,12 +10,12 @@ import {
   setOwnAvatar,
   updateOwnDetails,
 } from "@/db/repositories/client/profile";
-import { PROFILE_FIELDS, parseProfileForm } from "@/lib/business-profile";
+import { CLIENT_PROFILE_FIELDS, PROFILE_FIELDS, parseProfileForm } from "@/lib/business-profile";
 import { AVATAR_REJECTION_MESSAGES, prepareAvatar } from "@/lib/profile/avatar";
 import { parseDetailsForm } from "@/lib/profile/details";
 
 /**
- * The client's own profile: three forms, three actions.
+ * The client's own profile: the picture, the person, the business.
  *
  * Each acts on the signed-in person — nothing here takes an id from the
  * form — and each revalidates the dashboard layout, because the top bar
@@ -145,13 +145,14 @@ export async function saveBusinessAction(
 
   const parsed = parseProfileForm(formData);
   if (!parsed.ok) {
-    const count = Object.keys(parsed.errors).length;
+    // Named, because the field can be a long scroll up from the Save button.
+    const labels = PROFILE_FIELDS.filter((f) => parsed.errors[f.key]).map((f) => f.label);
     return {
       ok: false,
-      message: `Nothing was saved — ${count === 1 ? "one field needs" : `${count} fields need`} fixing.`,
+      message: `Nothing was saved. Fix ${labels.length === 1 ? "this field" : "these fields"}: ${labels.join(", ")}.`,
       errors: parsed.errors,
       values: Object.fromEntries(
-        PROFILE_FIELDS.map((field) => [field.key, String(formData.get(field.key) ?? "")]),
+        CLIENT_PROFILE_FIELDS.map((field) => [field.key, String(formData.get(field.key) ?? "")]),
       ),
     };
   }

@@ -108,6 +108,15 @@ export const clients = pgTable(
     /** Why. Required in the UI, because "why is this free?" is asked later. */
     compNote: text("comp_note"),
 
+    /**
+     * A site the agency built for nothing, valued at what it would normally
+     * charge, and when. Listed under "Potential write-offs" on the payments
+     * page for the operator's CPA to rule on; never money, never in the
+     * ledger. Both set or both null. Managed on the payments page only.
+     */
+    freeBuildValueCents: integer("free_build_value_cents"),
+    freeBuildOn: date("free_build_on"),
+
     dunningExemptUntil: timestamp("dunning_exempt_until", {
       withTimezone: true,
     }),
@@ -159,6 +168,15 @@ export const clients = pgTable(
     isInternal: boolean("is_internal").notNull().default(false),
 
     /**
+     * What kind of site this is, chosen by the operator when adding the
+     * client. Each one opens a section of the portal: a booking portal gets
+     * "Set your availability", a store gets the online shop. Both may be on.
+     * Off by default, so every existing client keeps the portal they have.
+     */
+    bookingEnabled: boolean("booking_enabled").notNull().default(false),
+    shopEnabled: boolean("shop_enabled").notNull().default(false),
+
+    /**
      * How much media this client may store, in bytes.
      *
      * Null means the platform default (`DEFAULT_STORAGE_QUOTA_BYTES` in
@@ -208,6 +226,11 @@ export const clients = pgTable(
     // with no Stripe customer coexist while any real id stays single-valued.
     uniqueIndex("clients_stripe_customer_key").on(t.stripeCustomerId),
     index("clients_industry_idx").on(t.industry),
+    check(
+      "clients_free_build_complete",
+      sql`(${t.freeBuildValueCents} IS NULL) = (${t.freeBuildOn} IS NULL)
+        AND (${t.freeBuildValueCents} IS NULL OR ${t.freeBuildValueCents} > 0)`,
+    ),
   ],
 );
 
@@ -519,6 +542,18 @@ export const payments = pgTable(
     status: paymentStatusEnum("status").notNull().default("recorded"),
     note: text("note"),
     isDemo: boolean("is_demo").notNull().default(false),
+
+    /**
+     * Who deleted this row from the ledger, when, and why. Set together with
+     * `status = 'void'` by `voidPayment`; the row itself stays, because its
+     * idempotency key is what stops a Stripe resync writing it again.
+     */
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidedBy: uuid("voided_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    voidReason: text("void_reason"),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -674,6 +709,17 @@ export const expenses = pgTable(
     recordedBy: uuid("recorded_by").references(() => users.id, {
       onDelete: "set null",
     }),
+
+    /**
+     * Deleted from the ledger. Hidden from every total rather than removed:
+     * the fee and monthly-repeat jobs re-create an automatic row whose public
+     * id is missing, so a removed row would come back within the hour.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

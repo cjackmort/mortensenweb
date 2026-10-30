@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -44,6 +43,7 @@ import { ReviewsSection } from "./reviews-section";
 import { getClientReviews, type ClientReviewsView } from "@/db/repositories/admin/reviews";
 import { getClientReports, type ClientReportsView } from "@/db/repositories/admin/reports";
 import { ReportsSection } from "./reports-section";
+import { PortalSectionsPanel } from "./portal-sections";
 import {
   SECTIONS,
   SectionGrid,
@@ -132,9 +132,6 @@ export default async function ClientDetailPage({
             organization.name
           )}
         </h1>
-        <span className="muted">
-          <Link href="/admin/clients">← All clients</Link>
-        </span>
       </div>
 
       {client.isDemo && (
@@ -195,6 +192,8 @@ export default async function ClientDetailPage({
             contactEmail={client.primaryContactEmail}
             accounts={portalUsers}
           />
+
+          <PortalSectionsPanel clientPublicId={client.publicId} bookingEnabled={client.bookingEnabled} shopEnabled={client.shopEnabled} hasSite={siteRows.length > 0} />
 
           <SectionGrid clientPublicId={client.publicId} summaries={summaries} />
         </>

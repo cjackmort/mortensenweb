@@ -278,3 +278,62 @@ describe("the business's general information", () => {
     );
   });
 });
+
+describe("the operator's look-and-voice notes", () => {
+  let initech: SeededTenant;
+  const OPERATOR_NOTES = {
+    brand: "Navy #1d2a44 and orange. Logo is the wrench mark.",
+    voice: "Plain and warm. Never 'synergy'.",
+    other: "Mention the 24-hour emergency line on every page.",
+  };
+
+  async function storedDetails(): Promise<Record<string, string>> {
+    const [row] = await db
+      .select({ details: businessProfiles.details })
+      .from(businessProfiles)
+      .where(eq(businessProfiles.organizationId, initech.organizationId));
+    return row!.details;
+  }
+
+  beforeAll(async () => {
+    initech = await seedTenant(db, "Initech Painting");
+    // Written by the operator's form, which shows every field.
+    await db.insert(businessProfiles).values({
+      organizationId: initech.organizationId,
+      details: { businessName: "Initech Painting", ...OPERATOR_NOTES },
+      updatedBy: initech.userId,
+      updatedAt: new Date(),
+    });
+  });
+
+  it("survive the client saving a form that never showed them", async () => {
+    const outcome = await saveOwnBusinessProfile(db, initech.ctx, {
+      businessName: "Initech Painting",
+      address: "PO Box 12, Riverton, UT 84065",
+    });
+
+    expect(outcome.changed).toEqual(["address"]);
+    expect(await storedDetails()).toEqual({
+      businessName: "Initech Painting",
+      address: "PO Box 12, Riverton, UT 84065",
+      ...OPERATOR_NOTES,
+    });
+  });
+
+  it("survive the client clearing everything they can see", async () => {
+    const outcome = await saveOwnBusinessProfile(db, initech.ctx, {});
+    expect(outcome.changed).toEqual(["businessName", "address"]);
+    expect(await storedDetails()).toEqual(OPERATOR_NOTES);
+  });
+
+  it("cannot be changed by a client who posts them anyway", async () => {
+    const outcome = await saveOwnBusinessProfile(db, initech.ctx, {
+      businessName: "Initech Painting",
+      brand: "Hot pink",
+      voice: "",
+    });
+
+    expect(outcome.changed).toEqual(["businessName"]);
+    expect(await storedDetails()).toEqual({ businessName: "Initech Painting", ...OPERATOR_NOTES });
+  });
+});

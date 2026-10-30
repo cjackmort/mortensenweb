@@ -4,7 +4,7 @@ import { ADS_AVAILABLE, dollars, feeTermsLabel, type GrowthFeatureKey } from "@m
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import { canUseFeature, getGrowthState } from "@/db/repositories/client/growth";
+import { canUseFeature, getGrowthState, growthHubFeatures, openedEarly, type GrowthState } from "@/db/repositories/client/growth";
 import type { FeatureAccess } from "@/lib/growth/access";
 import { addAddOnAction } from "../plan/actions";
 import { PlanActionButton } from "../plan/controls";
@@ -19,7 +19,9 @@ import "@/components/ads/ads.css";
  * what it does and what it does *for the business*, and the two ways to get
  * it — add it on its own, or move to the plan that includes it, with the
  * saving said out loud when the plan is the better deal. A feature that is not
- * built yet says so and offers nothing to buy.
+ * built yet says so and offers nothing to buy. The online shop belongs to
+ * store sites only, so it is left off every other client's page rather than
+ * shown as coming soon (`growthHubFeatures`).
  *
  * Which is which is decided in `lib/growth/access.ts`, never here.
  */
@@ -70,9 +72,13 @@ export default async function GrowthPage({
   const state = await getGrowthState(db, ctx);
   const { locked } = await searchParams;
   const lockedName = state.access.find((a) => a.feature.key === locked)?.feature.name;
+  // The shop is not something to buy here: it comes with a store site, and
+  // a client who is not one has no shop card to point at.
+  const shopIsNotTheirs = locked === "shop" && !canUseFeature(state, "shop");
 
-  const owned = state.access.filter((a) => a.via);
-  const notOwned = state.access.filter((a) => !a.via);
+  const cards = growthHubFeatures(state);
+  const owned = cards.filter((a) => a.via);
+  const notOwned = cards.filter((a) => !a.via);
 
   return (
     <main className="shell">
@@ -81,10 +87,17 @@ export default async function GrowthPage({
         <span>Tools that bring you more customers</span>
       </div>
 
-      {lockedName && (
+      {shopIsNotTheirs ? (
         <p className="notice notice-info">
-          {lockedName} is not part of your plan yet — here is how to add it.
+          The online shop is not switched on for your website. Want to sell from it?{" "}
+          <Link href="/dashboard/requests">Send us a request</Link> and we will set it up.
         </p>
+      ) : (
+        lockedName && (
+          <p className="notice notice-info">
+            {lockedName} is not part of your plan yet — here is how to add it.
+          </p>
+        )
       )}
 
       {ADS_AVAILABLE && <AdsCard readOnly={ctx.impersonating} />}
@@ -126,7 +139,7 @@ function FeatureCard({
   state,
 }: {
   access: FeatureAccess;
-  state: Awaited<ReturnType<typeof getGrowthState>>;
+  state: GrowthState;
 }) {
   const { feature, via, upgradeTo, upgradeSavesCents, canAdd } = access;
   const opens = OPENS[feature.key];
@@ -141,7 +154,7 @@ function FeatureCard({
         <p>{feature.summary}</p>
         {opens && canUseFeature(state, feature.key) ? (
           <>
-            {!feature.available && <p className="hint">Being built. You are trying it early.</p>}
+            {openedEarly(state, feature.key) && <p className="hint">Being built. You are trying it early.</p>}
             <Link className="button" href={opens}>
               Open {feature.name.toLowerCase()}
             </Link>

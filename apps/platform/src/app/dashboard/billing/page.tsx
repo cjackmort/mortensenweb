@@ -20,6 +20,23 @@ import { UnlockPanel } from "./unlock-panel";
 export const dynamic = "force-dynamic";
 
 /**
+ * How a payment was made, in the client's words. The ledger's own labels
+ * (`lib/finance/ledger-csv.ts`) are the operator's — "Stripe", "Square" — but
+ * the client paid by card either way, and the history used to show the raw
+ * stored value: "stripe", "venmo", "bank_transfer".
+ */
+const METHOD_LABEL: Record<string, string> = {
+  cash: "Cash",
+  venmo: "Venmo",
+  check: "Check",
+  card: "Card",
+  bank_transfer: "Bank transfer",
+  stripe: "Card",
+  square: "Card",
+  other: "Other",
+};
+
+/**
  * What the client owes, and how to pay it.
  *
  * The tone here is set by one rule from the plan: non-payment pauses labour,
@@ -249,7 +266,7 @@ export default async function BillingPage({
                       <td data-label="Amount">
                         {formatCurrency(p.amountCents, p.currency)}
                       </td>
-                      <td data-label="Method">{p.method}</td>
+                      <td data-label="Method">{METHOD_LABEL[p.method] ?? p.method}</td>
                     </tr>
                   ))}
                 </tbody>

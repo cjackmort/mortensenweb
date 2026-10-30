@@ -52,59 +52,64 @@ export default async function AdminShowcasesPage() {
   );
 }
 
+/** In a card like every other admin table, not loose on the page's ground. */
 function ShowcaseTable({ rows }: { rows: AdminShowcaseRow[] }) {
   return (
-    <div className="table-wrap">
-      <table className="stack">
-        <thead>
-          <tr>
-            <th>Job</th>
-            <th>Client</th>
-            <th>Website page</th>
-            <th>Google</th>
-            <th>Made</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.publicId}>
-              <td data-label="Job">
-                {r.title}
-                <span className="muted">
-                  {" "}
-                  · {r.town} · {r.photoCount} {r.photoCount === 1 ? "photo" : "photos"}
-                </span>
-              </td>
-              <td data-label="Client">
-                {r.clientPublicId ? (
-                  <Link href={`/admin/clients/${r.clientPublicId}`}>{r.organizationName}</Link>
-                ) : (
-                  r.organizationName
-                )}
-              </td>
-              <td data-label="Website page">
-                {r.status === "draft" ? (
-                  <span className="pill pill-neutral">Wording not approved</span>
-                ) : (
-                  <>
-                    <span className={`pill ${r.site.state === "live" ? "pill-success" : r.site.state === "blocked" || r.site.state === "stopped" ? "pill-warning" : "pill-info"}`}>
-                      {r.site.label}
-                    </span>
-                    {r.site.state === "blocked" && <span className="queue-note">{r.site.detail}</span>}
-                    {r.requestTitle && (
-                      <span className="queue-note">
-                        <Link href="/admin/requests">{r.requestTitle}</Link>
-                      </span>
-                    )}
-                  </>
-                )}
-              </td>
-              <td data-label="Google">{r.status === "draft" ? <span className="muted">—</span> : r.google.label}</td>
-              <td data-label="Made">{formatDate(r.createdAt)}</td>
+    <section className="card">
+      <div className="table-wrap">
+        <table className="stack">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Client</th>
+              <th>Website page</th>
+              <th>Google</th>
+              <th>Made</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.publicId}>
+                <td data-label="Job">
+                  {r.title}
+                  <span className="muted">
+                    {" "}
+                    · {r.town} · {r.photoCount} {r.photoCount === 1 ? "photo" : "photos"}
+                  </span>
+                </td>
+                <td data-label="Client">
+                  {r.clientPublicId ? (
+                    <Link href={`/admin/clients/${r.clientPublicId}`}>{r.organizationName}</Link>
+                  ) : (
+                    r.organizationName
+                  )}
+                </td>
+                <td data-label="Website page">
+                  {r.status === "draft" ? (
+                    <span className="pill pill-neutral">Wording not approved</span>
+                  ) : (
+                    <>
+                      <span className={`pill ${r.site.state === "live" ? "pill-success" : r.site.state === "blocked" || r.site.state === "stopped" ? "pill-warning" : "pill-info"}`}>
+                        {r.site.label}
+                      </span>
+                      {r.site.state === "blocked" && <span className="queue-note">{r.site.detail}</span>}
+                      {r.requestTitle && (
+                        <span className="queue-note">
+                          <Link href="/admin/requests">{r.requestTitle}</Link>
+                        </span>
+                      )}
+                    </>
+                  )}
+                </td>
+                <td data-label="Google">{r.status === "draft" ? <span className="muted">—</span> : r.google.label}</td>
+                <td data-label="Made" className="nowrap">
+                  {formatDate(r.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

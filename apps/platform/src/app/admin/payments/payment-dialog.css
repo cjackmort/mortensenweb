@@ -1,0 +1,244 @@
+/* The payments page's dialog: Mark paid, Not paid, Record payment, Bill,
+   free sites and the ledger's delete confirm. A centred panel on a desktop,
+   a bottom sheet on a phone. Tokens only, from globals.css. */
+
+.pay-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--pane-shadow-lift);
+}
+
+.pay-dialog::backdrop {
+  background: rgb(16 20 24 / 50%);
+}
+
+.pay-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pay-dialog-head h2 {
+  margin: 0;
+  font: 500 1.4rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.pay-dialog-head p {
+  margin: 0.3rem 0 0;
+}
+
+.pay-dialog .pay-dialog-x,
+.pay-dialog .pay-dialog-x:hover {
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-height: var(--tap);
+  margin: -0.5rem -0.75rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--muted);
+  font: 400 1.6rem / 1 var(--font);
+}
+
+.pay-dialog .pay-dialog-x:hover {
+  color: var(--text);
+}
+
+.pay-dialog-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.pay-dialog-lede {
+  margin: 0 0 1.1rem;
+  color: var(--text-soft);
+  font-size: 0.94rem;
+}
+
+.pay-dialog-body .hint {
+  display: block;
+  margin: -0.4rem 0 0;
+}
+
+.pay-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+/* A bottom sheet on a phone: thumbs reach it and it never runs off the side. */
+@media (max-width: 40rem) {
+  .pay-dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+  }
+
+  .pay-dialog-head,
+  .pay-dialog-body {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .pay-dialog-body {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+
+  .pay-dialog-foot > button {
+    flex: 1 1 0;
+  }
+}
+
+.pay-methods,
+.pay-choices {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1.1rem;
+  min-width: 0;
+}
+
+.pay-methods legend,
+.pay-choices legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.pay-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pay-chip {
+  position: relative;
+  margin: 0;
+  font-weight: 500;
+}
+
+.pay-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pay-chip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  background: var(--field);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.pay-chip input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.pay-chip input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pay-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+@media (max-width: 22rem) {
+  .pay-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pay-choices {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pay-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pay-choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0.2rem 0 0;
+  box-shadow: none;
+  accent-color: var(--accent-fill);
+}
+
+.pay-choice > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.pay-choice .muted {
+  font-size: 0.86rem;
+}
+
+.pay-choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.pay-delete-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+}
+
+.pay-delete-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.92rem;
+}
+
+.pay-delete-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.pay-consequences {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1.1rem;
+  padding-left: 1.1rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}

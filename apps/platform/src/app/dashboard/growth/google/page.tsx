@@ -1,4 +1,3 @@
-import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -73,7 +72,6 @@ export default async function GoogleProfilePage({
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Google profile</h1>
         <span>Your Business Profile on Google Search and Maps, kept current by us</span>

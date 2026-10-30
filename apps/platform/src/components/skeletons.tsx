@@ -38,7 +38,7 @@ export function MastheadSkeleton({ title }: { title: string }) {
   );
 }
 
-/** The visitors panel: four metrics and a chart-height block. */
+/** The visitors panel: its five metrics and a chart-height block. */
 export function VisitorsSkeleton() {
   return (
     <section className="panel" aria-busy="true" aria-label="Loading visitors">
@@ -46,8 +46,8 @@ export function VisitorsSkeleton() {
         <h2>Your visitors</h2>
         <Bone w="9rem" h="1.6rem" />
       </div>
-      <div className="metrics">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="metrics metrics-visitors">
+        {[0, 1, 2, 3, 4].map((i) => (
           <div className="metric" key={i}>
             <Bone w="4.5rem" h="0.7rem" />
             <Bone w="5.5rem" h="1.8rem" className="bone-gap" />

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { countUnreadLeads } from "@/db/repositories/client/leads";
+import { getClientSections, NO_CLIENT_SECTIONS } from "@/db/repositories/client/sections";
 
 /**
  * The chrome for every client page, rendered once by the layout rather than
@@ -32,19 +33,26 @@ export default async function DashboardLayout({
   // One indexed count per page view. A failure loses the badge, never the
   // page: the inbox itself is one tap away and shows the truth.
   let unreadLeads = 0;
+  // Same rule for the optional tabs: a failed read hides them, and each
+  // section's own page still answers when visited directly.
+  let clientSections = NO_CLIENT_SECTIONS;
   if (user.organizationId) {
+    const db = await getDb();
+    const ctx = tenantContextFrom(user, user.organizationId);
     try {
-      unreadLeads = await countUnreadLeads(
-        await getDb(),
-        tenantContextFrom(user, user.organizationId),
-      );
+      unreadLeads = await countUnreadLeads(db, ctx);
     } catch (error) {
       console.error("[dashboard] unread lead count failed", error);
+    }
+    try {
+      clientSections = await getClientSections(db, ctx);
+    } catch (error) {
+      console.error("[dashboard] client sections read failed", error);
     }
   }
 
   return (
-    <AppShell user={user} unreadLeads={unreadLeads}>
+    <AppShell user={user} unreadLeads={unreadLeads} clientSections={clientSections}>
       {children}
     </AppShell>
   );

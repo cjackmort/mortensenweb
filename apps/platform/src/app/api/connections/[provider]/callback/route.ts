@@ -3,7 +3,7 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { completeConnect, runAudit } from "@/db/repositories/client/connections";
-import { isConnectionProvider, providerAdapter } from "@/lib/connections";
+import { CONNECTIONS_HOME, connectionHome, isConnectionProvider, providerAdapter } from "@/lib/connections";
 import { verifyOAuthState } from "@/lib/google-business/oauth-state";
 import { CONNECT_COOKIE, CONNECT_COOKIE_PATH } from "../cookie";
 
@@ -22,7 +22,8 @@ import { CONNECT_COOKIE, CONNECT_COOKIE_PATH } from "../cookie";
 export const dynamic = "force-dynamic";
 
 function back(request: Request, provider: string, outcome: string): Response {
-  const response = NextResponse.redirect(new URL(`/dashboard/connections?connect=${provider}:${outcome}`, request.url));
+  const home = isConnectionProvider(provider) ? connectionHome(provider) : CONNECTIONS_HOME;
+  const response = NextResponse.redirect(new URL(`${home}?connect=${provider}:${outcome}`, request.url));
   response.cookies.set(CONNECT_COOKIE, "", { path: CONNECT_COOKIE_PATH, maxAge: 0 });
   return response;
 }

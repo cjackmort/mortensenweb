@@ -14,6 +14,8 @@ import { organizations, users } from "./identity";
 /**
  * Accounts a client has connected so the portal can look them over —
  * Stripe, Google Search Console, Instagram — and what it found last time.
+ * Also Google Calendar, connected from Availability and read only for busy
+ * times (`lib/connections/providers/google-calendar.ts`).
  *
  * One row per organization and provider while connected. Tokens are sealed
  * (`lib/connections/seal.ts`) and never leave the server; what the client
@@ -23,7 +25,7 @@ import { organizations, users } from "./identity";
  * connected survives and a reconnect is a new row.
  */
 
-export const CONNECTION_PROVIDERS = ["stripe", "google", "instagram"] as const;
+export const CONNECTION_PROVIDERS = ["stripe", "google", "instagram", "google_calendar"] as const;
 export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
 
 export const CONNECTION_STATUSES = ["connected", "needs_reconnect", "revoked"] as const;
@@ -69,7 +71,7 @@ export const connectedAccounts = pgTable(
     index("connected_accounts_audit_due_idx").on(t.status, t.lastAuditAt),
     check(
       "connected_accounts_provider",
-      sql`${t.provider} IN ('stripe', 'google', 'instagram')`,
+      sql`${t.provider} IN ('stripe', 'google', 'instagram', 'google_calendar')`,
     ),
     check(
       "connected_accounts_status",

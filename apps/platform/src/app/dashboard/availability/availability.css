@@ -1,0 +1,546 @@
+/*
+ * Availability. Beside the page rather than in globals.css, like the Growth
+ * features. Panels, pills, notices, buttons and fields are the portal's own;
+ * this file only lays them out. Phone first: everything stacks, and wider
+ * screens add the second column and side-by-side rows.
+ */
+
+.avail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--stack);
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .avail-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  }
+}
+
+.avail-lede {
+  margin: 0 0 1.1rem;
+  color: var(--text-soft);
+}
+
+.avail-empty-line {
+  margin: 0;
+}
+
+.avail-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 1.25rem;
+}
+
+/* ------------------------------------------------------------ weekly hours */
+
+.avail-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.avail-day {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.avail-day:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.avail-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  min-height: var(--tap);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.avail-day-toggle input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  margin: 0;
+  box-shadow: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.avail-day--closed .avail-day-toggle span {
+  color: var(--muted);
+}
+
+.avail-day-blocks {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.avail-closed {
+  display: none;
+}
+
+/* From, "to", until, remove: the two times share what is left after the
+   word and the button, so the row never runs past the panel on a phone. */
+.avail-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.avail-block input[type="time"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding-inline: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A tap on the field opens the phone's own picker; the desktop icon only
+   takes room there. */
+@media (max-width: 39.99rem) {
+  .avail-block input[type="time"]::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+}
+
+/* Days off: from, "to", until, with no remove button. */
+.avail-dayoff-hours {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.avail-to {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The × beside a block: quiet until it is aimed at. */
+.avail-remove {
+  flex: none;
+  width: var(--tap);
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font: 400 1.4rem / 1 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.avail-remove:hover,
+.avail-remove:focus-visible {
+  background: var(--danger-wash);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.avail-day-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  font-size: 0.85rem;
+}
+
+.avail-day-tools button.link {
+  padding: 0.35rem 0;
+}
+
+@media (min-width: 40rem) {
+  .avail-day {
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .avail-closed {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .avail-block {
+    grid-template-columns: minmax(0, 9.5rem) auto minmax(0, 9.5rem) auto;
+    justify-content: start;
+  }
+
+  .avail-day-tools {
+    grid-column: 2;
+  }
+}
+
+/* ----------------------------------------------------------- booking rules */
+
+.avail-approval {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.18s var(--ease-out),
+    border-color 0.18s var(--ease-out);
+}
+
+.avail-approval:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.avail-approval input {
+  width: 1.2rem;
+  height: 1.2rem;
+  min-height: 0;
+  margin: 0.1rem 0 0;
+  box-shadow: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.avail-approval strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 1rem;
+}
+
+.avail-approval-on,
+.avail-approval-off {
+  display: block;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+/* Only the sentence for the box as it is now ticked. */
+.avail-approval:has(input:checked) .avail-approval-off,
+.avail-approval:not(:has(input:checked)) .avail-approval-on {
+  display: none;
+}
+
+.avail-rule-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 1.25rem;
+}
+
+@media (min-width: 36rem) {
+  .avail-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .avail-rule-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.avail-rules .avail-save {
+  margin-top: 0.15rem;
+}
+
+/* -------------------------------------------------------------- days off */
+
+.avail-dayoff-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 1.25rem;
+  align-items: end;
+}
+
+.avail-dayoff-mode {
+  margin: 0 0 1.1rem;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+}
+
+.avail-dayoff-mode legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.avail-dayoff-mode label.checkbox {
+  align-items: center;
+  min-height: var(--tap);
+  margin: 0;
+}
+
+.avail-dayoff-mode input[type="radio"] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+
+.avail-dayoff-hours {
+  margin-bottom: 1.1rem;
+}
+
+.avail-dayoff-form > button {
+  margin-bottom: 1.1rem;
+  justify-self: start;
+}
+
+@media (min-width: 44rem) {
+  .avail-dayoff-form {
+    grid-template-columns: 11rem auto minmax(0, 1fr) auto;
+  }
+
+  .avail-dayoff-hours {
+    grid-template-columns: minmax(0, 8.5rem) auto minmax(0, 8.5rem);
+  }
+}
+
+.avail-dayoff-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.avail-dayoff-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.avail-dayoff-day {
+  min-width: 7.5rem;
+  font-weight: 600;
+}
+
+.avail-dayoff-list form {
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------- bookings */
+
+.avail-bookings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.avail-booking {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.avail-booking:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.avail-booking:last-child {
+  padding-bottom: 0;
+}
+
+.avail-booking-when {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.avail-booking--pending .avail-booking-when {
+  border-left: 3px solid var(--warning);
+  padding-left: 0.65rem;
+}
+
+.avail-booking-day {
+  font: 500 0.72rem / 1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.avail-booking-time {
+  white-space: nowrap;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.avail-booking-who {
+  min-width: 0;
+}
+
+.avail-booking-name {
+  display: block;
+  font-size: 1rem;
+}
+
+.avail-booking-contact {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.avail-booking-note {
+  margin: 0.4rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.avail-booking-warning {
+  margin: 0.4rem 0 0;
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.avail-booking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+}
+
+.avail-booking-actions form {
+  margin: 0;
+}
+
+.avail-booking-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.avail-booking-ask {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+@media (min-width: 48rem) {
+  .avail-booking {
+    grid-template-columns: 11.5rem minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .avail-booking-when {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .avail-booking-actions {
+    justify-content: flex-end;
+    max-width: 20rem;
+  }
+
+  .avail-booking-meta {
+    flex-basis: 100%;
+    text-align: right;
+  }
+}
+
+.avail-recent {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.avail-recent summary {
+  cursor: pointer;
+  color: var(--muted);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+
+.avail-recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.avail-recent li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------------------------------------------------------------- preview */
+
+.avail-preview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.avail-preview li {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.avail-preview-day {
+  font: 500 0.72rem / 1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.avail-preview-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.avail-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.avail-chip--more {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.avail-bookpage {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.avail-calendar-privacy {
+  margin: 0 0 1rem;
+}

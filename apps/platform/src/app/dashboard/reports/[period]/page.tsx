@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -35,9 +34,6 @@ export default async function ReportPage({ params }: { params: Promise<{ period:
 
   return (
     <main className="shell">
-      <p className="no-print" style={{ margin: "0 0 1rem" }}>
-        <Link href="/dashboard/reports">← All reports</Link>
-      </p>
       {report.data ? (
         <ReportView data={report.data} builtAt={report.builtAt} actions={<PrintButton />} />
       ) : (

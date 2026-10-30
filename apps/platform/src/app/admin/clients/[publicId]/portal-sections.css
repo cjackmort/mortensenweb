@@ -1,0 +1,71 @@
+/*
+ * "What kind of site?" — on Add a client and on the client's own page.
+ * Beside the components rather than in globals.css. The checkbox rows are
+ * the portal's own `label.checkbox`; this only groups them and gives each
+ * a hint line.
+ */
+
+.site-kinds {
+  border: 0;
+  padding: 0;
+  margin: 0.4rem 0 1.25rem;
+  min-width: 0;
+}
+
+.site-kinds legend {
+  padding: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 0.3rem;
+}
+
+.site-kinds-intro {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 0.8rem;
+}
+
+.site-kinds label.checkbox {
+  margin-bottom: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+}
+
+.site-kinds label.checkbox:has(input:checked) {
+  border-color: var(--accent);
+}
+
+.site-kinds label.checkbox:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.site-kinds-name {
+  display: block;
+  font-weight: 600;
+}
+
+.site-kinds-hint {
+  display: block;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.portal-sections-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-sections-form .notice,
+.portal-sections-form .error {
+  margin: 0 0 0.9rem;
+}

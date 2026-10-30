@@ -238,6 +238,9 @@ async function openSessionFor(
 
   const match = sessions.data.find((session) => {
     if (session.mode !== "subscription") return false;
+    // The welcome checkout's sessions also carry the build and add-ons: a
+    // plan chosen from Billing must not land on one of those.
+    if (session.metadata?.source === "welcome") return false;
     if (session.expires_at && session.expires_at * 1000 < Date.now()) {
       return false;
     }

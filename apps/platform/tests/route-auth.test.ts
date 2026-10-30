@@ -155,6 +155,17 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "starts a Stripe Checkout for a visitor; rate-limited, amounts decided server-side",
     checks: "beginShopCheckout(",
   },
+  // A booking site's open times and the booking itself, from visitors'
+  // browsers. Only sites whose client has booking on; the booking is
+  // rate-limited, origin-checked and re-checked in one guarded insert.
+  "api/public/sites/[sitePublicId]/availability/route.ts": {
+    reason: "a booking site's open times, read by visitors' browsers",
+    checks: "openTimesForSite(",
+  },
+  "api/public/sites/[sitePublicId]/bookings/route.ts": {
+    reason: "a visitor books an open time; rate-limited, origin-checked, slot re-checked atomically",
+    checks: "requestBooking(",
+  },
 };
 
 const APP_DIR = join(process.cwd(), "src", "app");

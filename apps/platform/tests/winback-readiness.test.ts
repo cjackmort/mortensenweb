@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sendingReadiness, sendTimeFor, winbackSenderAddress } from "@/lib/winback/readiness";
+import { CLIENT_PROFILE_FIELDS } from "@/lib/business-profile";
+import { MISSING_FIX, MISSING_MESSAGE, sendingReadiness, sendTimeFor, winbackSenderAddress } from "@/lib/winback/readiness";
 
 /**
  * What must be true before a win-back campaign may be approved or sent.
@@ -39,6 +40,32 @@ describe("sendingReadiness", () => {
   it("blocks when this server cannot send or sign links", () => {
     const result = sendingReadiness({ details: { address: "123 Main St" }, fallbackReplyTo: "o@example.test", env: {} });
     expect(result.missing).toEqual(["sender", "links"]);
+  });
+});
+
+describe("what to do about a gap", () => {
+  it("sends the client straight to the profile field that fixes it", () => {
+    expect(MISSING_FIX.postal_address).toEqual({ href: "/dashboard/profile?field=address", label: "Add your address" });
+    // Replies go to the profile's public email when it has one.
+    expect(MISSING_FIX.reply_to).toEqual({ href: "/dashboard/profile?field=email", label: "Add a business email" });
+  });
+
+  it("only links to a field the client can edit themselves", () => {
+    const editable = new Set(CLIENT_PROFILE_FIELDS.map((f) => f.key));
+    for (const fix of Object.values(MISSING_FIX)) {
+      const field = new URL(fix.href, "https://portal.example").searchParams.get("field");
+      expect(editable.has(field ?? "")).toBe(true);
+    }
+  });
+
+  it("no longer asks for a request to fix what the client can fix", () => {
+    expect(MISSING_MESSAGE.postal_address).not.toMatch(/request/i);
+    expect(MISSING_MESSAGE.reply_to).not.toMatch(/request/i);
+  });
+
+  it("has nothing to link for what only we can switch on", () => {
+    expect(MISSING_FIX.sender).toBeUndefined();
+    expect(MISSING_FIX.links).toBeUndefined();
   });
 });
 

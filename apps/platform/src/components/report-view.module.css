@@ -21,11 +21,15 @@
   font-size: 0.875rem;
 }
 
+/* Regular weight, like every other page title: left to the h1 default it was
+   bold, the one heavy title in the portal. */
 .title {
   margin: 0;
   font-family: var(--display);
+  font-weight: 400;
   font-size: clamp(1.75rem, 5vw, 2.5rem);
   line-height: 1.1;
+  letter-spacing: -0.03em;
 }
 
 .headline {

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { BarList, Sparkline } from "@/components/charts";
@@ -61,7 +60,6 @@ export default async function CampaignsPage() {
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Campaigns</h1>
         <span>QR codes and short links for your print</span>
@@ -148,6 +146,7 @@ function ScansPanel({ stats, list }: { stats: ScanStats; list: CampaignListItem[
               label="Top campaign"
               value={stats.byCampaign[0]?.name ?? "—"}
               note={`${stats.byCampaign[0]?.scans ?? 0} scans in the last ${DAYS} days`}
+              isText
             />
           </div>
           <div className="panel-body">

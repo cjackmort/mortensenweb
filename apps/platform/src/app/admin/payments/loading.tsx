@@ -8,8 +8,9 @@ export default function Loading() {
   return (
     <main className="shell">
       <MastheadSkeleton title="Payments" />
-      <ListSkeleton title="Subscriptions" rows={4} />
-      <ListSkeleton title="Revenue" rows={3} />
+      <ListSkeleton title="Clients" rows={5} />
+      <ListSkeleton title="Overdue" rows={2} />
+      <ListSkeleton title="Ledger" rows={4} />
     </main>
   );
 }

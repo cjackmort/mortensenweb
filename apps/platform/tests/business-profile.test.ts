@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLIENT_PROFILE_FIELDS,
+  CLIENT_PROFILE_GROUPS,
   PROFILE_FIELDS,
+  PROFILE_GROUPS,
+  focusedProfileField,
+  mergeClientDetails,
   parseProfileForm,
   profileEntries,
+  profileFieldHref,
 } from "@/lib/business-profile";
 
 /**
@@ -87,5 +93,50 @@ describe("PROFILE_FIELDS", () => {
   it("names every field once", () => {
     const keys = PROFILE_FIELDS.map((f) => f.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("the operator's own fields", () => {
+  it("leaves the look-and-voice notes off the client's form", () => {
+    const clientKeys = CLIENT_PROFILE_FIELDS.map((f) => f.key);
+    for (const key of ["brand", "voice", "other"]) expect(clientKeys).not.toContain(key);
+    expect(clientKeys).toEqual(expect.arrayContaining(["businessName", "phone", "address", "email"]));
+
+    expect(CLIENT_PROFILE_GROUPS).not.toContain("Look and voice");
+    expect(PROFILE_GROUPS).toContain("Look and voice");
+    // The operator's form still has every field.
+    expect(PROFILE_FIELDS.map((f) => f.key)).toEqual(expect.arrayContaining(["brand", "voice", "other"]));
+  });
+
+  it("keeps what the operator wrote when the client saves, and ignores the client's try at it", () => {
+    const before = { businessName: "Acme", phone: "208-555-0100", brand: "Navy, Jost", voice: "Plain", other: "Mention the 24h line" };
+    const submitted = { businessName: "Acme Plumbing", brand: "Hot pink", voice: "" };
+
+    expect(mergeClientDetails(before, submitted)).toEqual({
+      businessName: "Acme Plumbing",
+      brand: "Navy, Jost",
+      voice: "Plain",
+      other: "Mention the 24h line",
+    });
+  });
+
+  it("does not invent operator fields that were never filled in", () => {
+    expect(mergeClientDetails({}, { phone: "208-555-0100" })).toEqual({ phone: "208-555-0100" });
+    expect(mergeClientDetails(null, {})).toEqual({});
+  });
+});
+
+describe("linking straight to a field", () => {
+  it("points at the client's own profile page, with the field named", () => {
+    expect(profileFieldHref("address")).toBe("/dashboard/profile?field=address");
+  });
+
+  it("only focuses a field the client's form shows", () => {
+    expect(focusedProfileField("address")).toBe("address");
+    expect(focusedProfileField("email")).toBe("email");
+    expect(focusedProfileField("brand")).toBeNull();
+    expect(focusedProfileField("nope")).toBeNull();
+    expect(focusedProfileField(undefined)).toBeNull();
+    expect(focusedProfileField(["address", "phone"])).toBe("address");
   });
 });
