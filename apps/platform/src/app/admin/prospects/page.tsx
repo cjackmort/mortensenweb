@@ -84,7 +84,9 @@ export default async function AdminProspectsPage() {
       <main className="shell">
         <div className="masthead">
           <h1>Potential clients</h1>
-          <span className="muted">{prospects.length}</span>
+          <span className="muted">
+            {prospects.length} {prospects.length === 1 ? "business" : "businesses"}
+          </span>
         </div>
 
         {/* Both are named because they fail at different points and the

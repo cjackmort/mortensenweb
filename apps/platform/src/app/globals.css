@@ -1387,6 +1387,12 @@ button:disabled {
   gap: 0.75rem;
 }
 
+/* A row of page actions between panes keeps the panes' own spacing; it sat
+   flush on top of the next card. */
+.shell > .actions {
+  margin-bottom: var(--stack);
+}
+
 /* Small enough to sit inside a table cell without dominating the row. */
 button.small,
 .button.small {

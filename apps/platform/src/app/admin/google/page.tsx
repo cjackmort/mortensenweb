@@ -126,7 +126,12 @@ export default async function GoogleAdminPage({ searchParams }: { searchParams: 
                     <tr key={c.clientPublicId}>
                       <td data-label="Client">
                         <Link href={`/admin/google/${c.clientPublicId}`}>{c.organizationName}</Link>
-                        {c.isDemo && <span className="badge"> Demo</span>}
+                        {c.isDemo && (
+                          <>
+                            {" "}
+                            <span className="badge">Demo</span>
+                          </>
+                        )}
                         {!c.hasFeature && <span className="muted"> · not in their plan</span>}
                       </td>
                       <td data-label="Google profile">{c.location ? (c.location.title ?? c.location.locationName) : <span className="muted">Not linked</span>}</td>
