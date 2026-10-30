@@ -173,6 +173,14 @@
  * Entrances are CSS keyframes, and every one animates *toward* the resting
  * state the HTML already describes. Stopping the animation at any point, or
  * never starting it, leaves a correct lockup.
+ *
+ * Only transform and opacity move, and the transforms are 3D so the browser
+ * runs them on the compositor. Two things made the lockup visibly shake on
+ * load: the tagline animated `letter-spacing`, which re-lays-out the text on
+ * every frame on the main thread (and stutters while the field canvas mounts),
+ * and the letters' long expo tail rendered on the pixel grid, so each letter
+ * snapped a pixel at a time as it settled. Composited layers move at
+ * sub-pixel precision and keep moving when the main thread is busy.
  */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -192,6 +200,7 @@
     display: inline-block;
     animation: sq-rise 1s var(--ease-expo) both;
     animation-delay: calc(200ms + var(--i) * 90ms);
+    backface-visibility: hidden;
   }
 
   .lockup__rule {
@@ -199,7 +208,8 @@
   }
 
   .lockup__tagline {
-    animation: sq-track 1.1s var(--ease-out) 920ms both;
+    animation: sq-settle 1.1s var(--ease-out) 920ms both;
+    backface-visibility: hidden;
   }
 
   .hero-sq__path {
@@ -209,7 +219,7 @@
 }
 
 @keyframes sq-mark {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
 }
 
 @keyframes sq-dot {
@@ -217,7 +227,7 @@
 }
 
 @keyframes sq-rise {
-  from { opacity: 0; transform: translateY(0.4em); }
+  from { opacity: 0; transform: translate3d(0, 0.4em, 0); }
 }
 
 @keyframes sq-draw {
@@ -228,8 +238,10 @@
   from { transform: scaleY(0); }
 }
 
-@keyframes sq-track {
-  from { opacity: 0; letter-spacing: 0.58em; }
+/* Was a letter-spacing "track in", which re-laid-out the line every frame.
+   A short rise reads as the same settling without touching layout. */
+@keyframes sq-settle {
+  from { opacity: 0; transform: translate3d(0, 0.35em, 0); }
 }
 
 /* ============================================================ the field */
