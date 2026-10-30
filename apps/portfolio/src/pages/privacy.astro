@@ -6,23 +6,27 @@ import { SITE } from "../data/site";
  * Privacy policy for this site and the client portal.
  *
  * Every line describes something the code actually does, checked against
- * apps/platform and this app on 2026-10-22. If a practice changes — a new
- * provider, a new kind of email, data kept for longer — change this page in
- * the same pull request, or it stops being true.
+ * apps/platform and this app on 2026-10-22, and the Search Console section on
+ * 2026-10-29. If a practice changes — a new provider, a new kind of email,
+ * data kept for longer — change this page in the same pull request, or it
+ * stops being true.
  *
  * Google's OAuth consent screen points here, and Google reviews the Business
- * Profile section against what the portal does with the business.manage
- * scope. The Limited Use sentence is Google's own sample wording (Google Cloud
- * help, answer 13463817); keep it word for word.
+ * Profile and Search Console sections against what the portal does with the
+ * business.manage and webmasters.readonly scopes. The Limited Use sentence is
+ * Google's own sample wording (Google Cloud help, answer 13463817); keep it
+ * word for word in both sections.
  *
  * No law or certification is claimed on purpose. Nothing here has been
  * checked by a lawyer yet; the pull request that added it lists what to ask.
  */
 
-const EFFECTIVE = { iso: "2026-10-22", label: "October 22, 2026" };
+const EFFECTIVE = { iso: "2026-10-29", label: "October 29, 2026" };
 const portalHost = new URL(SITE.portalUrl).host;
 const GOOGLE_USER_DATA_POLICY =
   "https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes";
+/** Where a Google user sees and removes third-party apps with access to their account. */
+const GOOGLE_ACCOUNT_CONNECTIONS = "https://myaccount.google.com/connections";
 ---
 
 <Base
@@ -262,8 +266,58 @@ const GOOGLE_USER_DATA_POLICY =
           </div>
         </li>
 
+        <li id="search-console">
+          <h2 class="h3"><span class="n">10</span> Google Search Console</h2>
+          <div>
+            <p>
+              A client can connect Google Search Console so the portal can show how their site does in Google
+              search. The client signs in with the Google account that has their site in Search Console and allows
+              read-only access (the <span class="mono">webmasters.readonly</span> permission). The portal also gets
+              that account's email address and Google account ID, to show which account is connected. It doesn't ask
+              for Gmail, Calendar or the Business Profile.
+            </p>
+            <p><strong>What we read</strong>, each day and when the client asks the portal to look again:</p>
+            <ul class="policy__list">
+              <li>
+                the list of sites the account has in Search Console, to find the client's site. We keep the list so
+                the portal can say when the site isn't on it.
+              </li>
+              <li>
+                for the client's site only, the latest 28 days Google has figures for: clicks, impressions (how
+                often the site was shown), click-through rate and average position, for the whole period, for each
+                day, and for the top 25 search terms and top 25 pages
+              </li>
+              <li>clicks and impressions for the 28 days before that, to compare</li>
+            </ul>
+            <p>We can't change anything in Search Console, and we don't read figures for any other site.</p>
+            <p>
+              We use this data only to show the client how their site is doing in Google search and what might
+              improve it, in their portal and in the monthly report we email them. We don't sell Google data, use it
+              for advertising, or use it to train AI models. We don't share it with anyone except the client whose
+              site it is and the providers that run the portal for us: Netlify, Neon, and Resend for the client's
+              report email.
+            </p>
+            <p>
+              We keep each day's figures in our database so the portal can show the trend. The token Google gives us
+              for the account is stored encrypted and never leaves our server.
+            </p>
+            <p>
+              A client can disconnect Search Console on the Connections page in the portal at any time. That asks
+              Google to cancel our access, deletes the token, and stops the daily reads. A client can also remove our
+              access in their <a class="link" href={GOOGLE_ACCOUNT_CONNECTIONS}>Google Account</a>, and the portal
+              then stops reading. Either way, the figures already saved, and a record of which Google account was
+              connected, stay until the client asks us to delete them.
+            </p>
+            <p class="policy__statement">
+              {SITE.name}'s use of information received from Google APIs will
+              adhere to <a class="link" href={GOOGLE_USER_DATA_POLICY}>Google API Services User Data Policy</a>,
+              including the Limited Use requirements.
+            </p>
+          </div>
+        </li>
+
         <li id="optional">
-          <h2 class="h3"><span class="n">10</span> Used only when switched on</h2>
+          <h2 class="h3"><span class="n">11</span> Used only when switched on</h2>
           <div>
             <p>These are built into the portal but stay off unless we switch them on:</p>
             <ul class="policy__list">
@@ -282,7 +336,7 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="providers">
-          <h2 class="h3"><span class="n">11</span> Who handles data for us</h2>
+          <h2 class="h3"><span class="n">12</span> Who handles data for us</h2>
           <div>
             <dl class="policy__providers">
               <div><dt>Netlify</dt><dd>hosts this site and the portal, runs the contact forms, and stores portal uploads</dd></div>
@@ -292,17 +346,17 @@ const GOOGLE_USER_DATA_POLICY =
               <div><dt>Resend</dt><dd>sends the portal's email</dd></div>
               <div><dt>Stripe</dt><dd>card payments</dd></div>
               <div><dt>Umami</dt><dd>visitor counts on this site</dd></div>
-              <div><dt>Google</dt><dd>our email (Gmail), this site's fonts, and the Business Profile and Places APIs</dd></div>
+              <div><dt>Google</dt><dd>our email (Gmail), this site's fonts, and the Business Profile, Search Console and Places APIs</dd></div>
             </dl>
             <p>
-              Plus the services in section 10, when they're on. We share information with each only so it can do
+              Plus the services in section 11, when they're on. We share information with each only so it can do
               that job. We'll also share information if the law requires it.
             </p>
           </div>
         </li>
 
         <li id="retention">
-          <h2 class="h3"><span class="n">12</span> How long we keep it</h2>
+          <h2 class="h3"><span class="n">13</span> How long we keep it</h2>
           <div>
             <ul class="policy__list">
               <li>
@@ -318,6 +372,10 @@ const GOOGLE_USER_DATA_POLICY =
                 the file.
               </li>
               <li><strong>Google profile data:</strong> until the profile is unlinked from the portal.</li>
+              <li>
+                <strong>Search Console figures:</strong> until the client asks us to delete them. Disconnecting stops
+                new ones.
+              </li>
               <li><strong>Sign-in and action logs:</strong> kept to protect accounts.</li>
             </ul>
             <p>We don't delete old records on a schedule yet. If you want something gone, ask.</p>
@@ -325,7 +383,7 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="choices">
-          <h2 class="h3"><span class="n">13</span> Your choices</h2>
+          <h2 class="h3"><span class="n">14</span> Your choices</h2>
           <div>
             <p>
               <a class="link" href="#contact">Contact us</a> to see what we hold about you, to correct it, or to
@@ -336,10 +394,10 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="security">
-          <h2 class="h3"><span class="n">14</span> Security</h2>
+          <h2 class="h3"><span class="n">15</span> Security</h2>
           <div>
             <p>
-              Everything travels over HTTPS. Passwords are hashed, our Google token is encrypted, and client
+              Everything travels over HTTPS. Passwords are hashed, Google tokens are encrypted, and client
               repositories are private. No system is perfect. If we learn of a breach that affects your
               information, we'll tell you.
             </p>
@@ -347,7 +405,7 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="children">
-          <h2 class="h3"><span class="n">15</span> Children</h2>
+          <h2 class="h3"><span class="n">16</span> Children</h2>
           <div>
             <p>
               This site and the portal are for businesses. They aren't meant for children, and we don't knowingly
@@ -357,7 +415,7 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="updates">
-          <h2 class="h3"><span class="n">16</span> Changes to this policy</h2>
+          <h2 class="h3"><span class="n">17</span> Changes to this policy</h2>
           <div>
             <p>
               When we change this policy, we'll update the date at the top. If a change affects how we use
@@ -367,7 +425,7 @@ const GOOGLE_USER_DATA_POLICY =
         </li>
 
         <li id="contact">
-          <h2 class="h3"><span class="n">17</span> Contact</h2>
+          <h2 class="h3"><span class="n">18</span> Contact</h2>
           <div>
             <p>
               {SITE.founder}<br />
