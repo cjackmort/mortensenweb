@@ -20,8 +20,8 @@ export interface EditorProps {
   identity: { fromName: string; replyTo: string | null; postalAddress: string | null; senderAddress: string };
   sample: { email: string; name: string | null };
   reachable: number;
-  /** Why approving is impossible right now, or null. */
-  blocked: string | null;
+  /** Why approving is impossible right now (with a link to fix it, where there is one), or null. */
+  blocked: React.ReactNode;
   today: string;
   readOnly: boolean;
 }
