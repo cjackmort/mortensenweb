@@ -122,6 +122,13 @@ export const dynamic = "force-dynamic";
 // budget; anything not reached is picked up on the next tick.
 export const maxDuration = 60;
 
+/**
+ * What the live-site check may spend of that minute. Healthy sites answer in a
+ * fraction of a second ten at a time, so this only bites when sites hang; it is
+ * a quarter of the minute so the jobs after it keep theirs.
+ */
+const LIVE_SITE_BUDGET_MS = 15_000;
+
 function authorised(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -202,7 +209,10 @@ export async function POST(request: Request): Promise<Response> {
     ["previewsVerified", () => reverifyPendingPreviews(db)],
     ["jobsExpired", () => expireStalledJobs(db)],
     ["shippedChanges", () => advanceShippedChanges(db)],
-    ["liveSiteProblems", () => reverifyLiveSites(db)],
+    // Bounded so a slow or hung site cannot eat the minute the jobs below
+    // share. The sites it does not reach are the least recently checked, so
+    // they go first on the next tick.
+    ["liveSiteProblems", () => reverifyLiveSites(db, { budgetMs: LIVE_SITE_BUDGET_MS })],
     ["sharesExpired", () => expireStaleShares(db)],
     // Media derivatives. The upload route nudges this after a completion, so
     // the usual path is seconds; this is the safety net for a nudge that did
