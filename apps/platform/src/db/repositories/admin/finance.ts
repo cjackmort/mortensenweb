@@ -400,3 +400,45 @@ export async function ledgerSummary(
   ]);
   return { month: { ...month, yearMonth }, year: { ...wholeYear, year } };
 }
+
+export interface ProfitStanding {
+  month: PeriodTotals & { yearMonth: string };
+  /** Every month up to the end of `month`. `since` is the first dated row, or null for an empty ledger. */
+  allTime: PeriodTotals & { since: string | null };
+}
+
+/** Earlier than any row the ledger can hold, so "all time" needs no special case. */
+const LEDGER_START = "1970-01-01";
+
+/** The first date anything was received or spent, before `to`. */
+async function firstLedgerDate(db: Database, to: string): Promise<string | null> {
+  const [paid] = await db
+    .select({ first: sql<string | null>`min(${payments.receivedOn})::text` })
+    .from(payments)
+    .where(and(COUNTED_PAYMENT, lt(payments.receivedOn, to)));
+  const [spent] = await db
+    .select({ first: sql<string | null>`min(${expenses.occurredOn})::text` })
+    .from(expenses)
+    .where(and(COUNTED_EXPENSE, lt(expenses.occurredOn, to)));
+  const dates = [paid?.first, spent?.first].filter((d): d is string => Boolean(d));
+  return dates.length === 0 ? null : dates.sort()[0]!;
+}
+
+/**
+ * "Are we in the green?" for the top of Payments: this month, and all time
+ * through the end of it. Rows dated later — a payment entered ahead — wait
+ * for their month rather than flattering this one.
+ */
+export async function profitStanding(
+  _ctx: AdminContext,
+  db: Database,
+  yearMonth: string,
+): Promise<ProfitStanding> {
+  const range = monthRange(yearMonth);
+  const [month, allTime, since] = await Promise.all([
+    periodTotals(db, range),
+    periodTotals(db, { from: LEDGER_START, to: range.to }),
+    firstLedgerDate(db, range.to),
+  ]);
+  return { month: { ...month, yearMonth }, allTime: { ...allTime, since } };
+}
