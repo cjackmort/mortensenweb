@@ -16,6 +16,7 @@ import {
   type RequiredFacts,
 } from "@/lib/onboarding/todos";
 import type { TenantContext } from "../context";
+import { isAvailabilitySetUp } from "./availability";
 import { getEntitlements, type Entitlements } from "./entitlements";
 import { listListingChecklists } from "./listings";
 import { siteDueFor } from "./onboarding-checkout";
@@ -112,11 +113,12 @@ async function requiredFacts(
   entitlements: Entitlements | null,
   passwordChosen: boolean,
 ): Promise<RequiredFacts> {
-  const [due, details, winback, shop] = await Promise.all([
+  const [due, details, winback, shop, availabilityReady] = await Promise.all([
     siteDueFor(db, flags),
     businessDetails(db, ctx),
     hasWinback(db, flags.clientId, entitlements),
     flags.shopEnabled ? shopFacts(db, ctx) : NO_SHOP,
+    flags.bookingEnabled ? isAvailabilitySetUp(db, ctx) : false,
   ]);
 
   return {
@@ -125,11 +127,7 @@ async function requiredFacts(
     businessDetailsMissing: BUSINESS_DETAIL_KEYS.filter((key) => !details[key]?.trim()),
     hasAddress: Boolean(details.address?.trim()),
     addressRequired: winback,
-    booking: {
-      enabled: flags.bookingEnabled,
-      // Wired at merge to the availability agent's isAvailabilitySetUp(db, ctx).
-      availabilityReady: false,
-    },
+    booking: { enabled: flags.bookingEnabled, availabilityReady },
     shop,
   };
 }
