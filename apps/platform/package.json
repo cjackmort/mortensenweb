@@ -21,7 +21,12 @@
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:reset": "tsx scripts/reset.ts",
     "square:plans": "tsx --env-file=.env.local scripts/square-plans.ts",
-    "stripe:setup": "tsx --env-file=.env.stripe scripts/stripe-setup.ts"
+    "stripe:setup": "tsx --env-file=.env.stripe scripts/stripe-setup.ts",
+    "stripe:fake": "tsx scripts/preview/fake-stripe.ts",
+    "seed:welcome": "tsx scripts/preview/seed-welcome.ts",
+    "netlify:stripe-env": "tsx scripts/preview/netlify-stripe-env.ts",
+    "e2e:prepare": "tsx e2e/prepare.ts",
+    "e2e:checkout": "npm run e2e:prepare && playwright test"
   },
   "dependencies": {
     "@mortensenweb/plans": "*",
@@ -40,6 +45,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
+    "@playwright/test": "^1.64.1",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectedCents,
   expectedCentsForPlan,
@@ -33,6 +33,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (savedKey === undefined) delete process.env.STRIPE_SECRET_KEY;
   else process.env.STRIPE_SECRET_KEY = savedKey;
 });
@@ -58,6 +59,8 @@ describe("mode detection", () => {
   });
 
   it("refuses a test event on a live key", () => {
+    // A live key is only honoured in the production deploy; see stripe-live-key-guard.test.ts.
+    vi.stubEnv("CONTEXT", "production");
     process.env.STRIPE_SECRET_KEY = "sk_live_abc";
     expect(modeMatches(false)).toBe(false);
     expect(modeMatches(true)).toBe(true);

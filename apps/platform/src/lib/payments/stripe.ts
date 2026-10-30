@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { isProductionContext } from "@/lib/storage/driver";
 import { ADD_ON_FEATURES, GROWTH_FEATURES, PLANS, type GrowthFeatureKey, type PlanKey } from "@mortensenweb/plans";
 
 /**
@@ -221,6 +222,70 @@ export class StripeNotConfigured extends Error {
 
 let cached: { key: string; client: Stripe } | null = null;
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Where a local preview's Stripe calls go: a stand-in on this machine
+ * (`scripts/preview/fake-stripe.ts`), so checkout can be clicked through with
+ * no Stripe account. Only for a test key, never in production, and never
+ * anywhere but localhost — a real key always talks to Stripe.
+ */
+export function localStripeHost(
+  secretKey: string,
+): { host: string; port: number; protocol: "http" | "https" } | null {
+  const base = process.env.STRIPE_API_BASE;
+  if (!base || process.env.NODE_ENV === "production" || !secretKey.startsWith("sk_test_")) return null;
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return null;
+  }
+  if (!LOCAL_HOSTS.has(url.hostname)) return null;
+  const protocol = url.protocol === "https:" ? "https" : "http";
+  return { host: url.hostname, port: Number(url.port || (protocol === "https" ? 443 : 80)), protocol };
+}
+
+let reportedRefusal = false;
+
+/**
+ * The secret key this process may use, or null when Stripe is off for it.
+ *
+ * A live key is honoured only in the production deploy. Netlify gives every
+ * context the variables it is scoped to, and until this check nothing stopped
+ * a deploy preview or a branch deploy that held the live key from creating
+ * real Checkout Sessions on a pull request's code — so a half-built change
+ * could charge a real card. "Production" is `isProductionContext()`, the same
+ * answer the storage driver and the scheduler gate act on: `CONTEXT` when the
+ * runtime exposes it, `NODE_ENV` when it does not. The failure this cannot
+ * catch is a preview whose runtime hides `CONTEXT`; scoping live keys to the
+ * production context in Netlify is what actually closes that.
+ *
+ * Anything not recognisably a test key counts as live, the same reading
+ * `modeFromKey` takes, so a mangled key fails closed instead of open.
+ *
+ * `STRIPE_ALLOW_LIVE_KEY=true` is for one thing: `npm run stripe:setup` on the
+ * operator's machine, which creates prices and the webhook in the live
+ * account and runs with neither `CONTEXT` nor a production `NODE_ENV`. It
+ * belongs in `.env.stripe` and nowhere else. Only the literal `true` counts.
+ */
+function usableSecretKey(): string | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  if (!modeFromKey(key).livemode) return key;
+  if (isProductionContext() || process.env.STRIPE_ALLOW_LIVE_KEY === "true") return key;
+
+  if (!reportedRefusal) {
+    reportedRefusal = true;
+    console.error(
+      `[stripe] A live Stripe key is set in the "${process.env.CONTEXT || process.env.NODE_ENV || "unknown"}" context, ` +
+        "which is not production. Stripe is switched off here so nothing can charge a real card. " +
+        "Use a sk_test_ key for this context.",
+    );
+  }
+  return null;
+}
+
 /**
  * The configured client, or null when Stripe is switched off.
  *
@@ -231,7 +296,7 @@ let cached: { key: string; client: Stripe } | null = null;
  * one that shows the Square path.
  */
 export function stripeClient(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = usableSecretKey();
   if (!key) return null;
 
   if (cached?.key === key) return cached.client;
@@ -242,6 +307,7 @@ export function stripeClient(): Stripe | null {
     // idempotency-key aware, so a retried create cannot produce two objects.
     maxNetworkRetries: 2,
     appInfo: { name: "mortensenweb-portal", version: "1.0.0" },
+    ...(localStripeHost(key) ?? {}),
   });
 
   cached = { key, client };
@@ -256,7 +322,7 @@ export function requireStripe(): Stripe {
 }
 
 export function stripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return usableSecretKey() !== null;
 }
 
 /**
@@ -269,7 +335,7 @@ export function stripeConfigured(): boolean {
  * two places.
  */
 export function modeMatches(objectLivemode: boolean): boolean {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = usableSecretKey();
   if (!key) return false;
   return modeFromKey(key).livemode === objectLivemode;
 }

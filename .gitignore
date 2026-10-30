@@ -106,3 +106,8 @@ apps/portfolio/.astro/dev.json
 # image beside each one is the fallback and is what belongs in git.
 apps/portfolio/public/work/*-auto.webp
 apps/portfolio/public/work/*-auto-*.webp
+
+# The checkout run (apps/platform/e2e): its throwaway database and the logins
+# the seed generates for it.
+.pglite-e2e/
+.e2e/

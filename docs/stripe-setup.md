@@ -137,10 +137,21 @@ the repository.
 |---|---|
 | `STRIPE_SECRET_KEY` | Secret or restricted key. **The key decides test vs live** — there is no separate environment variable, because two sources for one fact can disagree and the way they disagree is a deployment that charges real cards believing itself to be in test mode. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for this deployment's endpoint. Each endpoint has its own. |
+| `STRIPE_ALLOW_LIVE_KEY` | `true` only in `apps/platform/.env.stripe`, on the operator's machine, for `npm run stripe:setup` against the live account. Never set it in Netlify. |
 
 Unset means Stripe is off: the billing page falls back to Square and manual
 payment, and the webhook answers 503 rather than processing anything
 unverified.
+
+**A live key is only used in production.** Outside the production deploy
+context — a deploy preview, a branch deploy, a developer's machine — a
+`sk_live_` or `rk_live_` key switches Stripe off and logs `[stripe] A live
+Stripe key is set in the "…" context`, instead of creating real Checkout
+Sessions on a pull request's code. Production is Netlify's `CONTEXT`, or
+`NODE_ENV` where the runtime does not expose it (the same rule the storage
+driver and the scheduler gate use). That is the backstop: also **scope the live
+keys to the Production context in Netlify** and give previews and branch deploys
+test keys. [testing-payments.md](testing-payments.md) has the steps.
 
 ### Webhook
 
@@ -445,8 +456,12 @@ built against the sandbox `Mortensen Web Co. sandbox` (`acct_1UAM3V5dv299nvox`);
 live mode starts with no prices, no webhook and no customer portal.
 
 1. **Prices and webhook — `npm run stripe:setup`.** Put the live secret key in
-   `apps/platform/.env.stripe` (ignored by Git), run it once to see the
-   report, then again with `-- --apply`. It creates the four prices under the
+   `apps/platform/.env.stripe` (ignored by Git) together with
+   `STRIPE_ALLOW_LIVE_KEY=true` — without it the portal's live-key guard treats
+   the script like a preview and refuses — run it once to see the
+   report, then again with `-- --apply`. (To set up a test account instead, use a
+   test key and pass `-- --portal=<that deployment's URL>`; the default target
+   is production's URL whatever the key.) It creates the four prices under the
    lookup keys above, and the webhook endpoint at the production URL pinned
    to `STRIPE_API_VERSION` and subscribed to exactly
    `HANDLED_STRIPE_EVENTS`. It prints the endpoint's signing secret once.
@@ -461,14 +476,17 @@ live mode starts with no prices, no webhook and no customer portal.
    not wired to send anything, so without this nobody tells a client their
    card failed.
 4. **Set `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET`** in the
-   Netlify production environment, then **trigger a deploy** — Netlify bakes
-   environment variables in at build time.
+   Netlify environment **for the Production context only** — a variable left
+   on "all contexts" hands the live key to every deploy preview — then
+   **trigger a deploy**; Netlify bakes environment variables in at build time.
 5. ~~Run migration 0020~~ — applied; production's ledger high-water mark is
    past it (0021 at `1789200000000`).
 6. **Decide Mitch's change allowance**, then migrate him in the order set out
    in [Migrating Mitch](#migrating-mitch--the-order-matters) — telling him to
    stop sending Venmo *before* he enrols, not after.
-7. **Verify with real, small transactions** — on a client record you control:
+7. **Verify with real, small transactions** — after rehearsing the same flow
+   locally and on staging ([testing-payments.md](testing-payments.md)), on a
+   client record you control:
    raise a $1 invoice and pay it by card; start a subscription. Confirm both
    ledger rows appear with the right amounts and the invoice reads paid, then
    refund both in the dashboard.
