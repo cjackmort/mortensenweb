@@ -10,7 +10,7 @@ import {
 } from "@/db/repositories/client/connections";
 import { runScheduledConnectionAudits } from "@/db/repositories/admin/connection-audits";
 import { AuthorizationError, tenantContextFrom } from "@/db/repositories/context";
-import type { ProviderAdapter } from "@/lib/connections";
+import type { OAuthAdapter } from "@/lib/connections";
 import { findingsNote } from "@/lib/connections/report";
 import { auditInstagram, type InstagramSnapshot } from "@/lib/connections/providers/instagram";
 import { auditSearch, matchProperty, type SearchSnapshot } from "@/lib/connections/providers/google";
@@ -61,7 +61,7 @@ afterEach(async () => {
   await db.delete(connectedAccounts);
 });
 
-function fakeAdapter(overrides: Partial<ProviderAdapter> = {}): ProviderAdapter {
+function fakeAdapter(overrides: Partial<OAuthAdapter> = {}): OAuthAdapter {
   const outcome: AuditOutcome = {
     audit: {
       version: AUDIT_VERSION,
@@ -77,6 +77,7 @@ function fakeAdapter(overrides: Partial<ProviderAdapter> = {}): ProviderAdapter 
   };
   return {
     key: "instagram",
+    connectWith: "oauth",
     name: "Instagram",
     what: "",
     looksAt: [],

@@ -5,9 +5,11 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { listConnectedAccounts, type ConnectedAccountView } from "@/db/repositories/client/connections";
 import { CONNECTION_PROVIDERS, PROVIDERS, type ConnectionProvider } from "@/lib/connections";
+import { STRIPE_KEY_READS } from "@/lib/connections/providers/stripe";
 import type { Finding } from "@/lib/connections/types";
 import { formatDateTime } from "@/lib/time";
 import { ConnectedControls } from "./forms";
+import { StripeKeyForm } from "./stripe-key-form";
 
 /**
  * Connections: the accounts a client lets the portal look at — Stripe,
@@ -154,6 +156,8 @@ function ProviderCard({
             {configured.ok ? (
               readOnly ? (
                 <p className="muted">Viewing as the client: connections are theirs to make.</p>
+              ) : adapter.connectWith === "key" ? (
+                <StripeKeyForm reads={STRIPE_KEY_READS} reconnect={Boolean(connected)} />
               ) : (
                 <a className="button" href={`/api/connections/${provider}/start`}>
                   {connected ? `Reconnect ${adapter.name}` : `Connect ${adapter.name}`}

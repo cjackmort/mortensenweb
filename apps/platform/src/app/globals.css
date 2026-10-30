@@ -4746,6 +4746,13 @@ form + .field-hint {
   margin-top: 0.25rem;
 }
 
+/* Stripe's paste-a-key form: the steps, then the box. A key is one line, so
+   the box needs no more width than the steps beside it. */
+.connection-key {
+  max-width: 36rem;
+  margin-top: 1rem;
+}
+
 .connection-headline {
   margin: 0 0 1rem;
   font-size: 1.1rem;

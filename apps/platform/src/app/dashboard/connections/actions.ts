@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { AuthorizationError, tenantContextFrom } from "@/db/repositories/context";
-import { disconnect, runOwnAudit } from "@/db/repositories/client/connections";
+import { completeConnect, disconnect, runAudit, runOwnAudit } from "@/db/repositories/client/connections";
 import { isConnectionProvider, providerAdapter } from "@/lib/connections";
+import { ProviderError } from "@/lib/connections/types";
 
 export type ConnectionActionResult = { ok: boolean; message: string };
 
@@ -29,8 +31,10 @@ export async function disconnectAction(
   try {
     const gone = await disconnect(session.db, session.ctx, provider);
     revalidatePath("/dashboard/connections");
+    const adapter = providerAdapter(provider);
+    const after = adapter.connectWith === "key" ? ` ${adapter.afterDisconnect}` : "";
     return gone
-      ? { ok: true, message: `${providerAdapter(provider).name} is disconnected. Nothing from it will be in your next report.` }
+      ? { ok: true, message: `${adapter.name} is disconnected. Nothing from it will be in your next report.${after}` }
       : { ok: false, message: "That account was not connected." };
   } catch (error) {
     if (error instanceof AuthorizationError) return { ok: false, message: READ_ONLY };
@@ -55,4 +59,50 @@ export async function auditNowAction(
     if (error instanceof AuthorizationError) return { ok: false, message: READ_ONLY };
     throw error;
   }
+}
+
+/**
+ * Connect a provider that takes a key rather than a sign-in: Stripe's
+ * restricted key. Same rule as the sign-in routes: the client's own grant,
+ * never made while an operator views as them. The key is checked and read
+ * with once before it is kept, sealed; it is never sent back, logged or
+ * stored anywhere but the sealed column.
+ */
+export async function connectKeyAction(
+  _previous: ConnectionActionResult | null,
+  formData: FormData,
+): Promise<ConnectionActionResult> {
+  const user = await currentUser();
+  if (!user?.organizationId) return { ok: false, message: "Please sign in again." };
+  if (user.role !== "client" || user.viewingAs) return { ok: false, message: READ_ONLY };
+  const provider = String(formData.get("provider") ?? "");
+  if (!isConnectionProvider(provider)) return { ok: false, message: "Unknown account." };
+  const adapter = providerAdapter(provider);
+  if (adapter.connectWith !== "key") return { ok: false, message: `${adapter.name} connects by signing in, not with a key.` };
+  if (!adapter.configured().ok) return { ok: false, message: "That account can't be connected yet. We will switch it on and let you know." };
+
+  let grant;
+  try {
+    grant = await adapter.acceptKey(String(formData.get("key") ?? ""));
+  } catch (error) {
+    if (error instanceof ProviderError && error.kind === "invalid") return { ok: false, message: error.message };
+    console.error("[connections] key check failed", {
+      provider,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return { ok: false, message: `${adapter.name} couldn't be reached just now. Try again in a minute.` };
+  }
+
+  const db = await getDb();
+  const ctx = tenantContextFrom(user, user.organizationId);
+  try {
+    await completeConnect(db, ctx, provider, grant);
+  } catch (error) {
+    if (error instanceof AuthorizationError) return { ok: false, message: READ_ONLY };
+    throw error;
+  }
+
+  const first = await runAudit(db, ctx.organizationId, provider);
+  revalidatePath("/dashboard/connections");
+  redirect(`/dashboard/connections?connect=${provider}:${first.ok ? "connected" : "connected_unread"}`);
 }

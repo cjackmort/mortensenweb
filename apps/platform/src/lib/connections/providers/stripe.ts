@@ -1,5 +1,5 @@
-import type Stripe from "stripe";
-import { stripeClient } from "@/lib/payments/stripe";
+import Stripe from "stripe";
+import { STRIPE_API_VERSION } from "@/lib/payments/stripe";
 import {
   formatMoney,
   percent,
@@ -10,76 +10,132 @@ import {
 } from "../types";
 
 /**
- * Stripe, read-only, through Connect's OAuth.
+ * Stripe, read-only, by a restricted key the client makes for us.
  *
- * The client authorises the platform to *read* their account (`read_only`);
- * every call after that is made with the platform key and a `Stripe-Account`
- * header, so no token of theirs is stored at all. The audit looks at the last
- * 30 days of charges, refunds, disputes and failed attempts, and at the
- * account itself: whether payouts are on, whether Stripe is waiting on them,
- * what shows on a customer's statement.
+ * Connect's OAuth looked like the way in, but Stripe allows its `read_only`
+ * scope only for its retired extensions: a platform may ask for
+ * `read_write`, which is full control of the client's account, and nothing
+ * less. A restricted key set to Read on the five things the audit uses is
+ * how a client lets us look without letting us touch. It is sealed like any
+ * other token, and every call is made with it against the client's own
+ * account, so the platform's Connect settings play no part.
+ *
+ * The audit looks at the last 30 days of charges, refunds, disputes and
+ * failed attempts, and at the account itself: whether payouts are on,
+ * whether Stripe is waiting on them, what shows on a customer's statement.
  */
 
-export const STRIPE_SCOPE = "read_only";
-const AUTHORIZE_URL = "https://connect.stripe.com/oauth/authorize";
+export const STRIPE_KEY_SCOPE = "restricted_key";
 /** Objects read per list. Enough for a local business's month; a cap, not a sample. */
 const LIST_LIMIT = 500;
+/** Real keys run to about a hundred characters; anything this short was cut off. */
+const MIN_KEY_BODY = 8;
+const RESTRICTED_KEY = new RegExp(`^rk_(live|test)_[A-Za-z0-9]{${MIN_KEY_BODY},}$`);
+/** Any Stripe key, wherever one turns up in a message about to be stored or logged. */
+const ANY_KEY = /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9*]+/g;
 
-export type StripeConnectConfig = { ok: true; clientId: string } | { ok: false; missing: string[] };
+/** What the audit reads, named as Stripe's restricted-key form names them. */
+const READS = [
+  { label: "Accounts", probe: (stripe: Stripe) => stripe.accounts.retrieveCurrent() },
+  { label: "Charges", probe: (stripe: Stripe) => stripe.charges.list({ limit: 1 }) },
+  { label: "Refunds", probe: (stripe: Stripe) => stripe.refunds.list({ limit: 1 }) },
+  { label: "Disputes", probe: (stripe: Stripe) => stripe.disputes.list({ limit: 1 }) },
+  { label: "PaymentIntents", probe: (stripe: Stripe) => stripe.paymentIntents.list({ limit: 1 }) },
+] as const;
 
-export function stripeConnectConfig(env: Record<string, string | undefined> = process.env): StripeConnectConfig {
-  const clientId = env.STRIPE_CONNECT_CLIENT_ID?.trim() ?? "";
-  const missing = [!clientId && "STRIPE_CONNECT_CLIENT_ID", !env.STRIPE_SECRET_KEY && "STRIPE_SECRET_KEY"].filter(
-    (name): name is string => Boolean(name),
-  );
-  return missing.length > 0 ? { ok: false, missing } : { ok: true, clientId };
-}
+export const STRIPE_KEY_READS: readonly string[] = READS.map((read) => read.label);
 
-export function stripeAuthorizationUrl(input: { clientId: string; redirectUri: string; state: string }): string {
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: input.clientId,
-    scope: STRIPE_SCOPE,
-    redirect_uri: input.redirectUri,
-    state: input.state,
-  });
-  return `${AUTHORIZE_URL}?${params.toString()}`;
-}
+export type StripeKeyCheck = { ok: true; key: string } | { ok: false; message: string };
 
-function client(deps: { stripe?: Stripe }): Stripe {
-  const stripe = deps.stripe ?? stripeClient();
-  if (!stripe) throw new ProviderError("unavailable", "Stripe is not configured.");
-  return stripe;
-}
-
-export async function exchangeStripeCode(code: string, deps: { stripe?: Stripe } = {}): Promise<ProviderGrant> {
-  const stripe = client(deps);
-  let token: Stripe.OAuthToken;
-  try {
-    token = await stripe.oauth.token({ grant_type: "authorization_code", code });
-  } catch (error) {
-    throw new ProviderError("auth", error instanceof Error ? error.message : "Stripe refused the code.");
+/**
+ * Is what was pasted a key we should keep? Only a restricted one: the
+ * secret key can do anything and is refused before it goes anywhere, and a
+ * test key on the live portal would read "nothing paid" every month.
+ */
+export function checkStripeKey(raw: string, opts: { production?: boolean } = {}): StripeKeyCheck {
+  const production = opts.production ?? process.env.NODE_ENV === "production";
+  const key = raw.trim();
+  if (!key) return { ok: false, message: "Paste the key Stripe showed you. It starts rk_live_." };
+  if (/^sk_(live|test)_/.test(key)) {
+    return {
+      ok: false,
+      message:
+        "That is your secret key, which can do anything in your Stripe account. We didn't keep it. Make a restricted key instead: it starts rk_live_.",
+    };
   }
-  const accountId = token.stripe_user_id;
-  if (!accountId) throw new ProviderError("auth", "Stripe returned no account.");
+  if (/^pk_(live|test)_/.test(key)) {
+    return { ok: false, message: "That is your publishable key, which can't read anything. Make a restricted key: it starts rk_live_." };
+  }
+  const match = RESTRICTED_KEY.exec(key);
+  if (!match) return { ok: false, message: "That doesn't look like a Stripe restricted key. It starts rk_live_ and has no spaces." };
+  if (match[1] === "test" && production) {
+    return {
+      ok: false,
+      message: "That is a test key, so it would only ever show test payments. Make the key with Stripe in live mode: it starts rk_live_.",
+    };
+  }
+  return { ok: true, key };
+}
 
-  const account = await stripe.accounts.retrieve(accountId);
+export function stripeForKey(key: string): Stripe {
+  return new Stripe(key, {
+    apiVersion: STRIPE_API_VERSION,
+    maxNetworkRetries: 2,
+    appInfo: { name: "mortensenweb-portal", version: "1.0.0" },
+  });
+}
+
+function redactKeys(text: string): string {
+  return text.replace(ANY_KEY, "[key]");
+}
+
+type StripeFailure = { kind: "auth" | "permission" | "unavailable"; message: string };
+
+function stripeFailure(error: unknown): StripeFailure {
+  const { type, statusCode } = error as { type?: string; statusCode?: number };
+  const message = redactKeys(error instanceof Error ? error.message : "Stripe could not be read.");
+  if (type === "StripeAuthenticationError" || statusCode === 401) return { kind: "auth", message };
+  if (type === "StripePermissionError" || statusCode === 403) return { kind: "permission", message };
+  return { kind: "unavailable", message };
+}
+
+function listed(labels: string[]): string {
+  return labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+}
+
+/**
+ * Try each read the audit will make before keeping the key, so a key
+ * missing a permission is turned away now, naming what to set, rather than
+ * failing every night after.
+ */
+export async function acceptStripeKey(key: string, deps: { stripe?: Stripe } = {}): Promise<ProviderGrant> {
+  const stripe = deps.stripe ?? stripeForKey(key);
+  const results = await Promise.allSettled(READS.map(async (read) => read.probe(stripe)));
+  const failed = results.flatMap((result, i) =>
+    result.status === "rejected" ? [{ label: READS[i]!.label, ...stripeFailure(result.reason) }] : [],
+  );
+
+  if (failed.some((f) => f.kind === "auth")) {
+    throw new ProviderError("invalid", "Stripe didn't accept that key. Check it was copied whole and hasn't been deleted.");
+  }
+  const missing = failed.filter((f) => f.kind === "permission").map((f) => f.label);
+  if (missing.length > 0) {
+    throw new ProviderError(
+      "invalid",
+      `That key can't read ${listed(missing)} yet. In Stripe, edit the key, set ${missing.length === 1 ? "it" : "each of them"} to Read, and paste it again.`,
+    );
+  }
+  if (failed.length > 0) throw new ProviderError("unavailable", `Stripe couldn't be read: ${failed[0]!.message}`);
+
+  const account = (results[0] as PromiseFulfilledResult<Stripe.Account>).value;
   return {
-    externalId: accountId,
-    displayName: account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? accountId,
-    scope: token.scope ?? STRIPE_SCOPE,
-    accessToken: null,
+    externalId: account.id,
+    displayName: account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null,
+    scope: STRIPE_KEY_SCOPE,
+    accessToken: key,
     refreshToken: null,
     expiresAt: null,
   };
-}
-
-export async function deauthorizeStripe(
-  accountId: string,
-  clientId: string,
-  deps: { stripe?: Stripe } = {},
-): Promise<void> {
-  await client(deps).oauth.deauthorize({ client_id: clientId, stripe_user_id: accountId });
 }
 
 // ---------------------------------------------------------------------------
@@ -105,36 +161,46 @@ export interface StripeSnapshot {
   attempts: { succeeded: number; failed: number };
 }
 
+/**
+ * One read, with Stripe's refusal turned into what the row should do: a
+ * deleted key or a lost permission asks the client to reconnect, anything
+ * else is a passing outage. The key never reaches the message.
+ */
+async function reading<T>(label: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    const failure = stripeFailure(error);
+    if (failure.kind === "auth") {
+      throw new ProviderError("auth", "Stripe no longer accepts the key; it may have been deleted. Make a new one and connect again.");
+    }
+    if (failure.kind === "permission") {
+      throw new ProviderError("auth", `The key can no longer read ${label}. Set it back to Read in Stripe, or make a new key and connect again.`);
+    }
+    throw new ProviderError("unavailable", failure.message);
+  }
+}
+
 export async function fetchStripeSnapshot(
-  accountId: string,
   window: { startAt: Date; endAt: Date },
-  deps: { stripe?: Stripe } = {},
+  deps: { stripe: Stripe },
 ): Promise<StripeSnapshot> {
-  const stripe = client(deps);
-  const opts = { stripeAccount: accountId };
+  const { stripe } = deps;
   const created = { gte: Math.floor(window.startAt.getTime() / 1000), lt: Math.floor(window.endAt.getTime() / 1000) };
 
-  let account: Stripe.Account;
-  try {
-    account = await stripe.accounts.retrieve(accountId);
-  } catch (error) {
-    const status = (error as { statusCode?: number }).statusCode;
-    throw new ProviderError(
-      status === 401 || status === 403 ? "auth" : "unavailable",
-      error instanceof Error ? error.message : "Stripe could not be read.",
-    );
-  }
-
-  const [charges, refunds, disputes, intents] = await Promise.all([
-    stripe.charges.list({ created, limit: 100 }, opts).autoPagingToArray({ limit: LIST_LIMIT }),
-    stripe.refunds.list({ created, limit: 100 }, opts).autoPagingToArray({ limit: LIST_LIMIT }),
-    stripe.disputes.list({ created, limit: 100 }, opts).autoPagingToArray({ limit: LIST_LIMIT }),
-    stripe.paymentIntents.list({ created, limit: 100 }, opts).autoPagingToArray({ limit: LIST_LIMIT }),
+  const [account, charges, refunds, disputes, intents] = await Promise.all([
+    reading("Accounts", () => stripe.accounts.retrieveCurrent()),
+    reading("Charges", () => stripe.charges.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("Refunds", () => stripe.refunds.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("Disputes", () => stripe.disputes.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("PaymentIntents", () =>
+      stripe.paymentIntents.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT }),
+    ),
   ]);
 
   const paid = charges.filter((c) => c.paid && c.status === "succeeded");
   return {
-    accountId,
+    accountId: account.id,
     currency: account.default_currency ?? paid[0]?.currency ?? "usd",
     chargesEnabled: Boolean(account.charges_enabled),
     payoutsEnabled: Boolean(account.payouts_enabled),
