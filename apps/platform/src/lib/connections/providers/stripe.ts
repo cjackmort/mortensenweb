@@ -15,8 +15,8 @@ import {
  * Connect's OAuth looked like the way in, but Stripe allows its `read_only`
  * scope only for its retired extensions: a platform may ask for
  * `read_write`, which is full control of the client's account, and nothing
- * less. A restricted key set to Read on the five things the audit uses is
- * how a client lets us look without letting us touch. It is sealed like any
+ * less. A restricted key set to Read on the four permissions the audit
+ * uses is how a client lets us look without letting us touch. It is sealed like any
  * other token, and every call is made with it against the client's own
  * account, so the platform's Connect settings play no part.
  *
@@ -34,16 +34,28 @@ const RESTRICTED_KEY = new RegExp(`^rk_(live|test)_[A-Za-z0-9]{${MIN_KEY_BODY},}
 /** Any Stripe key, wherever one turns up in a message about to be stored or logged. */
 const ANY_KEY = /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9*]+/g;
 
-/** What the audit reads, named as Stripe's restricted-key form names them. */
-const READS = [
-  { label: "Accounts", probe: (stripe: Stripe) => stripe.accounts.retrieveCurrent() },
-  { label: "Charges", probe: (stripe: Stripe) => stripe.charges.list({ limit: 1 }) },
-  { label: "Refunds", probe: (stripe: Stripe) => stripe.refunds.list({ limit: 1 }) },
-  { label: "Disputes", probe: (stripe: Stripe) => stripe.disputes.list({ limit: 1 }) },
-  { label: "PaymentIntents", probe: (stripe: Stripe) => stripe.paymentIntents.list({ limit: 1 }) },
+/**
+ * The permissions the audit needs, named and filed as Stripe's "Custom
+ * permissions" form does (read off the form on 2026-10-29). Each is set to
+ * Read and everything else left on None.
+ */
+export const STRIPE_KEY_PERMISSIONS = [
+  { name: "Charges and Refunds", section: "Core" },
+  { name: "Payment Disputes", section: "Core" },
+  { name: "Payment Intents", section: "Core" },
+  { name: "Accounts", section: "Connect" },
 ] as const;
 
-export const STRIPE_KEY_READS: readonly string[] = READS.map((read) => read.label);
+type PermissionName = (typeof STRIPE_KEY_PERMISSIONS)[number]["name"];
+
+/** Each read the audit makes, and the permission Stripe checks for it. */
+const READS: { permission: PermissionName; probe: (stripe: Stripe) => Promise<unknown> }[] = [
+  { permission: "Accounts", probe: (stripe) => stripe.accounts.retrieveCurrent() },
+  { permission: "Charges and Refunds", probe: (stripe) => stripe.charges.list({ limit: 1 }) },
+  { permission: "Charges and Refunds", probe: (stripe) => stripe.refunds.list({ limit: 1 }) },
+  { permission: "Payment Disputes", probe: (stripe) => stripe.disputes.list({ limit: 1 }) },
+  { permission: "Payment Intents", probe: (stripe) => stripe.paymentIntents.list({ limit: 1 }) },
+];
 
 export type StripeKeyCheck = { ok: true; key: string } | { ok: false; message: string };
 
@@ -99,8 +111,10 @@ function stripeFailure(error: unknown): StripeFailure {
   return { kind: "unavailable", message };
 }
 
-function listed(labels: string[]): string {
-  return labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+/** Stripe's own names in quotes, since one of them already has an "and" in it. */
+function listed(names: string[]): string {
+  const quoted = names.map((name) => `“${name}”`);
+  return quoted.length <= 1 ? (quoted[0] ?? "") : `${quoted.slice(0, -1).join(", ")} and ${quoted.at(-1)}`;
 }
 
 /**
@@ -112,17 +126,17 @@ export async function acceptStripeKey(key: string, deps: { stripe?: Stripe } = {
   const stripe = deps.stripe ?? stripeForKey(key);
   const results = await Promise.allSettled(READS.map(async (read) => read.probe(stripe)));
   const failed = results.flatMap((result, i) =>
-    result.status === "rejected" ? [{ label: READS[i]!.label, ...stripeFailure(result.reason) }] : [],
+    result.status === "rejected" ? [{ permission: READS[i]!.permission, ...stripeFailure(result.reason) }] : [],
   );
 
   if (failed.some((f) => f.kind === "auth")) {
     throw new ProviderError("invalid", "Stripe didn't accept that key. Check it was copied whole and hasn't been deleted.");
   }
-  const missing = failed.filter((f) => f.kind === "permission").map((f) => f.label);
+  const missing = [...new Set(failed.filter((f) => f.kind === "permission").map((f) => f.permission))];
   if (missing.length > 0) {
     throw new ProviderError(
       "invalid",
-      `That key can't read ${listed(missing)} yet. In Stripe, edit the key, set ${missing.length === 1 ? "it" : "each of them"} to Read, and paste it again.`,
+      `That key can't read ${listed(missing)} yet. In Stripe, edit the key, set ${missing.length === 1 ? "that permission" : "those permissions"} to Read, and paste it again.`,
     );
   }
   if (failed.length > 0) throw new ProviderError("unavailable", `Stripe couldn't be read: ${failed[0]!.message}`);
@@ -166,7 +180,7 @@ export interface StripeSnapshot {
  * deleted key or a lost permission asks the client to reconnect, anything
  * else is a passing outage. The key never reaches the message.
  */
-async function reading<T>(label: string, run: () => Promise<T>): Promise<T> {
+async function reading<T>(permission: PermissionName, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
@@ -175,7 +189,7 @@ async function reading<T>(label: string, run: () => Promise<T>): Promise<T> {
       throw new ProviderError("auth", "Stripe no longer accepts the key; it may have been deleted. Make a new one and connect again.");
     }
     if (failure.kind === "permission") {
-      throw new ProviderError("auth", `The key can no longer read ${label}. Set it back to Read in Stripe, or make a new key and connect again.`);
+      throw new ProviderError("auth", `The key can no longer read ${listed([permission])}. Set it back to Read in Stripe, or make a new key and connect again.`);
     }
     throw new ProviderError("unavailable", failure.message);
   }
@@ -190,10 +204,10 @@ export async function fetchStripeSnapshot(
 
   const [account, charges, refunds, disputes, intents] = await Promise.all([
     reading("Accounts", () => stripe.accounts.retrieveCurrent()),
-    reading("Charges", () => stripe.charges.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
-    reading("Refunds", () => stripe.refunds.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
-    reading("Disputes", () => stripe.disputes.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
-    reading("PaymentIntents", () =>
+    reading("Charges and Refunds", () => stripe.charges.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("Charges and Refunds", () => stripe.refunds.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("Payment Disputes", () => stripe.disputes.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT })),
+    reading("Payment Intents", () =>
       stripe.paymentIntents.list({ created, limit: 100 }).autoPagingToArray({ limit: LIST_LIMIT }),
     ),
   ]);

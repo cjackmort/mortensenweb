@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type Stripe from "stripe";
-import { acceptStripeKey, checkStripeKey, fetchStripeSnapshot } from "@/lib/connections/providers/stripe";
+import {
+  acceptStripeKey,
+  checkStripeKey,
+  fetchStripeSnapshot,
+  STRIPE_KEY_PERMISSIONS,
+} from "@/lib/connections/providers/stripe";
 import { ProviderError } from "@/lib/connections/types";
 
 /**
@@ -153,11 +158,16 @@ describe("accepting a Stripe key", () => {
     expect((error as ProviderError).message).toContain("didn't accept that key");
   });
 
-  it("lists every permission the key is missing, in the words of Stripe's form, without the key", async () => {
+  it("names each permission the key is missing once, as Stripe's form names it, without the key", async () => {
     const stripe = fakeStripe({
       charges: {
         list: () => {
           throw permissionError("rak_charge_read");
+        },
+      },
+      refunds: {
+        list: () => {
+          throw permissionError("rak_refund_read");
         },
       },
       disputes: {
@@ -168,10 +178,20 @@ describe("accepting a Stripe key", () => {
     });
     const error = (await acceptStripeKey(LIVE_KEY, { stripe }).catch((e: unknown) => e)) as ProviderError;
     expect(error.kind).toBe("invalid");
-    expect(error.message).toContain("Charges");
-    expect(error.message).toContain("Disputes");
-    expect(error.message).not.toContain("Refunds");
+    expect(error.message).toContain("“Charges and Refunds” and “Payment Disputes”");
+    expect(error.message.match(/Charges and Refunds/g)).toHaveLength(1);
+    expect(error.message).not.toContain("Payment Intents");
+    expect(error.message).not.toContain("Accounts");
     expect(error.message).not.toContain("StUv");
+  });
+
+  it("asks for exactly the four permissions on Stripe's form, filed where the form files them", () => {
+    expect(STRIPE_KEY_PERMISSIONS).toEqual([
+      { name: "Charges and Refunds", section: "Core" },
+      { name: "Payment Disputes", section: "Core" },
+      { name: "Payment Intents", section: "Core" },
+      { name: "Accounts", section: "Connect" },
+    ]);
   });
 
   it("treats Stripe being down as passing, not as a bad key, and strips a key Stripe echoed", async () => {
@@ -226,7 +246,7 @@ describe("reading a Stripe account by its key", () => {
     });
     const lost = (await fetchStripeSnapshot(WINDOW, { stripe: narrowed }).catch((e: unknown) => e)) as ProviderError;
     expect(lost.kind).toBe("auth");
-    expect(lost.message).toContain("Refunds");
+    expect(lost.message).toContain("“Charges and Refunds”");
     expect(lost.message).not.toMatch(/rk_live_\S/);
   });
 });
