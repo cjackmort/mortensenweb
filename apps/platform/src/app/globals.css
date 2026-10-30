@@ -243,10 +243,25 @@ code {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* A sub-page slides in from a little to the side. `clip` rather than
+     `hidden`, so the sticky header still sticks and nothing gains a scroll
+     bar for the length of the slide. */
+  overflow-x: clip;
+}
+
+/* The page between the header and the footer — the element the shell slides
+   as a sub-page opens. It takes `.shell`'s place in the column, so `.shell`
+   still stretches to push the footer down on a short page. */
+.app-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* Brand row and section tabs are one sticky header, so the tabs never scroll
-   away from the page they navigate. */
+   away from the page they navigate. On a sub-page it holds the back button
+   instead (`.subpage-bar`). */
 .topbar {
   position: sticky;
   top: 0;
@@ -475,6 +490,65 @@ code {
 .nav a[aria-current="page"] {
   color: var(--text);
   border-bottom-color: var(--accent-fill);
+}
+
+/* A sub-page's header: one back button where the brand row and tabs were.
+   Slimmer than the bar it replaces, so the screen reads as opened on top of
+   the list rather than as one more tab. */
+.subpage-bar {
+  animation: subpage-bar-in 0.18s var(--ease-out);
+}
+
+@keyframes subpage-bar-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.subpage-bar-inner {
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: 0.3rem var(--gutter);
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+}
+
+.subpage-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: var(--tap);
+  max-width: 100%;
+  /* Pulled into the gutter so the arrow, not the hover wash, lines up with
+     the page's left edge. */
+  margin-left: -0.6rem;
+  padding: 0 0.9rem 0 0.4rem;
+  font: 500 0.95rem / 1.2 var(--font);
+  color: var(--text);
+  text-decoration: none;
+  transition: background-color 0.18s var(--ease-out);
+}
+
+.subpage-back:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.subpage-back-arrow {
+  flex: none;
+  color: var(--accent);
+  transition: transform 0.18s var(--ease-out);
+}
+
+.subpage-back:hover .subpage-back-arrow {
+  transform: translateX(-2px);
+}
+
+.subpage-back-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell {
