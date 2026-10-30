@@ -4005,11 +4005,6 @@ form + .field-hint {
   border-top: 1px solid var(--border);
 }
 
-.lead-back,
-.page-back {
-  margin: 0 0 1rem;
-}
-
 .lead-contact {
   display: flex;
   flex-wrap: wrap;

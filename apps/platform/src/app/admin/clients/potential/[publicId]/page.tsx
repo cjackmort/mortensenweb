@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom, NotFoundError } from "@/db/repositories/context";
@@ -72,9 +71,6 @@ export default async function EditPotentialClientPage({
       <main className="shell">
         <div className="masthead">
           <h1>{prospect.businessName}</h1>
-          <span className="muted">
-            <Link href="/admin/clients">← All clients</Link>
-          </span>
         </div>
 
         <form className="card" action={save} style={{ maxWidth: "34rem" }}>

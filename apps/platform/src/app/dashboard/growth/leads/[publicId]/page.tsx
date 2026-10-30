@@ -346,9 +346,6 @@ export default async function LeadPage({
   return (
     <main className="shell">
       <RefreshOnRead wasUnread={lead.unread} />
-      <p className="lead-back">
-        <Link href="/dashboard/growth/leads">← All leads</Link>
-      </p>
 
       <div className="masthead">
         <h1>{request?.actName ?? who ?? "Enquiry"}</h1>

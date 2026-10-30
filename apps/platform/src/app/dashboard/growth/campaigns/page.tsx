@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { BarList, Sparkline } from "@/components/charts";
@@ -61,7 +60,6 @@ export default async function CampaignsPage() {
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Campaigns</h1>
         <span>QR codes and short links for your print</span>

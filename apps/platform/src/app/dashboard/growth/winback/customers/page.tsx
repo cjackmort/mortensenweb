@@ -44,9 +44,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
 
   return (
     <main className="shell">
-      <p className="lead-back">
-        <Link href="/dashboard/growth/winback">← Win-back emails</Link>
-      </p>
       <div className="masthead">
         <h1>Past customers</h1>
         <span>

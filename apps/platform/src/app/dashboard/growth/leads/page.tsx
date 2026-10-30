@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BackToGrowth } from "@/components/back-link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -209,7 +208,6 @@ export default async function LeadsPage({
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Leads</h1>
         <span>From your website&rsquo;s forms</span>

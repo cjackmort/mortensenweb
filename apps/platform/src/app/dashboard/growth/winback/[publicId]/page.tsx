@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -66,9 +65,6 @@ export default async function CampaignPage({
 
   return (
     <main className="shell">
-      <p className="lead-back">
-        <Link href="/dashboard/growth/winback">← Win-back emails</Link>
-      </p>
       <div className="masthead">
         <h1>{campaign.name}</h1>
         <span>

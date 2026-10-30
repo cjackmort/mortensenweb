@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -48,9 +47,6 @@ export default async function AdminReportPreviewPage({
 
   return (
     <main className="shell">
-      <p className="no-print" style={{ margin: "0 0 1rem" }}>
-        <Link href={`/admin/clients/${publicId}?section=reports`}>← Monthly reports</Link>
-      </p>
 
       <section className="card no-print">
         <h2>Before you send</h2>

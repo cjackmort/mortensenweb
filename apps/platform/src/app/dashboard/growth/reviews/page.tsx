@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BackToGrowth } from "@/components/back-link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
@@ -97,7 +96,6 @@ export default async function ReviewRequestsPage({
   if (!setup) {
     return (
       <main className="shell">
-        <BackToGrowth />
         <div className="masthead">
           <h1>Review requests</h1>
           <span>Ask customers for a Google review</span>
@@ -136,7 +134,6 @@ export default async function ReviewRequestsPage({
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Review requests</h1>
         <span>Ask customers for a Google review</span>

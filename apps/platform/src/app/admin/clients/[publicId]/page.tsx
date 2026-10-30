@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -132,9 +131,6 @@ export default async function ClientDetailPage({
             organization.name
           )}
         </h1>
-        <span className="muted">
-          <Link href="/admin/clients">← All clients</Link>
-        </span>
       </div>
 
       {client.isDemo && (
