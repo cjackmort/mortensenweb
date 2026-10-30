@@ -43,7 +43,7 @@ export const connectedAccounts = pgTable(
     /** What the client recognises it by: the business on the Stripe account, an email, an @handle. */
     displayName: text("display_name"),
     scope: text("scope").notNull().default(""),
-    /** Sealed. Google's short-lived access token, Instagram's long-lived one. Null for Stripe. */
+    /** Sealed. Google's short-lived access token, Instagram's long-lived one, Stripe's restricted key. */
     accessTokenSealed: text("access_token_sealed"),
     /** Sealed. Google's refresh token. Null where the provider issues none. */
     refreshTokenSealed: text("refresh_token_sealed"),
