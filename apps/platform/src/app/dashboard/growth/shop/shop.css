@@ -310,3 +310,93 @@
 .shop-order-note {
   margin: 0;
 }
+
+/* Setup */
+
+.shop-setup-intro {
+  margin: 0 0 1.1rem;
+  color: var(--text-soft);
+  max-width: 40rem;
+}
+
+/* Sales */
+
+.shop-sales-empty {
+  font: 400 clamp(1.3rem, 1.15rem + 0.5vw, 1.6rem) / 1.2 var(--display);
+  letter-spacing: -0.02em;
+  margin: 0 0 0.4rem;
+}
+
+.shop-sales-refunds {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  margin: 0;
+  max-width: 44rem;
+}
+
+.shop-best,
+.shop-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Cells line up with the figures above them, not the narrower default. */
+.shop-sales .panel-split > * {
+  padding: 1.25rem var(--pane-pad);
+}
+
+.shop-best li,
+.shop-recent li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.shop-best li:first-child,
+.shop-recent li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shop-best-name,
+.shop-recent-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.shop-best-figures,
+.shop-recent-total {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.shop-recent li {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.shop-recent-what {
+  display: block;
+  font-weight: 600;
+}
+
+.shop-recent-who {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.shop-recent-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
