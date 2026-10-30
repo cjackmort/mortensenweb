@@ -229,7 +229,9 @@ function RequestTable({
                   <span className="muted">{r.priority}</span>
                 )}
               </td>
-              <td data-label="Sent">{formatDate(r.createdAt)}</td>
+              <td data-label="Sent" className="nowrap">
+                {formatDate(r.createdAt)}
+              </td>
               <td data-label="Run">
                 <RunTiming
                   dispatchedAt={r.agentDispatchedAt}
