@@ -21,6 +21,12 @@ export interface ProfileField {
   kind: ProfileFieldKind;
   group: ProfileGroup;
   hint?: string;
+  /**
+   * The operator's own notes for the agent: shown only on the operator's
+   * form. The client's form leaves it out, and the client's save carries the
+   * stored value over untouched (see `mergeClientDetails`).
+   */
+  operatorOnly?: true;
 }
 
 export const PROFILE_GROUPS = [
@@ -36,8 +42,8 @@ export type ProfileGroup = (typeof PROFILE_GROUPS)[number];
 
 export const PROFILE_FIELDS: readonly ProfileField[] = [
   { key: "businessName", label: "Business name", kind: "line", group: "The business", hint: "As customers see it, not the legal name unless they are the same." },
-  { key: "tagline", label: "One-line description", kind: "line", group: "The business", hint: "What they do and where, in a sentence." },
-  { key: "about", label: "About the business", kind: "text", group: "The business", hint: "Their story, who runs it, what makes them different." },
+  { key: "tagline", label: "One-line description", kind: "line", group: "The business", hint: "What the business does and where, in a sentence." },
+  { key: "about", label: "About the business", kind: "text", group: "The business", hint: "The story, who runs it, what makes it different." },
   { key: "founded", label: "Year founded", kind: "line", group: "The business" },
 
   { key: "phone", label: "Phone", kind: "phone", group: "Contact", hint: "The public number. Calls from the site go here." },
@@ -62,10 +68,20 @@ export const PROFILE_FIELDS: readonly ProfileField[] = [
   { key: "credentials", label: "Licences, certifications, insurance", kind: "text", group: "Credentials", hint: "Only what has been confirmed. The site will publish these as written." },
   { key: "awards", label: "Awards and memberships", kind: "text", group: "Credentials" },
 
-  { key: "brand", label: "Colours, fonts and logo notes", kind: "text", group: "Look and voice" },
-  { key: "voice", label: "Tone of voice", kind: "text", group: "Look and voice", hint: "How they talk, and words they would never use." },
-  { key: "other", label: "Anything else the site should say", kind: "text", group: "Look and voice" },
+  // The operator's judgement about the brand, not facts the client owns: a
+  // client rewriting the tone notes would steer every future agent run.
+  { key: "brand", label: "Colours, fonts and logo notes", kind: "text", group: "Look and voice", operatorOnly: true },
+  { key: "voice", label: "Tone of voice", kind: "text", group: "Look and voice", hint: "How they talk, and words they would never use.", operatorOnly: true },
+  { key: "other", label: "Anything else the site should say", kind: "text", group: "Look and voice", operatorOnly: true },
 ];
+
+/** The fields the client sees and edits on their own profile page. */
+export const CLIENT_PROFILE_FIELDS: readonly ProfileField[] = PROFILE_FIELDS.filter((f) => !f.operatorOnly);
+
+/** The groups with at least one field the client edits, in the form's order. */
+export const CLIENT_PROFILE_GROUPS: readonly ProfileGroup[] = PROFILE_GROUPS.filter((group) =>
+  CLIENT_PROFILE_FIELDS.some((f) => f.group === group),
+);
 
 const LIMITS: Record<ProfileFieldKind, number> = {
   line: 200,
@@ -158,4 +174,37 @@ export function profileEntries(details: BusinessDetails | null | undefined): Pro
     const value = details[field.key]?.trim();
     return value ? [{ key: field.key, label: field.label, value }] : [];
   });
+}
+
+/**
+ * What a client's save stores: their answers for the fields they can see,
+ * and the operator's answers for the rest exactly as they were. Whatever the
+ * client posted for an operator-only field is dropped — their form never
+ * shows one, so a value there was not typed into it.
+ */
+export function mergeClientDetails(
+  before: BusinessDetails | null | undefined,
+  submitted: BusinessDetails,
+): BusinessDetails {
+  const merged: BusinessDetails = {};
+  for (const field of PROFILE_FIELDS) {
+    const value = field.operatorOnly ? before?.[field.key] : submitted[field.key];
+    if (value) merged[field.key] = value;
+  }
+  return merged;
+}
+
+/** Where a client goes to fill in one field of their own profile. */
+export function profileFieldHref(key: string): string {
+  return `/dashboard/profile?field=${encodeURIComponent(key)}`;
+}
+
+/**
+ * The field a link asked the profile page to bring into view, when it is one
+ * the client's form shows. Anything else is ignored rather than trusted: it
+ * becomes an element id the page looks up.
+ */
+export function focusedProfileField(param: string | string[] | undefined): string | null {
+  const key = Array.isArray(param) ? param[0] : param;
+  return CLIENT_PROFILE_FIELDS.some((f) => f.key === key) ? key! : null;
 }

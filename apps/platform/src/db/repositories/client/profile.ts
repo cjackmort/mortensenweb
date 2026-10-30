@@ -2,7 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, businessProfiles, users } from "@/db/schema";
 import { verifyPassword } from "@/lib/auth/password";
-import { PROFILE_FIELDS, type BusinessDetails } from "@/lib/business-profile";
+import { PROFILE_FIELDS, mergeClientDetails, type BusinessDetails } from "@/lib/business-profile";
 import type { OwnDetailsInput } from "@/lib/profile/details";
 import type { PreparedAvatar } from "@/lib/profile/avatar";
 import { avatarDriver, avatarKey } from "@/lib/storage/driver";
@@ -258,18 +258,20 @@ export async function getOwnBusinessProfile(
 }
 
 /**
- * Replace the profile with what the client's form held. The whole object, not
- * a merge, for the same reason as the operator's form: every field is shown,
- * so a missing one was cleared on purpose.
+ * Replace the client's part of the profile with what their form held. Every
+ * field they can see is replaced, not merged — a missing one was cleared on
+ * purpose. The operator-only fields their form never shows are carried over
+ * as stored, here rather than in the action, so no form can erase them.
  */
 export async function saveOwnBusinessProfile(
   db: Database,
   ctx: TenantContext,
-  details: BusinessDetails,
+  submitted: BusinessDetails,
 ): Promise<{ changed: string[]; routingChanged: string[] }> {
   assertMutable(ctx);
 
   const before = (await getOwnBusinessProfile(db, ctx))?.details ?? {};
+  const details = mergeClientDetails(before, submitted);
   const changed = PROFILE_FIELDS.map((f) => f.key).filter(
     (key) => (before[key] ?? "") !== (details[key] ?? ""),
   );
