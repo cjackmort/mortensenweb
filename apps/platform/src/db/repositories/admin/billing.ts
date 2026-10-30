@@ -331,7 +331,7 @@ export async function confirmPaymentReceived(
 
   // An extra change becomes available only now, on confirmed money — never
   // when the client pressed pay. This is the single place a payment request
-  // is ever marked paid (the Square webhook and this manual-confirm path
+  // is ever marked paid (the Stripe webhook and this manual-confirm path
   // both end up here), so it's the one place this increment needs to live —
   // it used to be duplicated into the webhook handler only, which meant a
   // Venmo- or cash-confirmed extra change silently never raised the
@@ -534,9 +534,8 @@ export interface ClientBillingStatus {
   billedByStripe: boolean;
   /**
    * Whether an operator can raise a new invoice right now. False while one is
-   * already open — the same "no second invoice on top of an unsettled one"
-   * rule `beginCheckout` enforces for a client raising their own, so the
-   * reference an operator is tracking can't be orphaned by a second one —
+   * already open — the "no second invoice on top of an unsettled one" rule, so
+   * the reference an operator is tracking can't be orphaned by a second one —
    * and always false for a client billed by Stripe, who would pay twice.
    */
   canRaise: boolean;

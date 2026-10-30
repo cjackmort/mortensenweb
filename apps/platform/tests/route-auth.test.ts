@@ -55,10 +55,6 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "GitHub webhook",
     checks: "verifyGithubSignature(",
   },
-  "api/webhooks/square/route.ts": {
-    reason: "Square webhook",
-    checks: "verifySquareSignature(",
-  },
   "api/webhooks/stripe/route.ts": {
     reason: "Stripe webhook",
     checks: "constructEventAsync(",

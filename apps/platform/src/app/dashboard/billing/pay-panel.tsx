@@ -10,9 +10,6 @@ import {
   startCardPaymentAction,
   type CardPaymentResult,
 } from "./checkout-actions";
-// Type only: the module itself reads server credentials and pulls in the
-// Stripe SDK, neither of which belongs in the browser bundle.
-import type { CardProvider } from "@/lib/payments/card-provider";
 
 /**
  * The pay flow.
@@ -30,24 +27,19 @@ import type { CardProvider } from "@/lib/payments/card-provider";
  * and a reminder going out.
  */
 
-const PROVIDER_NAME: Record<CardProvider, string> = {
-  stripe: "Stripe",
-  square: "Square",
-};
-
 export function PayPanel({
   requestPublicId,
   venmoUrl,
   reference,
   amount,
-  cardProvider,
+  cardAvailable,
 }: {
   requestPublicId: string;
   venmoUrl: string | null;
   reference: string;
   amount: string;
-  /** Null when no card processor has credentials in this environment. */
-  cardProvider: CardProvider | null;
+  /** False when Stripe has no credentials in this environment. */
+  cardAvailable: boolean;
 }) {
   const [openState, openAction] = useActionState<
     BillingActionResult | null,
@@ -61,8 +53,6 @@ export function PayPanel({
     CardPaymentResult | null,
     FormData
   >(startCardPaymentAction, null);
-
-  const cardAvailable = cardProvider !== null;
 
   // Redirect from the client so a processor failure leaves them here with an
   // explanation rather than on a broken page.
@@ -90,7 +80,7 @@ export function PayPanel({
         <p className="error">{cardState.message}</p>
       )}
 
-      {cardProvider && (
+      {cardAvailable && (
         <>
           <form action={cardAction}>
             <input type="hidden" name="requestPublicId" value={requestPublicId} />
@@ -99,9 +89,8 @@ export function PayPanel({
             </button>
           </form>
           <p className="field-hint" style={{ margin: "0.75rem 0 1.25rem" }}>
-            Handled by {PROVIDER_NAME[cardProvider]}, and confirmed
-            automatically &mdash; nothing else to do afterwards. We never see
-            your card details.
+            Handled by Stripe, and confirmed automatically &mdash; nothing else
+            to do afterwards. We never see your card details.
           </p>
         </>
       )}

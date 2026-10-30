@@ -17,7 +17,6 @@ import {
   type PriceRef,
   type SiteDue,
 } from "@/lib/onboarding/checkout";
-import { cardProvider, type CardProvider } from "@/lib/payments/card-provider";
 import { usablePromo } from "@/lib/payments/promos";
 import {
   priceForAddOn,
@@ -181,8 +180,6 @@ export interface WelcomeOffer {
   businessName: string;
   /** Whether the combined checkout can open a Stripe page here. */
   stripeReady: boolean;
-  /** Who takes a one-off card payment for an open invoice, if anyone. */
-  cardProvider: CardProvider | null;
   siteDue: SiteDue;
   /** Null when no plan can be chosen here: on the house, or already billed by a processor. */
   plans: PlanCard[] | null;
@@ -205,7 +202,6 @@ export async function getWelcomeOffer(db: Database, ctx: TenantContext): Promise
   return {
     businessName: client.businessName,
     stripeReady: stripeConfigured(),
-    cardProvider: cardProvider(),
     siteDue,
     plans: cards?.plans ?? null,
     currentPlanName: billed?.name ?? null,

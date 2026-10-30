@@ -4,9 +4,9 @@ How card payments work in the portal — monthly subscriptions and one-off
 invoices — what has to be true before they can take real money, and how to undo
 it.
 
-Stripe is the card processor whenever `STRIPE_SECRET_KEY` is set. Square code
-is kept and still runs in an environment that has Square credentials and no
-Stripe key — see [Existing providers](#existing-providers-and-migration).
+Stripe is the only card processor. With `STRIPE_SECRET_KEY` unset the billing
+page offers the Venmo hand-off alone — see
+[Existing providers](#existing-providers-and-migration).
 
 ---
 
@@ -30,9 +30,9 @@ Checkout Session in `payment` mode.
   and the invoice's client to match the checkout's. A mismatch, or money for
   an invoice cancelled meanwhile, lands in `webhook_deliveries` as
   `needs_review`.
-- **First payment is the subscription.** With Stripe on, the Square "unlock"
-  panel is hidden: starting automatic payment is how a new client pays. A
-  one-off "first month" beside it would let them pay that month twice.
+- **First payment is the subscription.** Starting automatic payment is how a
+  new client pays; there is no separate one-off "first month" checkout beside
+  it that would let them pay that month twice.
 - **Moving a client onto Stripe retires their hand-billed plan** (the
   `subscriptions` row with no provider) once the Stripe subscription is
   active, and the admin monthly-billing list stops offering to invoice them.
@@ -55,8 +55,9 @@ Worth stating plainly, because it was not what it looked like:
   [Two Stripe integrations](#two-stripe-integrations) for how they interact.
 - **The sandbox account was empty.** No products, prices, customers or
   subscriptions.
-- **Square is the real integration**, with a webhook receiver, a catalogue
-  script and a signature verifier.
+- **Square was the only integration** at that point, with a webhook receiver, a
+  catalogue script and a signature verifier. It was never used to take a
+  payment and has since been removed.
 - The schema had, however, been *designed* for this: `payments.provider` was
   already there, commented "Reserved for Stripe", and
   `subscriptions.provider` / `provider_subscription_id` already existed. Stripe
@@ -139,8 +140,8 @@ the repository.
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for this deployment's endpoint. Each endpoint has its own. |
 | `STRIPE_ALLOW_LIVE_KEY` | `true` only in `apps/platform/.env.stripe`, on the operator's machine, for `npm run stripe:setup` against the live account. Never set it in Netlify. |
 
-Unset means Stripe is off: the billing page falls back to Square and manual
-payment, and the webhook answers 503 rather than processing anything
+Unset means Stripe is off: the billing page falls back to manual payment
+(Venmo), and the webhook answers 503 rather than processing anything
 unverified.
 
 **A live key is only used in production.** Outside the production deploy
@@ -236,10 +237,11 @@ Ask before changing it.
 
 ## Existing providers and migration
 
-Square and manual records are preserved untouched. Processor identifiers stay
-explicit — `payments.provider` names the processor rather than it being implied
-by which column is populated — so Stripe, Square and manual transactions cannot
-collide.
+Manual records are preserved untouched. Processor identifiers stay explicit —
+`payments.provider` names the processor rather than it being implied by which
+column is populated — so Stripe and manual transactions cannot collide. The
+`square` enum values and `service_plans.square_plan_variation_id` column remain
+in the schema, unused.
 
 **Nothing is auto-migrated.** No payment method is moved, no existing
 subscription is cancelled.
@@ -258,7 +260,7 @@ to pay.
 
 | | |
 |---|---|
-| Current rail | **Venmo, manual.** Not Square, not Stripe. |
+| Current rail | **Venmo, manual.** Not Stripe. |
 | Retainer | $50/month |
 | Paid so far | $250 build + $50 first retainer |
 | Stripe customer | none — the workbook's "Stripe Customer Email" cell is empty |
@@ -299,10 +301,8 @@ comp override; do not let the first he hears of the limit be an invoice.
 ### Preventing double billing
 
 The checkout guard only prevents a second *Stripe* subscription. It cannot see
-Square or Venmo, so:
+Venmo, so:
 
-- A client with a **Square** subscription must have it cancelled *before*
-  Stripe enrolment.
 - A client paying by **Venmo or cash** must be told to stop. There is no
   technical guard for a human sending money.
 
@@ -500,8 +500,8 @@ Until step 7 passes, card billing is not operational, whatever the code says.
 In order of severity.
 
 **Stop new enrolments, keep existing billing.** Unset
-`STRIPE_SECRET_KEY`. Checkout refuses, the billing page falls back to Square
-and manual, and the webhook answers 503. Stripe keeps retrying deliveries for
+`STRIPE_SECRET_KEY`. Checkout refuses, the billing page falls back to manual
+(Venmo), and the webhook answers 503. Stripe keeps retrying deliveries for
 three days, so anything missed during a short outage arrives on its own.
 
 **Stop everything.** Disable the webhook endpoint in the Stripe dashboard and

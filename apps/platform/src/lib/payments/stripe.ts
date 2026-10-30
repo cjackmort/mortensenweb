@@ -174,9 +174,9 @@ export function allLookupKeys(): string[] {
  * Here rather than beside the receiver so `scripts/stripe-setup.ts` can
  * subscribe the endpoint to exactly this list without loading the database.
  *
- * An allowlist rather than a denylist, matching the GitHub and Square
- * receivers: enabling a new event type in the Stripe dashboard should not
- * silently start changing billing state in a build that has never seen it.
+ * An allowlist rather than a denylist, matching the GitHub receiver: enabling
+ * a new event type in the Stripe dashboard should not silently start changing
+ * billing state in a build that has never seen it.
  */
 export const HANDLED_STRIPE_EVENTS = new Set([
   "checkout.session.completed",
@@ -290,10 +290,10 @@ function usableSecretKey(): string | null {
  * The configured client, or null when Stripe is switched off.
  *
  * Null rather than a throw: Stripe being absent is a supported state. The
- * platform billed through Square and by hand before this existed and must keep
- * working when `STRIPE_SECRET_KEY` is unset — a portal that 500s on the
- * billing page because a processor is not configured is a worse outcome than
- * one that shows the Square path.
+ * platform billed by hand before this existed and must keep working when
+ * `STRIPE_SECRET_KEY` is unset — a portal that 500s on the billing page
+ * because a processor is not configured is a worse outcome than one that shows
+ * the Venmo path.
  */
 export function stripeClient(): Stripe | null {
   const key = usableSecretKey();

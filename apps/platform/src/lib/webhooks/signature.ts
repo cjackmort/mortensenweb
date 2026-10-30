@@ -1,10 +1,9 @@
 /**
  * Webhook signature verification.
  *
- * Two providers, one shape of problem: a sender computes HMAC-SHA-256 over some
- * canonical string with a shared secret, and we recompute it and compare. The
- * details differ — what goes into the string, and how the digest is encoded —
- * and both differences are places where a plausible-looking implementation
+ * A sender computes HMAC-SHA-256 over some canonical string with a shared
+ * secret, and we recompute it and compare. What goes into the string, and how
+ * the digest is encoded, are places where a plausible-looking implementation
  * verifies nothing at all.
  *
  * Three rules apply to every function here.
@@ -70,23 +69,6 @@ function hexToBytes(hex: string): Uint8Array | null {
   return out;
 }
 
-function base64ToBytes(base64: string): Uint8Array | null {
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
 // ---------------------------------------------------------------------------
 // GitHub
 // ---------------------------------------------------------------------------
@@ -120,46 +102,4 @@ export async function githubSignatureFor(
   secret: string,
 ): Promise<string> {
   return `sha256=${toHex(await hmacSha256(secret, rawBody))}`;
-}
-
-// ---------------------------------------------------------------------------
-// Square
-// ---------------------------------------------------------------------------
-
-/**
- * Verify `x-square-hmacsha256-signature`.
- *
- * Square's signed string is **the notification URL concatenated with the raw
- * body**, and the digest is base64 rather than hex. Including the URL is what
- * stops a signature captured from one endpoint being replayed against another,
- * so the URL passed here must be the exact string configured in Square's
- * dashboard — scheme, host, path, no trailing slash unless it is configured
- * with one. A mismatch here fails every delivery, which is the correct failure:
- * the alternative, deriving the URL from the incoming request, would let a
- * `Host` header decide what we verify against.
- */
-export async function verifySquareSignature(
-  rawBody: string,
-  headerValue: string | null,
-  signatureKey: string,
-  notificationUrl: string,
-): Promise<boolean> {
-  if (!headerValue || !signatureKey || !notificationUrl) return false;
-
-  const provided = base64ToBytes(headerValue);
-  if (!provided) return false;
-
-  const expected = await hmacSha256(signatureKey, `${notificationUrl}${rawBody}`);
-  return constantTimeEqual(provided, expected);
-}
-
-/** Exposed for tests: produce the header a valid Square delivery would carry. */
-export async function squareSignatureFor(
-  rawBody: string,
-  signatureKey: string,
-  notificationUrl: string,
-): Promise<string> {
-  return bytesToBase64(
-    await hmacSha256(signatureKey, `${notificationUrl}${rawBody}`),
-  );
 }

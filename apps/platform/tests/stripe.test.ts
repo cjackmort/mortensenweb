@@ -15,9 +15,9 @@ import { PLANS } from "@mortensenweb/plans";
 /**
  * Stripe.
  *
- * As with Square, the failures worth testing are the ones where something is
- * treated as a payment when it is not, or where a client is told they are paid
- * when nobody has charged them. Specifically:
+ * The failures worth testing are the ones where something is treated as a
+ * payment when it is not, or where a client is told they are paid when nobody
+ * has charged them. Specifically:
  *
  *  - a live event reaching a test-keyed deployment (or the reverse)
  *  - an invoice that settled without collecting any cash

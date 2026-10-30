@@ -48,7 +48,7 @@ force one, set `E2E_BROWSER_CHANNEL` (`chrome`, `msedge`).
 
 **What it can't touch.** The run sets its own environment on top of whatever is
 in `apps/platform/.env.local`: `DATABASE_URL` is blanked, Stripe points at the
-stand-in, and the mail, Square and Twilio credentials are blanked. A variable
+stand-in, and the mail and Twilio credentials are blanked. A variable
 that is already set is never overwritten by an env file, which is what makes
 that hold. `seed:welcome` itself refuses to run if `DATABASE_URL` is set at all.
 

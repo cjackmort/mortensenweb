@@ -15,9 +15,8 @@ import { PayPanel } from "./pay-panel";
  * extra capacity), and `getBillingOverview` only ever surfaces one "current"
  * request at a time. This panel manages its own, independently.
  *
- * Two-step like `UnlockPanel`: nothing is created until the button is
- * pressed, so a client who never wants this never gets an invoice row for
- * it. Pressing it again later (a new page load resets this component's
+ * Two-step: nothing is created until the button is pressed, so a client who
+ * never wants this never gets an invoice row for it. Pressing it again later (a new page load resets this component's
  * local state) reuses the same open request rather than minting a second
  * one — `getOrCreateExtraChangeRequest` handles that, not this component.
  */
@@ -47,7 +46,7 @@ export function ExtraChangePanel({ amountLabel }: { amountLabel: string }) {
           <PayPanel
             requestPublicId={state.requestPublicId}
             venmoUrl={state.venmoUrl}
-            cardProvider={state.cardProvider}
+            cardAvailable={state.cardAvailable}
             reference={state.reference}
             amount={state.amount}
           />

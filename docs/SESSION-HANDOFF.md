@@ -77,7 +77,7 @@ Stage 3 added the loop itself:
 - **Entitlements + change allowances.** First confirmed payment unlocks
   analytics and change requests. Monthly allowance consumed atomically in one
   statement, so two submissions cannot spend the same last change
-- **Square** — hosted checkout links (verified against their OpenAPI spec) and
+- **Square** (since removed; never took a payment) — hosted checkout links (verified against their OpenAPI spec) and
   `x-square-hmacsha256-signature` verification over notification URL + raw body
 - **Netlify** — site creation, deploy lookup, and URL liveness checks
 - **Prospect → demo** — intake with plan selection, private repo scaffolded from

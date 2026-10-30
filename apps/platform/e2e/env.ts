@@ -46,6 +46,5 @@ export const runEnvironment: Record<string, string> = {
 
   // Anything that would reach a person or another service from a run.
   RESEND_API_KEY: "",
-  SQUARE_ACCESS_TOKEN: "",
   TWILIO_AUTH_TOKEN: "",
 };

@@ -40,7 +40,6 @@ export interface Entitlements {
   includedChangesPerMonth: number | null;
   overagePerChangeCents: number | null;
   planIncludesAnalytics: boolean;
-  squarePlanVariationId: string | null;
   /** Whether the client has switched on automatic monthly payment. */
   recurringEnabled: boolean;
   /** True when an operator has granted this plan rather than it being paid for. */
@@ -70,7 +69,6 @@ export async function getEntitlements(
       includedChangesPerMonth: servicePlans.includedChangesPerMonth,
       overagePerChangeCents: servicePlans.overagePerChangeCents,
       planIncludesAnalytics: servicePlans.includesAnalytics,
-      squarePlanVariationId: servicePlans.squarePlanVariationId,
       monthlyPriceCents: subscriptions.monthlyPriceCents,
       recurringEnabledAt: subscriptions.recurringEnabledAt,
 
@@ -123,7 +121,6 @@ export async function getEntitlements(
     overagePerChangeCents: comped ? null : row.overagePerChangeCents,
     planIncludesAnalytics:
       (comped ? row.compIncludesAnalytics : row.planIncludesAnalytics) ?? true,
-    squarePlanVariationId: row.squarePlanVariationId,
     recurringEnabled: row.recurringEnabledAt !== null,
     comped,
   };
