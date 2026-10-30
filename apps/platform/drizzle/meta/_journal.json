@@ -309,6 +309,13 @@
       "when": 1791600000000,
       "tag": "0043_client_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791700000000,
+      "tag": "0044_availability",
+      "breakpoints": true
     }
   ]
 }
