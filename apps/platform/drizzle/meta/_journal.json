@@ -302,6 +302,27 @@
       "when": 1791500000000,
       "tag": "0042_search_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0043_client_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791700000000,
+      "tag": "0044_availability",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791900000000,
+      "tag": "0046_ledger_deletes",
+      "breakpoints": true
     }
   ]
 }
