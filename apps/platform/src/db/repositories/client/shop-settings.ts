@@ -207,7 +207,7 @@ export type ConnectStart = { ok: true; url: string } | { ok: false; message: str
 
 const CONNECT_UNAVAILABLE: ConnectStart = {
   ok: false,
-  message: "Connecting Stripe is not switched on here yet. We will let you know when it is.",
+  message: "Connecting Stripe is not switched on here yet. We will let you know when it is; you can add products in the meantime.",
 };
 
 /**

@@ -3,11 +3,16 @@ import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
 import { createClient } from "@/db/repositories/admin/clients";
+import { SiteKindFields } from "../[publicId]/portal-sections";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Add a client.
+ *
+ * "What kind of site?" decides which optional sections their portal opens:
+ * a booking portal gets Set your availability, a store gets the online shop.
+ * Both can be changed later under Portal sections on their page.
  *
  * This creates the record only. It issues no credential and sends no email —
  * activation is a separate, deliberate step on the client's own page, because
@@ -45,6 +50,8 @@ export default async function NewClientPage({
       primaryContactEmail: String(formData.get("primaryContactEmail") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       industry: String(formData.get("industry") ?? ""),
+      bookingEnabled: formData.get("bookingEnabled") === "on",
+      shopEnabled: formData.get("shopEnabled") === "on",
     });
 
     // Straight to their page, which is where activation lives.
@@ -110,6 +117,8 @@ export default async function NewClientPage({
             type="text"
             placeholder="fine art / sculpture"
           />
+
+          <SiteKindFields />
 
           <button type="submit">Create client</button>
 

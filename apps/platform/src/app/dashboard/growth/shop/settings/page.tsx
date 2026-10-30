@@ -113,7 +113,12 @@ function Payments({ settings, readOnly }: { settings: ShopSettingsView; readOnly
   }
 
   if (!stripeConfigured()) {
-    return <p className="muted" style={{ margin: 0 }}>Connecting Stripe is not switched on here yet. We will let you know when it is.</p>;
+    return (
+      <p className="muted" style={{ margin: 0 }}>
+        Connecting Stripe is not switched on here yet. We will let you know when it is; you can add products and set
+        up shipping in the meantime.
+      </p>
+    );
   }
 
   if (settings.stripeAccountId) {

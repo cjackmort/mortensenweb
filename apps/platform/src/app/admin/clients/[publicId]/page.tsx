@@ -43,6 +43,7 @@ import { ReviewsSection } from "./reviews-section";
 import { getClientReviews, type ClientReviewsView } from "@/db/repositories/admin/reviews";
 import { getClientReports, type ClientReportsView } from "@/db/repositories/admin/reports";
 import { ReportsSection } from "./reports-section";
+import { PortalSectionsPanel } from "./portal-sections";
 import {
   SECTIONS,
   SectionGrid,
@@ -191,6 +192,8 @@ export default async function ClientDetailPage({
             contactEmail={client.primaryContactEmail}
             accounts={portalUsers}
           />
+
+          <PortalSectionsPanel clientPublicId={client.publicId} bookingEnabled={client.bookingEnabled} shopEnabled={client.shopEnabled} hasSite={siteRows.length > 0} />
 
           <SectionGrid clientPublicId={client.publicId} summaries={summaries} />
         </>

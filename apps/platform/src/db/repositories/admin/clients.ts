@@ -206,6 +206,10 @@ export interface NewClientInput {
   primaryContactEmail?: string;
   phone?: string;
   industry?: string;
+  /** A booking portal: opens "Set your availability" in their portal. */
+  bookingEnabled?: boolean;
+  /** A store: opens the online shop in their portal. */
+  shopEnabled?: boolean;
 }
 
 /**
@@ -266,6 +270,8 @@ export async function createClient(
         input.primaryContactEmail?.trim().toLowerCase() || null,
       phone: input.phone?.trim() || null,
       industry: input.industry?.trim() || null,
+      bookingEnabled: input.bookingEnabled ?? false,
+      shopEnabled: input.shopEnabled ?? false,
       // Not activated: no credential exists yet, and that is the point.
       onboardingStatus: "new",
     })
@@ -277,10 +283,76 @@ export async function createClient(
     action: "client.created",
     entityType: "client",
     entityId: clientRows[0]!.publicId,
-    metadata: { name, slug },
+    metadata: {
+      name,
+      slug,
+      bookingEnabled: input.bookingEnabled ?? false,
+      shopEnabled: input.shopEnabled ?? false,
+    },
   });
 
   return { clientPublicId: clientRows[0]!.publicId, slug };
+}
+
+/** What kind of site a client has: the portal sections it opens. */
+export interface ClientSectionChoice {
+  bookingEnabled: boolean;
+  shopEnabled: boolean;
+}
+
+export type SectionsOutcome =
+  | { ok: true; changed: boolean }
+  | { ok: false; reason: "not_found" };
+
+/**
+ * Change what kind of site a client has, after adding them.
+ *
+ * A store's shop is where their customers' money is taken, so turning it on
+ * or off is recorded with what it was before and who changed it. Turning a
+ * section off hides it and closes its pages; nothing in it is deleted, and
+ * turning it back on finds products, orders and availability as they were.
+ *
+ * No audit row when nothing changed: saving the panel without touching it
+ * is not a decision anyone needs to account for.
+ */
+export async function setClientSections(
+  ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+  choice: ClientSectionChoice,
+): Promise<SectionsOutcome> {
+  const [current] = await db
+    .select({
+      organizationId: clients.organizationId,
+      bookingEnabled: clients.bookingEnabled,
+      shopEnabled: clients.shopEnabled,
+    })
+    .from(clients)
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+  if (!current) return { ok: false, reason: "not_found" };
+
+  const from = { bookingEnabled: current.bookingEnabled, shopEnabled: current.shopEnabled };
+  const to = { bookingEnabled: choice.bookingEnabled, shopEnabled: choice.shopEnabled };
+  if (from.bookingEnabled === to.bookingEnabled && from.shopEnabled === to.shopEnabled) {
+    return { ok: true, changed: false };
+  }
+
+  await db
+    .update(clients)
+    .set({ ...to, updatedAt: new Date() })
+    .where(eq(clients.publicId, clientPublicId));
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: current.organizationId,
+    action: "client.sections_changed",
+    entityType: "client",
+    entityId: clientPublicId,
+    metadata: { from, to },
+  });
+
+  return { ok: true, changed: true };
 }
 
 export async function getClientDetail(

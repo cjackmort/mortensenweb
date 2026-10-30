@@ -7,14 +7,34 @@ import { requireUsableGrowthFeature } from "@/db/repositories/client/growth";
 import { getShopSettings, type ShopSettingsView } from "@/db/repositories/client/shop-settings";
 import { countOrdersAwaitingShipment } from "@/db/repositories/client/shop-orders";
 import { listProducts, type ProductSummary } from "@/db/repositories/client/shop-products";
+import { getShopSales } from "@/db/repositories/client/shop-sales";
+import { stripeConfigured } from "@/lib/payments/stripe";
 import { money } from "@/lib/shop/money";
 import { stockLabel } from "@/lib/shop/products";
+import { SalesPanel, type SalesState } from "./sales-panel";
 import "./shop.css";
 
 /**
- * The shop, from the client's side: what is set up, the products, and what
- * is waiting to be sent.
+ * The shop, from the client's side: how to get it going, what is selling,
+ * and the products.
+ *
+ * Written for the store owner, not the operator. Until the shop can take a
+ * payment with something on the website, the setup steps come first; after
+ * that the sales do, and the steps get out of the way.
  */
+
+const SETTINGS_PATH = "/dashboard/growth/shop/settings";
+const NEW_PRODUCT_PATH = "/dashboard/growth/shop/products/new";
+
+/** Read separately so a failed figure costs the panel, not the page. */
+async function salesState(load: () => ReturnType<typeof getShopSales>): Promise<SalesState> {
+  try {
+    return { kind: "ready", sales: await load() };
+  } catch (error) {
+    console.error("[shop] sales summary failed", { message: error instanceof Error ? error.message : "unknown" });
+    return { kind: "failed" };
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -38,13 +58,16 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
   const db = await getDb();
   if (!(await requireUsableGrowthFeature(db, ctx, "shop"))) redirect("/dashboard/growth?locked=shop#shop");
 
-  const [settings, products, toSend, { deleted }] = await Promise.all([
+  const [settings, products, toSend, sales, { deleted }] = await Promise.all([
     getShopSettings(db, ctx),
     listProducts(db, ctx),
     countOrdersAwaitingShipment(db, ctx),
+    salesState(() => getShopSales(db, ctx)),
     searchParams,
   ]);
   const readOnly = ctx.impersonating;
+  const onSite = products.filter((p) => p.status === "active").length;
+  const setUp = settings !== null && settings.chargesEnabled && settings.updatedAt !== null && onSite > 0;
 
   return (
     <main className="shell">
@@ -55,87 +78,94 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
 
       {deleted === "1" && <p className="notice notice-success">Deleted. It is off your website; orders already placed keep it.</p>}
 
-      {settings ? (
-        <>
-          <SetupPanel settings={settings} products={products} />
-          <OrdersPanel toSend={toSend} open={settings.chargesEnabled} />
-          <ProductsPanel products={products} readOnly={readOnly} />
-        </>
-      ) : (
+      {!settings ? (
         <section className="panel">
           <div className="panel-body">
             <p>Your shop goes on your website, and there is no website on your account yet. It appears here once there is.</p>
           </div>
         </section>
+      ) : setUp ? (
+        <>
+          <SalesPanel state={sales} toSend={toSend} chargesEnabled={settings.chargesEnabled} onSite={onSite} />
+          <ProductsPanel products={products} readOnly={readOnly} />
+          <p className="panel-note">
+            Payments, shipping and your returns policy are in <Link href={SETTINGS_PATH}>Shop settings</Link>.
+          </p>
+        </>
+      ) : (
+        <>
+          <SetupPanel settings={settings} products={products} onSite={onSite} />
+          <SalesPanel state={sales} toSend={toSend} chargesEnabled={settings.chargesEnabled} onSite={onSite} />
+          <ProductsPanel products={products} readOnly={readOnly} />
+        </>
       )}
-
-      <p className="panel-note">
-        <Link href="/dashboard/growth">← Growth</Link>
-      </p>
     </main>
   );
 }
 
-function SetupPanel({ settings, products }: { settings: ShopSettingsView; products: ProductSummary[] }) {
-  const paymentsDone = settings.chargesEnabled;
+function fulfilmentSummary(settings: ShopSettingsView): string {
+  if (settings.fulfilment === "pickup") return "Customers collect their order from you.";
+  if (settings.shippingCents === 0) return "You ship orders, free of charge.";
+  return `You ship orders, ${money(settings.shippingCents)} per order.`;
+}
+
+/**
+ * Four things to do once. Each step says what it is for, in the owner's
+ * terms, and links to where it is done.
+ */
+function SetupPanel({
+  settings,
+  products,
+  onSite,
+}: {
+  settings: ShopSettingsView;
+  products: ProductSummary[];
+  onSite: number;
+}) {
+  const paid = settings.chargesEnabled;
   const fulfilmentDone = settings.updatedAt !== null;
-  const onSite = products.filter((p) => p.status === "active").length;
 
   return (
     <section className="panel" aria-labelledby="shop-setup">
       <div className="panel-head">
-        <h2 id="shop-setup">Getting set up</h2>
+        <h2 id="shop-setup">Set up your shop</h2>
         <span className="panel-sub">On {settings.siteName}</span>
       </div>
       <div className="panel-body">
+        <p className="shop-setup-intro">
+          Do these once. After that, anything you add here shows in the shop on your website by itself, and every sale
+          shows up on this page.
+        </p>
         <ol className="shop-steps">
-          <Step n={1} done={paymentsDone} title="Connect Stripe">
-            {paymentsDone ? (
-              <p className="muted">Connected. Payments go straight to your Stripe account.</p>
-            ) : settings.stripeAccountId ? (
-              <p>
-                Stripe still needs a few details before it will take payments.{" "}
-                <Link href="/dashboard/growth/shop/settings">Finish setting up</Link>
-              </p>
-            ) : (
-              <p>
-                Customers pay through Stripe, into an account in your name.{" "}
-                <Link href="/dashboard/growth/shop/settings">Connect Stripe</Link>
-              </p>
-            )}
+          <Step n={1} done={paid} title="Connect Stripe, so customers can pay you">
+            <PaymentsStep settings={settings} />
           </Step>
-          <Step n={2} done={fulfilmentDone} title="Say how orders reach customers">
+          <Step n={2} done={fulfilmentDone} title="Choose shipping or pickup">
             {fulfilmentDone ? (
               <p className="muted">
-                {settings.fulfilment === "pickup"
-                  ? "Customers collect their order."
-                  : settings.shippingCents === 0
-                    ? "Shipped, free of charge."
-                    : `Shipped, ${money(settings.shippingCents)} per order.`}{" "}
-                <Link href="/dashboard/growth/shop/settings">Change</Link>
+                {fulfilmentSummary(settings)} <Link href={SETTINGS_PATH}>Change</Link>
               </p>
             ) : (
               <p>
-                Shipping or pickup, and what you tell customers about returns.{" "}
-                <Link href="/dashboard/growth/shop/settings">Choose</Link>
+                How orders reach customers, and what you tell them about returns.{" "}
+                <Link href={SETTINGS_PATH}>Choose</Link>
               </p>
             )}
           </Step>
-          <Step n={3} done={onSite > 0} title="Put products on your website">
+          <Step n={3} done={products.length > 0} title="Add your products">
             {products.length === 0 ? (
               <p>
-                Photos, a price and how many you have. <Link href="/dashboard/growth/shop/products/new">Add your first product</Link>
-              </p>
-            ) : onSite === 0 ? (
-              <p>
-                {products.length === 1 ? "Your product is" : `Your ${products.length} products are`} added but not on the website yet.
-                Open one below and put it on.
+                A photo or two, a price and how many you have. <Link href={NEW_PRODUCT_PATH}>Add your first product</Link>
               </p>
             ) : (
               <p className="muted">
-                {onSite} of {products.length} on your website.
+                {products.length === 1 ? "1 product added." : `${products.length} products added.`}{" "}
+                <Link href={NEW_PRODUCT_PATH}>Add another</Link>
               </p>
             )}
+          </Step>
+          <Step n={4} done={onSite > 0} title="Put them on your website">
+            <OnSiteStep products={products.length} onSite={onSite} paid={paid} />
           </Step>
         </ol>
       </div>
@@ -143,30 +173,56 @@ function SetupPanel({ settings, products }: { settings: ShopSettingsView; produc
   );
 }
 
-function OrdersPanel({ toSend, open }: { toSend: number; open: boolean }) {
+function PaymentsStep({ settings }: { settings: ShopSettingsView }) {
+  if (settings.chargesEnabled) {
+    return <p className="muted">Connected. Every sale is paid into your own Stripe account.</p>;
+  }
+  if (settings.stripeAccountId) {
+    return (
+      <p>
+        Stripe needs a few more details before it will take payments. <Link href={SETTINGS_PATH}>Finish with Stripe</Link>
+      </p>
+    );
+  }
+  if (!stripeConfigured()) {
+    return (
+      <p>
+        Connecting Stripe is not switched on yet; we will let you know when it is. You can do the other steps in the
+        meantime.
+      </p>
+    );
+  }
   return (
-    <section className="panel" aria-labelledby="shop-orders">
-      <div className="panel-head">
-        <h2 id="shop-orders">Orders</h2>
-        <div className="panel-head-actions">
-          <Link href="/dashboard/growth/shop/orders">All orders</Link>
-        </div>
-      </div>
-      <div className="panel-body">
-        {toSend > 0 ? (
-          <p style={{ margin: 0 }}>
-            <strong>
-              {toSend} {toSend === 1 ? "order" : "orders"}
-            </strong>{" "}
-            waiting to be sent. <Link href="/dashboard/growth/shop/orders">See them</Link>
-          </p>
-        ) : (
-          <p className="muted" style={{ margin: 0 }}>
-            {open ? "Nothing waiting to be sent." : "Orders appear here once Stripe is connected and a customer pays."}
-          </p>
-        )}
-      </div>
-    </section>
+    <p>
+      Customers pay by card through Stripe, into an account in your name. We never hold your money.{" "}
+      <Link href={SETTINGS_PATH}>Connect Stripe</Link>
+    </p>
+  );
+}
+
+function OnSiteStep({ products, onSite, paid }: { products: number; onSite: number; paid: boolean }) {
+  if (onSite === 0) {
+    return (
+      <p>
+        {products === 0
+          ? "New products stay off your website until you are happy with them. Then press \u201cPut on my website\u201d on one."
+          : "Open a product below and press \u201cPut on my website\u201d."}{" "}
+        It appears in the shop on your website straight away. No request needed.
+      </p>
+    );
+  }
+  if (paid) {
+    return (
+      <p className="muted">
+        {onSite} of {products} on your website, ready to buy.
+      </p>
+    );
+  }
+  return (
+    <p>
+      {onSite} of {products} on your website. Customers can see {onSite === 1 ? "it" : "them"}; the Buy button
+      appears once Stripe is connected.
+    </p>
   );
 }
 
@@ -177,7 +233,7 @@ function ProductsPanel({ products, readOnly }: { products: ProductSummary[]; rea
         <h2 id="shop-products">Products</h2>
         {!readOnly && (
           <div className="panel-head-actions">
-            <Link className="button small" href="/dashboard/growth/shop/products/new">
+            <Link className="button small" href={NEW_PRODUCT_PATH}>
               Add a product
             </Link>
           </div>
@@ -186,7 +242,7 @@ function ProductsPanel({ products, readOnly }: { products: ProductSummary[]; rea
       <div className="panel-body">
         {products.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            No products yet.
+            No products yet. Each one you add is listed here, with whether it is on your website.
           </p>
         ) : (
           <ul className="shop-products">
