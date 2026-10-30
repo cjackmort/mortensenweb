@@ -67,6 +67,14 @@ export interface GrowthState {
    * "coming soon" until `available` flips.
    */
   earlyAccess: boolean;
+  /**
+   * The kind of site the operator chose when adding the client
+   * (`clients.shop_enabled` / `booking_enabled`). A store has the online
+   * shop whether or not the shop is released to everyone: see
+   * `SECTION_FEATURES`.
+   */
+  shopEnabled: boolean;
+  bookingEnabled: boolean;
 }
 
 interface StripeSubscriptionRow {
@@ -77,9 +85,21 @@ interface StripeSubscriptionRow {
   currentPeriodEnd: Date | null;
 }
 
-async function clientRowFor(db: Database, ctx: TenantContext): Promise<{ id: string; isInternal: boolean } | null> {
+interface ClientRow {
+  id: string;
+  isInternal: boolean;
+  shopEnabled: boolean;
+  bookingEnabled: boolean;
+}
+
+async function clientRowFor(db: Database, ctx: TenantContext): Promise<ClientRow | null> {
   const [row] = await db
-    .select({ id: clients.id, isInternal: clients.isInternal })
+    .select({
+      id: clients.id,
+      isInternal: clients.isInternal,
+      shopEnabled: clients.shopEnabled,
+      bookingEnabled: clients.bookingEnabled,
+    })
     .from(clients)
     .where(eq(clients.organizationId, ctx.organizationId))
     .limit(1);
@@ -161,18 +181,49 @@ export async function getGrowthState(db: Database, ctx: TenantContext): Promise<
     renewsOn: sub && !sub.cancelAtPeriodEnd ? (sub.currentPeriodEnd ?? null) : null,
     addOns,
     earlyAccess: client?.isInternal ?? false,
+    shopEnabled: client?.shopEnabled ?? false,
+    bookingEnabled: client?.bookingEnabled ?? false,
   };
 }
 
 /**
- * Whether a feature's pages open for this client: theirs, and either built
- * or being tried early on the agency's own site. `hasFeature` alone is not
- * enough — a comp grants every feature, built or not.
+ * Features that belong to a kind of site rather than to everyone.
+ *
+ * The online shop is for stores. The operator says which clients are stores
+ * (`clients.shop_enabled`, set when adding the client or later on their
+ * page), and that choice — not `available` in `@mortensenweb/plans` — is
+ * what opens it. `available` stays false so the public site does not
+ * advertise a shop to every visitor while it is offered client by client.
+ *
+ * The plan still has to include the feature (`via`): the shop is free today,
+ * so every store has it, but a flag is never a way round a price.
+ */
+const SECTION_FEATURES: Partial<Record<GrowthFeatureKey, (state: GrowthState) => boolean>> = {
+  shop: (state) => state.shopEnabled,
+};
+
+/**
+ * Whether a feature's pages open for this client: theirs, and either built,
+ * opened for their kind of site, or being tried early on the agency's own
+ * site. `hasFeature` alone is not enough — a comp grants every feature,
+ * built or not.
  */
 export function canUseFeature(state: GrowthState, key: GrowthFeatureKey): boolean {
   const access = state.access.find((a) => a.feature.key === key);
   if (!access?.via) return false;
-  return access.feature.available || state.earlyAccess;
+  if (state.earlyAccess) return true;
+  const forKind = SECTION_FEATURES[key];
+  if (forKind) return forKind(state);
+  return access.feature.available;
+}
+
+/**
+ * The cards on the Growth page. A feature that belongs to a kind of site is
+ * left off for every other client — a "coming soon" shop on a plumber's
+ * Growth page is a promise nobody made them.
+ */
+export function growthHubFeatures(state: GrowthState): FeatureAccess[] {
+  return state.access.filter((a) => !SECTION_FEATURES[a.feature.key] || canUseFeature(state, a.feature.key));
 }
 
 /** The gate on a feature's pages and actions, for features that may still be being built. */

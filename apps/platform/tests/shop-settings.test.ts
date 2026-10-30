@@ -314,6 +314,9 @@ describe("opening a feature that is still being built", () => {
       renewsOn: null,
       addOns: [],
       earlyAccess,
+      // Not a store: the shop opening for one is `client-kinds.test.ts`.
+      shopEnabled: false,
+      bookingEnabled: false,
     });
 
   it("opens for the agency's own site, and for nobody else — not even a comp", () => {
