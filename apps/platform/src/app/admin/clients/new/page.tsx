@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
@@ -57,9 +56,6 @@ export default async function NewClientPage({
       <main className="shell">
         <div className="masthead">
           <h1>Add a client</h1>
-          <span className="muted">
-            <Link href="/admin/clients">← All clients</Link>
-          </span>
         </div>
 
         <form className="card" action={submit} style={{ maxWidth: "34rem" }}>

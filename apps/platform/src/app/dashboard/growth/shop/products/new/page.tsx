@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -34,9 +33,6 @@ export default async function NewProductPage() {
     <main className="shell">
       <div className="masthead">
         <h1>Add a product</h1>
-        <span>
-          <Link href="/dashboard/growth/shop">← Shop</Link>
-        </span>
       </div>
 
       <ProductForm photos={pickablePhotos(assets)} maxPhotos={MAX_PRODUCT_PHOTOS} readOnly={ctx.impersonating} />

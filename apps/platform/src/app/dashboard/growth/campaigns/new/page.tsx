@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -28,9 +27,6 @@ export default async function NewCampaignPage() {
     <main className="shell">
       <div className="masthead">
         <h1>New campaign</h1>
-        <span>
-          <Link href="/dashboard/growth/campaigns">← Campaigns</Link>
-        </span>
       </div>
 
       <section className="panel">

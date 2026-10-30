@@ -46,9 +46,6 @@ export default async function OrdersPage() {
     <main className="shell">
       <div className="masthead">
         <h1>Orders</h1>
-        <span>
-          <Link href="/dashboard/growth/shop">← Shop</Link>
-        </span>
       </div>
 
       <section className="panel">

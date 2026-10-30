@@ -5,7 +5,6 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { requireGrowthFeature } from "@/db/repositories/client/growth";
 import { getSearchView, type SearchTrendPoint, type SearchView } from "@/db/repositories/client/search-snapshots";
-import { BackToGrowth } from "@/components/back-link";
 import { Delta } from "@/components/analytics-summary";
 import { Sparkline } from "@/components/charts";
 import type { SearchSnapshot } from "@/lib/connections/providers/google";
@@ -65,7 +64,6 @@ export default async function SearchPage() {
 
   return (
     <main className="shell">
-      <BackToGrowth />
       <div className="masthead">
         <h1>Search</h1>
         <span>What people search on Google to find you, and where you rank</span>

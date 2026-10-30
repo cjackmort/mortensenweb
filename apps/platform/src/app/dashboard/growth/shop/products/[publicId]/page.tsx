@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -62,9 +61,6 @@ export default async function ProductPage({
     <main className="shell">
       <div className="masthead">
         <h1>{product.name}</h1>
-        <span>
-          <Link href="/dashboard/growth/shop">← Shop</Link>
-        </span>
       </div>
 
       {added === "1" && !product.deleted && (

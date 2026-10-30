@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -61,9 +60,6 @@ export default async function ShopSettingsPage({
         <h1>
           Shop<span className="masthead-sub">Settings</span>
         </h1>
-        <span className="muted">
-          <Link href="/dashboard/growth/shop">← Back to your shop</Link>
-        </span>
       </div>
 
       {cameFrom === "refresh" && (

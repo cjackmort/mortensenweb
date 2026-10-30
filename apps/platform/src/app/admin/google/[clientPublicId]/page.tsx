@@ -79,7 +79,7 @@ export default async function GoogleWorkspacePage({ params }: { params: Promise<
           <span className="masthead-sub">Google profile</span>
         </h1>
         <span className="muted">
-          <Link href="/admin/google">← Google profiles</Link> · <Link href={`/admin/clients/${client.publicId}`}>Client page</Link>
+          <Link href={`/admin/clients/${client.publicId}`}>Client page</Link>
         </span>
       </div>
 
