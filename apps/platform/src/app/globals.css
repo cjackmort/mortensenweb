@@ -407,7 +407,7 @@ code {
   object-fit: cover;
   background: var(--accent-wash);
   color: var(--accent);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   font: 600 0.66rem / 1 var(--mono);
   letter-spacing: 0.04em;
 }
@@ -468,6 +468,19 @@ code {
 
 .nav::-webkit-scrollbar {
   display: none;
+}
+
+/* On a phone the tabs run past the edge. A fade at the right says "there is
+   more" where a hard cut read as a broken word ("MEDI"), and the extra end
+   padding lets the last tab scroll clear of the fade. */
+@media (max-width: 60rem) {
+  .nav {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
+
+  .nav-inner {
+    padding-right: calc(var(--gutter) + 2.5rem);
+  }
 }
 
 .nav-inner {
@@ -4673,6 +4686,22 @@ form + .field-hint {
 .growth-card h3 {
   margin: 0;
   font-size: 1.1rem;
+}
+
+/* The pill stays top-right beside the title, which wraps instead. Letting the
+   pill drop under a long title ("Google profile management") made card heads
+   in one row different heights. */
+.growth-card .card-head {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.growth-card .card-head > h3 {
+  min-width: 0;
+}
+
+.growth-card .card-head > .pill {
+  flex: none;
 }
 
 .growth-card p {

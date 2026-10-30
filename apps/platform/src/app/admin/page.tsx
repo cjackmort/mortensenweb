@@ -55,11 +55,12 @@ export default async function AdminOverview() {
   ]);
 
   const openRequests = requests.filter((r) => isOpen(r.status));
-  const awaiting = moneyQueue.filter((r) => r.awaitingConfirmation);
-  const overdue = moneyQueue.filter((r) => !r.awaitingConfirmation);
-  const owed = overdue.reduce((sum, r) => sum + r.amountCents, 0);
+  // One money tile, matching Payments: a client who says they paid is still
+  // unpaid until it is marked paid there, so they count as overdue, flagged.
+  const saidPaid = moneyQueue.filter((r) => r.awaitingConfirmation).length;
+  const owed = moneyQueue.reduce((sum, r) => sum + r.amountCents, 0);
 
-  const needsAttention = awaiting.length + overdue.length + openRequests.length;
+  const needsAttention = moneyQueue.length + openRequests.length;
 
   return (
     <>
@@ -74,23 +75,18 @@ export default async function AdminOverview() {
         {needsAttention === 0 ? (
           <p className="notice notice-success">
             <strong>Nothing needs you right now.</strong> No open requests, no
-            overdue invoices, nobody waiting on a confirmation.
+            overdue invoices.
           </p>
         ) : (
-          <div className="grid grid-3">
-            <Tile
-              label="Waiting on you"
-              value={String(awaiting.length)}
-              note="clients say they paid"
-              href="/admin/payments"
-              tone={awaiting.length > 0 ? "pill-warning" : undefined}
-            />
+          <div className="grid grid-2">
             <Tile
               label="Overdue"
               value={formatCurrency(owed)}
-              note={`${overdue.length} invoice${overdue.length === 1 ? "" : "s"}`}
+              note={`${moneyQueue.length} invoice${moneyQueue.length === 1 ? "" : "s"}${
+                saidPaid > 0 ? ` · ${saidPaid} say${saidPaid === 1 ? "s" : ""} they paid` : ""
+              }`}
               href="/admin/payments"
-              tone={overdue.length > 0 ? "pill-danger" : undefined}
+              tone={moneyQueue.length > 0 ? "pill-danger" : undefined}
             />
             <Tile
               label="Open requests"
