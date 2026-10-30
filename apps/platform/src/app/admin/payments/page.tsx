@@ -7,6 +7,7 @@ import {
   ledgerEntries,
   ledgerSummary,
   monthRange,
+  profitStanding,
   sumPaymentsReceivedInMonth,
 } from "@/db/repositories/admin/finance";
 import { listDeletedLedgerRows } from "@/db/repositories/admin/ledger-deletes";
@@ -23,6 +24,7 @@ import { ClientsTable } from "./clients-table";
 import { LedgerSection } from "./ledger-section";
 import { OverdueTable } from "./overdue-table";
 import { PaymentDialogs } from "./payment-dialogs";
+import { StandingTiles } from "./standing";
 import { StripeSync } from "./stripe-sync";
 import { WriteOffsSection } from "./write-offs-section";
 import { monthName, plural } from "./format";
@@ -71,10 +73,12 @@ export default async function AdminPaymentsPage({
   const ctx = adminContextFrom(user);
   const db = await getDb();
   const range = monthRange(ledgerMonth);
-  const [overview, received, summary, entries, deleted, writeOffs, candidates, stripeSync] =
+  const [overview, received, standing, summary, entries, deleted, writeOffs, candidates, stripeSync] =
     await Promise.all([
       paymentsOverview(ctx, db),
       sumPaymentsReceivedInMonth(ctx, db),
+      // Always this month, whichever month the ledger below is showing.
+      profitStanding(ctx, db, thisMonth),
       ledgerSummary(ctx, db, ledgerMonth),
       ledgerEntries(ctx, db, range),
       listDeletedLedgerRows(ctx, db, range),
@@ -93,6 +97,8 @@ export default async function AdminPaymentsPage({
       </div>
 
       <PaymentDialogs today={today}>
+        <StandingTiles standing={standing} />
+
         <Totals
           totals={overview.totals}
           received={received}

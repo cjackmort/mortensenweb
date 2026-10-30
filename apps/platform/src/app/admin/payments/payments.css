@@ -335,6 +335,41 @@
   border-color: var(--border-strong);
 }
 
+/* "In the green / in the red": the wash fills the tile and the figure takes
+   the tone, so the answer is readable from across the room. A rule down the
+   left keeps the tile distinct from the plain stats below it. */
+.pay-standing-tile {
+  border-left-width: 4px;
+}
+
+.pay-standing-tile.is-green {
+  background: var(--success-wash);
+  border-left-color: var(--success);
+}
+
+.pay-standing-tile.is-red {
+  background: var(--danger-wash);
+  border-left-color: var(--danger);
+}
+
+.pay-standing-tile.is-green .stat-value,
+.pay-standing-tile.is-green .pay-standing-words {
+  color: var(--success);
+}
+
+.pay-standing-tile.is-red .stat-value,
+.pay-standing-tile.is-red .pay-standing-words {
+  color: var(--danger);
+}
+
+.pay-standing-words {
+  margin: -0.35rem 0 0.6rem;
+  font: 600 0.78rem / 1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .pay-quiet {
   font-size: 0.82rem;
   color: var(--muted);
