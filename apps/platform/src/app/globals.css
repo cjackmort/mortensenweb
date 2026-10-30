@@ -40,6 +40,11 @@
  */
 
 :root {
+  /* Native parts of controls — a select's arrow, a date field's calendar
+     button, a checkbox, the scrollbars — follow the theme too. Without this
+     they stayed light in dark mode: a black arrow on a near-black field. */
+  color-scheme: light dark;
+
   --bg: #f4f5f2;
   /* One ink square per 32px tile, at low opacity: the grid is a texture you
      notice when you look for it, not a pattern competing with the panes. */
@@ -185,6 +190,13 @@ h1,
 h2,
 h3 {
   text-wrap: balance;
+}
+
+/* Headings do not inherit the body's 1.6: an unstyled two-line heading spread
+   its lines half a line apart. Every styled heading sets its own. */
+h1,
+h2 {
+  line-height: 1.2;
 }
 
 p {
@@ -569,6 +581,16 @@ code {
   color: var(--text);
 }
 
+/* A card that is the whole page — the public "stop these emails" screens a
+   client's customer lands on — heads it in display type too, rather than in
+   the browser's bold default at twice the body's line height. */
+.card > h1 {
+  margin: 0 0 1rem;
+  font: 400 clamp(1.6rem, 1.3rem + 1.2vw, 2.1rem) / 1.12 var(--display);
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
 .card-head {
   display: flex;
   align-items: center;
@@ -923,6 +945,20 @@ code {
   margin: 0.6rem 0 0;
 }
 
+/* A stat whose answer is a name — "Top campaign" — rather than a figure.
+   At figure size a long campaign name ran five lines; three at most here. */
+.stat-value.is-text {
+  font-size: clamp(1.2rem, 1.05rem + 0.6vw, 1.5rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
 /* -------------------------------------------------------------- tables */
 
 /*
@@ -1017,6 +1053,21 @@ tbody tr:last-child td {
 
   table.stack td:empty {
     display: none;
+  }
+
+  /* The first column is what the row is — the campaign, the customer, the
+     search, the date — so it heads the stacked row, full width and left-
+     aligned, rather than being one more label and value. Right-aligned in the
+     narrow half of the row, a business name or a customer with an email under
+     it wrapped into a ragged paragraph. */
+  table.stack td:first-child {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.4rem;
+  }
+
+  table.stack td:first-child::before {
+    content: none;
   }
 }
 
@@ -1166,8 +1217,17 @@ tbody tr:last-child td {
   color: var(--muted);
 }
 
+/* A readable measure, centred: across a full-width panel the explanation ran
+   to one 150-character line. */
 .empty p {
-  margin: 0 0 0.35rem;
+  max-width: 42rem;
+  margin: 0 auto 0.35rem;
+}
+
+/* The way out of an empty state sits clear of the sentence above it. */
+.empty > .button,
+.empty > button {
+  margin-top: 1rem;
 }
 
 .empty .empty-title {
@@ -1381,6 +1441,8 @@ label.checkbox input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+  /* Fixed dark in either theme, so its controls' native parts are dark too. */
+  color-scheme: dark;
   background-color: #0e1116;
   background-image:
     radial-gradient(55% 45% at 50% 38%, rgba(237, 239, 234, 0.1), transparent 70%),
@@ -1481,10 +1543,13 @@ label.checkbox input[type="checkbox"] {
 
 /* ------------------------------------------------- definition lists */
 
+/* `minmax(0, 1fr)` and `overflow-wrap`, so one unbroken value — a long email
+   address, an environment variable's name — wraps inside its column instead of
+   widening the page past a phone's screen. */
 .detail-grid,
 .credential-grid {
   display: grid;
-  grid-template-columns: minmax(7.5rem, auto) 1fr;
+  grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr);
   gap: 0.85rem 1.5rem;
   margin: 0;
   font-size: 0.95rem;
@@ -1502,6 +1567,8 @@ label.checkbox input[type="checkbox"] {
 .detail-grid dd,
 .credential-grid dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /*
@@ -1541,6 +1608,11 @@ label.checkbox input[type="checkbox"] {
 .muted {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+/* A short date in a narrow table column: "Oct 29" on one line, not two. */
+.nowrap {
+  white-space: nowrap;
 }
 
 /* -------------------------------------------------------------- charts */
@@ -1635,6 +1707,12 @@ label.checkbox input[type="checkbox"] {
   stop-opacity: 0;
 }
 
+/* A page-views-only chart is shaded in its own rust, not in the visits blue. */
+.chart-grad-series-2 .chart-grad-from,
+.chart-grad-series-2 .chart-grad-to {
+  stop-color: var(--series-2);
+}
+
 .chart-dot {
   /* 2px surface ring so an overlapping mark stays legible. */
   stroke: var(--surface);
@@ -1651,6 +1729,11 @@ circle.chart-series-1 {
 
 .chart-series-2 {
   stroke: var(--series-2);
+}
+/* Without this the last-day dot on a page-views chart was painted black. */
+.chart-series-2.chart-dot,
+circle.chart-series-2 {
+  fill: var(--series-2);
 }
 
 .chart-legend {
@@ -2001,6 +2084,25 @@ input[type="file"] {
   cursor: pointer;
 }
 
+/* Its "Choose file" button was the browser's own grey one, the only control
+   in the portal not drawn like the rest; now it is a secondary button. */
+input[type="file"]::file-selector-button {
+  margin-right: 0.85rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 500 0.66rem / 1.3 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+input[type="file"]:hover::file-selector-button {
+  border-color: var(--text);
+}
+
 /* A command the operator copies to their own machine. Monospace, scrollable
    rather than wrapping — a wrapped shell command invites a half-copied paste. */
 .handoff {
@@ -2196,6 +2298,16 @@ input[type="file"] {
   line-height: 1.5;
 }
 
+/* A note that introduces a control — "Pausing stops the count…" over Pause,
+   "Finished the job?" over Archive — had no bottom margin, so the button sat
+   on the line of text above it. */
+.panel-note + form,
+.panel-note + button,
+.panel-note + .button,
+.panel-note + .actions {
+  margin-top: 0.75rem;
+}
+
 /* ---------------------------------------------------------- metric strip */
 
 /*
@@ -2227,6 +2339,12 @@ input[type="file"] {
   border-top: 1px solid var(--border);
 }
 
+/* An odd one out at the end takes the whole row, rather than sitting beside
+   an empty cell. */
+.metric:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 60rem) {
   .metrics {
     grid-template-columns: repeat(4, 1fr);
@@ -2243,6 +2361,29 @@ input[type="file"] {
   .metric:first-child {
     border-left: none;
   }
+
+  .metric:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+
+  /* The visitors strip has five figures. Four columns left the fifth alone on
+     a second row with a stray rule beside it; three over two reads as meant. */
+  .metrics-visitors {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .metrics-visitors > .metric {
+    grid-column: span 2;
+  }
+
+  .metrics-visitors > .metric:nth-child(n + 4) {
+    grid-column: span 3;
+    border-top: 1px solid var(--border);
+  }
+
+  .metrics-visitors > .metric:nth-child(4) {
+    border-left: none;
+  }
 }
 
 .metric-label {
@@ -2253,12 +2394,15 @@ input[type="file"] {
   margin: 0 0 0.65rem;
 }
 
-/* Value and delta on the left, sparkline on the right, baselines aligned. */
+/* Value and delta on the left, sparkline on the right, baselines aligned.
+   In a cell too narrow for both — two columns on a phone — the sparkline
+   drops under the figure instead of squeezing the delta onto its own line. */
 .metric-main {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
 }
 
 .metric-figure {
@@ -2468,7 +2612,12 @@ input[type="file"] {
  * does the work: no JavaScript, keyboard-operable, remembered by nothing (a
  * fresh page always opens compact, which is the intended reading order).
  */
+/* The chevron is pinned to the right edge rather than being the last flex
+   item: as a flex item it wrapped onto a line of its own under the heading
+   whenever the heading and the answer line only just fitted a phone. */
 .panel-fold > summary {
+  position: relative;
+  padding-right: calc(var(--pane-pad) + 1.5rem);
   list-style: none;
   cursor: pointer;
   user-select: none;
@@ -2491,19 +2640,20 @@ input[type="file"] {
 
 .panel-fold > summary::after {
   content: "";
-  flex: 0 0 auto;
+  position: absolute;
+  right: calc(var(--pane-pad) + 0.25rem);
+  top: calc(50% - 0.4rem);
   width: 0.55rem;
   height: 0.55rem;
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
   transform: rotate(45deg);
-  margin: 0 0.25rem 0.2rem 0;
   transition: transform 0.2s ease;
 }
 
 .panel-fold[open] > summary::after {
   transform: rotate(-135deg);
-  margin-bottom: -0.15rem;
+  top: calc(50% - 0.15rem);
 }
 
 .panel-fold:not([open]) > summary {
@@ -2917,6 +3067,25 @@ button.link:focus-visible {
 .media-drop.is-dragging {
   border-color: var(--accent);
   background: var(--accent-wash);
+}
+
+/* `.field-hint` pulls itself up under the input it explains; here it follows
+   a line of text, and was drawn over it. */
+.media-drop .field-hint {
+  margin-top: 0.5rem;
+}
+
+/* "Choose images" is the way in, so it reads as a link in the accent — not as
+   the muted, red-on-hover `.linklike` meant for a quiet destructive action. */
+.media-drop .linklike,
+.media-drop .linklike:hover,
+.media-drop .linklike:focus-visible {
+  font-size: inherit;
+  color: var(--accent);
+}
+
+.media-drop .linklike:hover {
+  color: var(--accent-hover);
 }
 
 .media-queue {
@@ -4417,6 +4586,12 @@ form + .field-hint {
   margin: 0 0 0.75rem;
 }
 
+/* A lone "Open …" button sits at the card's foot, so the buttons line up
+   across a row even when one card's title wraps its pill onto a second line. */
+.growth-card > .button:last-child {
+  margin-top: auto;
+}
+
 .growth-benefit {
   font-weight: 600;
 }
@@ -4477,7 +4652,7 @@ form + .field-hint {
 }
 
 .plan-price small {
-  font: 400 1rem / 1 var(--sans);
+  font: 400 1rem / 1 var(--font);
   color: var(--muted);
 }
 
@@ -4506,9 +4681,11 @@ form + .field-hint {
   border-top: 1px solid var(--border);
 }
 
+/* auto-fit, not auto-fill: four plans fill the row instead of leaving an
+   empty fifth column on a wide screen. */
 .plan-options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
   gap: 0.9rem;
   margin-bottom: 1rem;
 }
@@ -4531,6 +4708,11 @@ form + .field-hint {
   margin: 0;
 }
 
+/* "Your plan" is a label, not a bar across the card. */
+.plan-option .pill {
+  align-self: flex-start;
+}
+
 .plan-option-name {
   font-weight: 600;
   font-size: 1.05rem;
@@ -4541,7 +4723,7 @@ form + .field-hint {
 }
 
 .plan-option-price small {
-  font: 400 0.85rem / 1 var(--sans);
+  font: 400 0.85rem / 1 var(--font);
   color: var(--muted);
 }
 
@@ -4557,6 +4739,14 @@ form + .field-hint {
   display: grid;
   grid-template-columns: 1fr;
   border-bottom: 1px solid var(--border);
+}
+
+/* Cells of the panel's strip, not panes of their own: a lifted, shadowed box
+   inside a lifted, shadowed panel read as cards stacked on a card. */
+.campaign-metrics > .stat {
+  background: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .campaign-metrics > .stat + .stat {
@@ -4622,6 +4812,11 @@ form + .field-hint {
   margin: 0.5rem 0 1.25rem;
 }
 
+/* The same gap before "Download" as before "Opens". */
+.campaign-code .campaign-link {
+  margin-bottom: 1.25rem;
+}
+
 .campaign-copy {
   display: flex;
   align-items: center;
@@ -4668,17 +4863,10 @@ form + .field-hint {
   margin-top: 1.25rem;
 }
 
-/* On a phone the campaign is the row's heading, not one more labelled
-   value squeezed into the right-hand half of the row. */
+/* On a phone the campaign heads its row: see `table.stack td:first-child`. */
 @media (max-width: 40rem) {
   .campaign-table td:first-child {
-    display: block;
-    text-align: left;
     padding-bottom: 0.5rem;
-  }
-
-  .campaign-table td:first-child::before {
-    content: none;
   }
 }
 
@@ -4731,7 +4919,7 @@ form + .field-hint {
 
 .divider {
   border: 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   margin: 1.5rem 0;
 }
 

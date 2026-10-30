@@ -195,7 +195,14 @@ export function TimeSeriesChartSvg({
         <defs>
           {/* Vertical fade under the visitors line. Stop colours are set in
               CSS so the gradient follows light and dark like everything else. */}
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient
+            id={gradientId}
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="1"
+            className={showVisits ? undefined : "chart-grad-series-2"}
+          >
             <stop offset="0%" className="chart-grad-from" />
             <stop offset="100%" className="chart-grad-to" />
           </linearGradient>

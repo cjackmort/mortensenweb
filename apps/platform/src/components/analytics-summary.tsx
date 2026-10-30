@@ -24,15 +24,20 @@ export function Stat({
   label,
   value,
   note,
+  isText = false,
 }: {
   label: string;
   value: string;
   note: string;
+  /** The value is a name, not a figure: set smaller, and clamped with the full text on hover. */
+  isText?: boolean;
 }) {
   return (
     <div className="stat">
       <p className="stat-label">{label}</p>
-      <p className="stat-value">{value}</p>
+      <p className={isText ? "stat-value is-text" : "stat-value"} title={isText ? value : undefined}>
+        {value}
+      </p>
       <p className="stat-note">{note}</p>
     </div>
   );
@@ -210,7 +215,7 @@ export function StatRow({
   const previous = data.previous;
 
   return (
-    <div className="metrics">
+    <div className="metrics metrics-visitors">
       <Metric
         label={METRIC_LABELS.visitors}
         value={data.visitors.toLocaleString("en-US")}
