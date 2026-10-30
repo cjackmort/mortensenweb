@@ -5,6 +5,7 @@ import { CPA_WARNING, type WriteOffSummary } from "@/lib/finance/write-offs";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { DialogButton } from "./payment-dialogs";
 import { dayLabel, plural } from "./format";
+import "./write-offs.css";
 
 /**
  * "Potential write-offs": the year's recorded expenses by category, and the

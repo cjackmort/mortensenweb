@@ -5,6 +5,7 @@ import type { LedgerEntry } from "@/db/repositories/admin/finance";
 import { formatCurrency } from "@/lib/payments/venmo";
 import { deleteLedgerRowsAction, type LedgerResult } from "./finance-actions";
 import { dayLabel, plural } from "./format";
+import "./payment-dialog.css";
 
 /**
  * "Delete these?" — asked once, in place, with what deleting will do.

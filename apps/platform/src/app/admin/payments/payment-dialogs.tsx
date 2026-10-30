@@ -11,6 +11,7 @@ import {
 } from "react";
 import { MarkPaidForm, NotPaidForm, RecordPaymentForm, BillForm } from "./payment-forms";
 import { FreeBuildForm, RemoveFreeBuildForm } from "./write-off-forms";
+import "./payment-dialog.css";
 
 /**
  * One dialog for the whole page, opened by the buttons in each row.
