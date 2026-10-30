@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   analyticsConnections,
@@ -328,16 +328,52 @@ export async function verifyAndGoLive(
   return { ok: true, domain, analyticsWebsiteId, analyticsNote, emailSent };
 }
 
+/** Sites looked at per run, oldest verification first. */
+const LIVE_CHECK_BATCH = 100;
+/** Fetches in flight at once; the rest of the batch waits for a free slot. */
+const LIVE_CHECK_CONCURRENCY = 10;
+const LIVE_CHECK_TIMEOUT_MS = 10_000;
+
+export interface LiveSiteProblem {
+  sitePublicId: string;
+  domain: string;
+  problem: string;
+}
+
+export interface ReverifyOptions {
+  /**
+   * Stop starting checks once one could no longer finish inside this many
+   * milliseconds, so the run returns within it. Unset means no limit.
+   */
+  budgetMs?: number;
+  check?: typeof verifyUrlServes;
+  now?: () => number;
+}
+
 /**
  * Re-check that live sites are still serving.
  *
  * Runs on the schedule. Certificates lapse, domains expire, and a client's
  * registrar can undo a record while "tidying up" — and in every one of those
  * cases the operator should hear it from this rather than from the client.
+ *
+ * Ten at a time and within `budgetMs`: one at a time, a hundred sites with a
+ * ten-second timeout each could run past the endpoint's whole minute and take
+ * every job after this one with it.
  */
-export async function reverifyLiveSites(db: Database): Promise<
-  { sitePublicId: string; domain: string; problem: string }[]
-> {
+export async function reverifyLiveSites(
+  db: Database,
+  options: ReverifyOptions = {},
+): Promise<LiveSiteProblem[]> {
+  const check = options.check ?? verifyUrlServes;
+  const now = options.now ?? Date.now;
+  const started = now();
+
+  // Least recently verified first, never-verified before all of them. With a
+  // cap on both the batch and the time, the order is what makes every site get
+  // its turn: the ones left over this tick are exactly the ones at the front of
+  // the next. A site without a URL is excluded here rather than skipped below —
+  // it would sort first forever and take a slot it can never use.
   const live = await db
     .select({
       publicId: sites.publicId,
@@ -346,32 +382,62 @@ export async function reverifyLiveSites(db: Database): Promise<
       id: sites.id,
     })
     .from(sites)
-    .where(eq(sites.status, "live"))
-    .limit(100);
+    .where(and(eq(sites.status, "live"), isNotNull(sites.productionUrl)))
+    .orderBy(sql`${sites.liveVerifiedAt} asc nulls first`)
+    .limit(LIVE_CHECK_BATCH);
 
-  const problems: { sitePublicId: string; domain: string; problem: string }[] = [];
+  // A check is only started if it could finish inside the budget. Cutting a
+  // check's timeout short instead would report a slow site as unreachable.
+  const hasRoomForCheck = () =>
+    options.budgetMs === undefined ||
+    now() - started + LIVE_CHECK_TIMEOUT_MS <= options.budgetMs;
 
-  for (const site of live) {
-    if (!site.productionUrl) continue;
-    const check = await verifyUrlServes(site.productionUrl, { timeoutMs: 10_000 });
+  // Indexed by position so the report keeps the query's order however the
+  // checks happen to finish.
+  const outcomes: (LiveSiteProblem | null)[] = live.map(() => null);
+  let nextIndex = 0;
+  let checked = 0;
 
-    if (check.ok) {
-      await db
-        .update(sites)
-        .set({ liveVerifiedAt: new Date() })
-        .where(eq(sites.id, site.id));
-      continue;
+  async function worker(): Promise<void> {
+    while (nextIndex < live.length && hasRoomForCheck()) {
+      const index = nextIndex++;
+      const site = live[index]!;
+      const url = site.productionUrl!;
+      const result = await check(url, { timeoutMs: LIVE_CHECK_TIMEOUT_MS });
+      checked++;
+
+      if (result.ok) {
+        await db
+          .update(sites)
+          .set({ liveVerifiedAt: new Date() })
+          .where(eq(sites.id, site.id));
+        continue;
+      }
+
+      outcomes[index] = {
+        sitePublicId: site.publicId,
+        domain: site.primaryDomain ?? url,
+        problem:
+          result.reason === "unreachable"
+            ? "not reachable"
+            : `responded ${result.status ?? result.reason}`,
+      };
     }
-
-    problems.push({
-      sitePublicId: site.publicId,
-      domain: site.primaryDomain ?? site.productionUrl,
-      problem:
-        check.reason === "unreachable"
-          ? "not reachable"
-          : `responded ${check.status ?? check.reason}`,
-    });
   }
 
-  return problems;
+  // Settled rather than raced: a worker that throws must not leave the others
+  // writing to the database after the caller has already moved on.
+  const settled = await Promise.allSettled(
+    Array.from({ length: Math.min(LIVE_CHECK_CONCURRENCY, live.length) }, worker),
+  );
+  const failure = settled.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+
+  if (checked < live.length) {
+    console.info(
+      `[cron] reverifyLiveSites: budget reached after ${checked} of ${live.length} sites; the rest go first next tick`,
+    );
+  }
+
+  return outcomes.filter((outcome): outcome is LiveSiteProblem => outcome !== null);
 }
