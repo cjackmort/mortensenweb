@@ -190,3 +190,15 @@
     grid-template-columns: repeat(5, 1fr);
   }
 }
+
+/* The link after a "before anything can be sent" reason, to the profile
+   field that fixes it. */
+.winback-fix {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.winback-fix::after {
+  content: " →";
+  content: " →" / "";
+}

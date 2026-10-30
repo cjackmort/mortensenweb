@@ -1,129 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { BusinessProfileField } from "@/components/profile-field";
-import { PROFILE_FIELDS, PROFILE_GROUPS } from "@/lib/business-profile";
+import { CLIENT_PROFILE_FIELDS, CLIENT_PROFILE_GROUPS, type ProfileGroup } from "@/lib/business-profile";
 import { MAX_NAME_LENGTH } from "@/lib/profile/details";
-import {
-  removeAvatarAction,
-  saveBusinessAction,
-  saveDetailsAction,
-  uploadAvatarAction,
-  type ProfileActionResult,
-} from "./actions";
+import { saveBusinessAction, saveDetailsAction, type ProfileActionResult } from "./actions";
 
 /**
- * The three forms of the profile page.
+ * The two text forms of the profile page: the person, and their business.
  *
  * Each keeps what was typed when a save is refused, and says in one line
- * what happened when it is accepted. Nothing here reaches the website on
- * its own: the page says so, and the business form's reply says it again.
+ * what happened when it is accepted. Save is live only once something has
+ * been changed, and says so beside it, so nobody wonders whether a click
+ * did anything. Nothing here reaches the website on its own: the page says
+ * so, and the business form's reply says it again.
  */
 
 const READ_ONLY_HINT = "Viewing as the client: nothing here can be changed.";
 
+/** How long a field linked to from elsewhere stays highlighted after arriving. */
+const ARRIVAL_HIGHLIGHT_MS = 2800;
+
 function Outcome({ state }: { state: ProfileActionResult | null }) {
   if (!state) return null;
-  return (
-    <p className={state.ok ? "notice notice-success" : "error"} role="status">
-      {state.message}
-    </p>
-  );
+  return <p className={state.ok ? "notice notice-success profile-outcome" : "error profile-outcome"}>{state.message}</p>;
 }
-
-// ---------------------------------------------------------------------------
-// Picture
-// ---------------------------------------------------------------------------
-
-/** Longest edge a photo is shrunk to in the browser before it is sent. */
-const SEND_EDGE = 512;
-/** Below this it is sent as chosen: re-encoding would cost more than it saves. */
-const SHRINK_ABOVE_BYTES = 300 * 1024;
 
 /**
- * Shrink a photo before upload. A phone photo is several megabytes and the
- * stored picture is 256 pixels square, so sending the original wastes the
- * client's data and risks the action's body limit. The server still checks
- * and re-encodes whatever arrives; this is a convenience, not a control.
+ * The foot of a form: what happened, and the button. A live region, so a
+ * screen reader hears "Saved" or the refusal without hunting for it.
  */
-async function shrinkForUpload(file: File): Promise<File> {
-  if (file.size <= SHRINK_ABOVE_BYTES || !/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, SEND_EDGE / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.9),
-    );
-    if (!blob) return file;
-    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
-  } catch {
-    return file;
-  }
-}
-
-export function PictureForm({ hasPicture, readOnly }: { hasPicture: boolean; readOnly: boolean }) {
-  const [upload, uploadAction, uploading] = useActionState<ProfileActionResult | null, FormData>(
-    uploadAvatarAction,
-    null,
-  );
-  const [removal, removeAction, removing] = useActionState<ProfileActionResult | null, void>(
-    removeAvatarAction,
-    null,
-  );
-  const [chosen, setChosen] = useState<string | null>(null);
-  // Which of the two last ran, so its answer is the one shown.
-  const [last, setLast] = useState<"upload" | "remove">("upload");
-
-  // The shrink is awaited first, so the dispatch happens after the form's
-  // own transition has ended; it needs one of its own for `pending` to track it.
-  async function submit(formData: FormData) {
-    const file = formData.get("avatar");
-    if (file instanceof File && file.size > 0) formData.set("avatar", await shrinkForUpload(file));
-    setLast("upload");
-    startTransition(() => uploadAction(formData));
-  }
-
+function SaveBar({
+  label,
+  pending,
+  dirty,
+  state,
+  readOnly,
+}: {
+  label: string;
+  pending: boolean;
+  dirty: boolean;
+  state: ProfileActionResult | null;
+  readOnly: boolean;
+}) {
+  // A refused save can be sent again as it is: the typed values are still there.
+  const canSave = !readOnly && !pending && (dirty || state?.ok === false);
   return (
-    <div>
-      <form action={submit} className="profile-picture-form">
-        <label htmlFor="avatar" className="sr-only">
-          Choose a picture
-        </label>
-        <input
-          id="avatar"
-          name="avatar"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          disabled={readOnly || uploading}
-          onChange={(event) => setChosen(event.target.files?.[0]?.name ?? null)}
-        />
-        <button type="submit" className="secondary small" disabled={readOnly || uploading || !chosen}>
-          {uploading ? "Saving…" : hasPicture ? "Replace picture" : "Add picture"}
-        </button>
-        {hasPicture && (
-          <button
-            type="button"
-            className="secondary small"
-            disabled={readOnly || removing}
-            onClick={() => {
-              setLast("remove");
-              startTransition(() => removeAction());
-            }}
-          >
-            {removing ? "Removing…" : "Remove"}
-          </button>
+    <div className="profile-savebar">
+      <div className="profile-savebar-status" role="status">
+        {readOnly ? (
+          <span className="muted">{READ_ONLY_HINT}</span>
+        ) : dirty && !pending ? (
+          <span className="profile-unsaved">Unsaved changes</span>
+        ) : (
+          !pending && <Outcome state={state} />
         )}
-      </form>
-      <p className="field-hint">
-        {readOnly ? READ_ONLY_HINT : "A square crop of the middle of the photo, shown beside your name."}
-      </p>
-      <Outcome state={last === "remove" ? removal : upload} />
+      </div>
+      <button type="submit" disabled={!canSave}>
+        {pending ? "Saving…" : label}
+      </button>
     </div>
   );
 }
@@ -147,11 +83,23 @@ export function DetailsForm({
   );
   const values = state?.values ?? { name, email };
   const errors = state?.errors ?? {};
+  const [dirty, setDirty] = useState(false);
+  const [typedEmail, setTypedEmail] = useState(values.email ?? email);
+  // The password is asked for only when it is needed: a new sign-in email.
+  const emailChanging = typedEmail.trim().toLowerCase() !== email.trim().toLowerCase();
+  const askPassword = emailChanging || Boolean(errors.currentPassword);
 
   return (
-    <form action={formAction} noValidate>
+    <form
+      action={(formData) => {
+        setDirty(false);
+        formAction(formData);
+      }}
+      onInput={() => setDirty(true)}
+      noValidate
+    >
       <div className="profile-details-grid">
-        <div>
+        <div className="profile-field">
           <label htmlFor="details-name">Your name</label>
           <input
             id="details-name"
@@ -165,14 +113,15 @@ export function DetailsForm({
           />
           {errors.name && <p className="error">{errors.name}</p>}
         </div>
-        <div>
-          <label htmlFor="details-email">Email</label>
+        <div className="profile-field">
+          <label htmlFor="details-email">Sign-in email</label>
           <input
             id="details-email"
             name="email"
             type="email"
             autoComplete="email"
             defaultValue={values.email}
+            onChange={(event) => setTypedEmail(event.target.value)}
             disabled={readOnly || pending}
             aria-invalid={errors.email ? true : undefined}
             aria-describedby="details-email-hint"
@@ -182,31 +131,31 @@ export function DetailsForm({
           </p>
           {errors.email && <p className="error">{errors.email}</p>}
         </div>
-        <div className="is-wide">
-          <label htmlFor="details-password">Current password</label>
-          <input
-            id="details-password"
-            name="currentPassword"
-            type="password"
-            autoComplete="current-password"
-            disabled={readOnly || pending}
-            aria-invalid={errors.currentPassword ? true : undefined}
-            aria-describedby="details-password-hint"
-          />
-          <p className="field-hint" id="details-password-hint">
-            Only needed to change your email. To change the password itself, go to{" "}
-            <Link href="/change-password">Change your password</Link>.
+        {askPassword ? (
+          <div className="profile-field is-wide profile-confirm">
+            <label htmlFor="details-password">Current password</label>
+            <input
+              id="details-password"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              disabled={readOnly || pending}
+              aria-invalid={errors.currentPassword ? true : undefined}
+              aria-describedby="details-password-hint"
+            />
+            <p className="field-hint" id="details-password-hint">
+              To change the email you sign in with, confirm it&rsquo;s you.
+            </p>
+            {errors.currentPassword && <p className="error">{errors.currentPassword}</p>}
+          </div>
+        ) : (
+          <p className="profile-password-row is-wide">
+            <span>Password</span>
+            <Link href="/change-password">Change your password</Link>
           </p>
-          {errors.currentPassword && <p className="error">{errors.currentPassword}</p>}
-        </div>
+        )}
       </div>
-      <Outcome state={state} />
-      <div className="actions" style={{ marginTop: "1rem" }}>
-        <button type="submit" disabled={readOnly || pending}>
-          {pending ? "Saving…" : "Save your details"}
-        </button>
-        {readOnly && <span className="muted">{READ_ONLY_HINT}</span>}
-      </div>
+      <SaveBar label="Save details" pending={pending} dirty={dirty} state={state} readOnly={readOnly} />
     </form>
   );
 }
@@ -215,44 +164,102 @@ export function DetailsForm({
 // General information about the business
 // ---------------------------------------------------------------------------
 
+/**
+ * The groups as the client reads them. The field list names them for the
+ * operator ("What they offer"); on the client's own page they are theirs.
+ */
+const GROUP_COPY: Record<ProfileGroup, { title: string; description: string }> = {
+  "The business": { title: "The basics", description: "Your name as customers see it, and what you do." },
+  Contact: { title: "Contact", description: "Calls, emails and bookings from your site go here." },
+  "What they offer": { title: "What you offer", description: "Your services, prices and the areas you cover." },
+  Online: { title: "Online", description: "Your other pages, so the site can link to them." },
+  Credentials: {
+    title: "Credentials",
+    description: "Licences, insurance and awards customers can check.",
+  },
+  "Look and voice": { title: "Look and voice", description: "" },
+};
+
+/**
+ * Bring a field linked to from elsewhere (`?field=address`) into view: scroll
+ * it to the middle of the screen, put the cursor in it, and highlight it
+ * briefly so the eye lands on it too.
+ */
+function useArrival(field: string | null): string | null {
+  const [highlighted, setHighlighted] = useState(field);
+  useEffect(() => {
+    if (!field || !bringIntoView(field)) return;
+    const timer = window.setTimeout(() => setHighlighted(null), ARRIVAL_HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [field]);
+  return highlighted;
+}
+
+/** Scroll a business field to the middle of the screen and put the cursor in it. */
+function bringIntoView(key: string): boolean {
+  const input = document.getElementById(`profile-${key}`);
+  if (!input) return false;
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  input.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+  input.focus({ preventScroll: true });
+  return true;
+}
+
 export function BusinessForm({
   details,
   readOnly,
+  focusField,
 }: {
   details: Record<string, string>;
   readOnly: boolean;
+  /** A field to bring into view on arrival, already checked to be one of the client's. */
+  focusField: string | null;
 }) {
   const [state, formAction, pending] = useActionState<ProfileActionResult | null, FormData>(
     saveBusinessAction,
     null,
   );
+  const [dirty, setDirty] = useState(false);
+  const highlighted = useArrival(focusField);
+  // A refused save takes the reader to the first field it names.
+  useEffect(() => {
+    const first = state?.errors && CLIENT_PROFILE_FIELDS.find((f) => state.errors?.[f.key]);
+    if (first) bringIntoView(first.key);
+  }, [state]);
   // A refused save shows what was typed, not what was stored.
   const values = state?.values ?? details;
 
   return (
-    <form action={formAction} className="profile-form" noValidate>
-      {PROFILE_GROUPS.map((group) => (
-        <fieldset key={group} className="profile-group" disabled={readOnly || pending}>
-          <legend>{group}</legend>
-          <div className="profile-grid">
-            {PROFILE_FIELDS.filter((f) => f.group === group).map((field) => (
-              <BusinessProfileField
-                key={field.key}
-                field={field}
-                value={values[field.key] ?? ""}
-                error={state?.errors?.[field.key]}
-              />
-            ))}
-          </div>
-        </fieldset>
-      ))}
-      <Outcome state={state} />
-      <div className="actions">
-        <button type="submit" disabled={readOnly || pending}>
-          {pending ? "Saving…" : "Save business information"}
-        </button>
-        {readOnly && <span className="muted">{READ_ONLY_HINT}</span>}
-      </div>
+    <form
+      action={(formData) => {
+        setDirty(false);
+        formAction(formData);
+      }}
+      onInput={() => setDirty(true)}
+      className="profile-business-form"
+      noValidate
+    >
+      {CLIENT_PROFILE_GROUPS.map((group) => {
+        const copy = GROUP_COPY[group];
+        return (
+          <fieldset key={group} className="profile-section" disabled={readOnly || pending}>
+            <legend>{copy.title}</legend>
+            {copy.description && <p className="profile-section-about">{copy.description}</p>}
+            <div className="profile-grid">
+              {CLIENT_PROFILE_FIELDS.filter((f) => f.group === group).map((field) => (
+                <BusinessProfileField
+                  key={field.key}
+                  field={field}
+                  value={values[field.key] ?? ""}
+                  error={state?.errors?.[field.key]}
+                  highlighted={highlighted === field.key}
+                />
+              ))}
+            </div>
+          </fieldset>
+        );
+      })}
+      <SaveBar label="Save business details" pending={pending} dirty={dirty} state={state} readOnly={readOnly} />
     </form>
   );
 }

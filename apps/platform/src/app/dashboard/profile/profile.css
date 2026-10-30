@@ -1,0 +1,548 @@
+/* --------------------------------------------------------------------------
+   Your profile.
+   A header card (the picture, the name, how full the business details are),
+   then two forms, each closing on a footer with its own save. The page sits
+   in a narrower column than the dashboard: a form a whole desktop wide puts
+   a label and its answer half a screen apart.
+   -------------------------------------------------------------------------- */
+
+.profile-page {
+  max-width: 60rem;
+}
+
+/* ------------------------------------------------------------ header card */
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem 2.25rem;
+  padding: var(--pane-pad);
+}
+
+.profile-hero-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile-hero-text h2 {
+  margin: 0;
+  font: 400 clamp(1.6rem, 1.3rem + 1vw, 2.15rem) / 1.1 var(--display);
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.profile-hero-business {
+  margin: 0.3rem 0 0;
+  color: var(--text-soft);
+}
+
+.profile-hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.75rem;
+  margin: 1rem 0 0;
+}
+
+.profile-hero-facts > div {
+  min-width: 0;
+}
+
+.profile-hero-facts dt,
+.profile-meter-label {
+  font: 500 0.66rem / 1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.profile-hero-facts dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-meter {
+  max-width: 22rem;
+  margin-top: 1.15rem;
+}
+
+.profile-meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.4rem;
+}
+
+.profile-meter-track {
+  height: 4px;
+  background: var(--surface-sunk);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.profile-meter-track > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-fill);
+}
+
+/* On a phone the card stacks and centres, the way a profile reads in an app. */
+@media (max-width: 40rem) {
+  .profile-hero {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .profile-hero-text {
+    width: 100%;
+  }
+
+  .profile-hero-facts {
+    justify-content: center;
+  }
+
+  .profile-meter {
+    margin-inline: auto;
+  }
+}
+
+/* ---------------------------------------------------------------- picture */
+
+.avatar-editor {
+  --avatar-size: 8.5rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  /* Wider than the picture, so a line under it ("Your picture is updated.")
+     wraps once, not four times. */
+  width: 10.5rem;
+  text-align: center;
+}
+
+@media (max-width: 40rem) {
+  .avatar-editor {
+    --avatar-size: 7.5rem;
+    width: 100%;
+  }
+}
+
+/* The picture is the button. Every property the global button sets is
+   restated, hover and disabled included, or it would paint a blue square. */
+.avatar-button,
+.avatar-button:hover {
+  position: relative;
+  display: block;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.avatar-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.avatar-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+
+.avatar-button .user-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 2.5rem;
+  border: 0;
+  /* A ring in the card's colour, then a hairline: lifts the circle off the pane. */
+  box-shadow:
+    0 0 0 4px var(--surface),
+    0 0 0 5px var(--border-strong);
+}
+
+/* A photo needs a dark scrim in either theme, so this one is not a token. */
+.avatar-button-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(8 10 14 / 58%);
+  color: var(--on-accent);
+  font: 500 0.68rem / 1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out);
+}
+
+/* Always there, so a phone has something to tap and a desktop sees the
+   picture can be changed before hovering it; hover makes it the accent. */
+.avatar-button-badge {
+  position: absolute;
+  right: 3%;
+  bottom: 3%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  transition:
+    background 0.18s var(--ease-out),
+    color 0.18s var(--ease-out),
+    border-color 0.18s var(--ease-out);
+}
+
+/* Initials step aside under the veil, so its word is not printed over them. */
+@media (hover: hover) {
+  .avatar-button:not(:disabled):hover .avatar-button-veil {
+    opacity: 1;
+  }
+
+  .avatar-button:not(:disabled):hover span.user-avatar {
+    color: transparent;
+  }
+}
+
+.avatar-button:focus-visible .avatar-button-veil {
+  opacity: 1;
+}
+
+.avatar-button:focus-visible span.user-avatar {
+  color: transparent;
+}
+
+.avatar-button:not(:disabled):hover .avatar-button-badge,
+.avatar-button:focus-visible .avatar-button-badge {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.avatar-remove {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.avatar-remove .linklike {
+  font-size: 0.85rem;
+}
+
+/* "Keep it" is the safe answer; it should not turn red under the pointer. */
+.avatar-remove .avatar-keep:hover,
+.avatar-remove .avatar-keep:focus-visible {
+  color: var(--text);
+}
+
+.avatar-outcome:empty {
+  display: none;
+}
+
+.avatar-outcome p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.avatar-outcome .error {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.avatar-saved {
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ forms */
+
+.profile-password-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.8rem 1rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.profile-password-row > span {
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.profile-confirm {
+  padding: 1rem;
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+}
+
+.profile-intro {
+  margin: 0 0 1.75rem;
+  max-width: 44rem;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.profile-section {
+  min-width: 0;
+  margin: 0;
+  padding: 1.6rem 0 1.75rem;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.profile-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Floated so it lays out as an ordinary heading, not inside the border. */
+.profile-section legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 0.2rem;
+  padding: 0;
+  font: 500 1.12rem / 1.3 var(--display);
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.profile-section legend + * {
+  clear: both;
+}
+
+.profile-section-about {
+  margin: 0 0 1.15rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+/* A field a link sent the reader to: picked out for a few seconds, then
+   faded back. A halo rather than padding, so nothing around it moves. */
+.profile-field {
+  transition:
+    box-shadow 0.7s var(--ease-out),
+    background-color 0.7s var(--ease-out);
+}
+
+.profile-field.is-arrived {
+  background-color: var(--accent-wash);
+  box-shadow:
+    0 0 0 0.6rem var(--accent-wash),
+    0 0 0 calc(0.6rem + 1px) var(--accent);
+}
+
+/* The foot of each form, edge to edge across the pane: what happened, and Save. */
+.profile-savebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem 1.25rem;
+  margin: 1.75rem calc(-1 * var(--pane-pad)) calc(-1 * var(--pane-pad));
+  padding: 1rem var(--pane-pad);
+  background: var(--surface-sunk);
+  border-top: 1px solid var(--border);
+}
+
+.profile-savebar-status {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.profile-outcome {
+  margin: 0;
+}
+
+.profile-unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: 500 0.68rem / 1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.profile-unsaved::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (max-width: 40rem) {
+  .profile-savebar > button {
+    width: 100%;
+  }
+}
+
+/* ----------------------------------------------------------- crop dialog */
+
+.crop-dialog {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--pane-highlight), var(--pane-shadow-lift);
+  overflow: auto;
+  /* It sits inside the centred picture column; only its heading is centred. */
+  text-align: left;
+}
+
+.crop-dialog::backdrop {
+  background: rgb(8 10 14 / 62%);
+  backdrop-filter: blur(3px);
+}
+
+.crop-dialog-head {
+  padding: 1.25rem 1.25rem 0;
+  text-align: center;
+}
+
+.crop-dialog-head h2 {
+  margin: 0;
+  font: 500 1.3rem / 1.2 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.crop-dialog-head p {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.crop-frame {
+  position: relative;
+  margin: 1.1rem 1.25rem 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--surface-sunk);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.crop-frame:active {
+  cursor: grabbing;
+}
+
+.crop-frame.is-loading {
+  cursor: progress;
+}
+
+.crop-frame:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.crop-frame img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+}
+
+/* The circle: everything outside it dimmed, a thin light ring on its edge. */
+.crop-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 85%);
+  box-shadow: 0 0 0 100vmax rgb(8 10 14 / 55%);
+  pointer-events: none;
+}
+
+.crop-frame-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 1.25rem 0;
+  color: var(--muted);
+  font: 500 1.1rem / 1 var(--mono);
+}
+
+.crop-zoom input[type="range"] {
+  flex: 1;
+  width: auto;
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent-fill);
+}
+
+.crop-zoom input[type="range"]:focus {
+  outline: none;
+}
+
+.crop-zoom input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.crop-error {
+  margin: 0.75rem 1.25rem 0;
+}
+
+.crop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+.crop-actions .crop-another {
+  margin-right: auto;
+}
+
+.crop-actions .crop-another:hover,
+.crop-actions .crop-another:focus-visible {
+  color: var(--text);
+}
+
+@media (max-width: 30rem) {
+  .crop-actions > button:not(.crop-another) {
+    flex: 1;
+  }
+}

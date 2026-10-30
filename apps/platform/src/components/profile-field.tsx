@@ -10,12 +10,15 @@ export function BusinessProfileField({
   value,
   error,
   suggested,
+  highlighted,
 }: {
   field: ProfileField;
   value: string;
   error?: string;
   /** Filled from their website and not yet saved. */
   suggested?: boolean;
+  /** The field a link sent the reader to, picked out for a moment on arrival. */
+  highlighted?: boolean;
 }) {
   const id = `profile-${field.key}`;
   const hintId = field.hint ? `${id}-hint` : undefined;
@@ -31,7 +34,7 @@ export function BusinessProfileField({
 
   return (
     <div
-      className={`${field.kind === "text" ? "profile-field profile-field-wide" : "profile-field"}${suggested ? " is-suggested" : ""}`}
+      className={`${field.kind === "text" ? "profile-field profile-field-wide" : "profile-field"}${suggested ? " is-suggested" : ""}${highlighted ? " is-arrived" : ""}`}
     >
       <label htmlFor={id}>
         {field.label}

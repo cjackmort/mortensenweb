@@ -1,4 +1,4 @@
-import type { BusinessDetails } from "@/lib/business-profile";
+import { profileFieldHref, type BusinessDetails } from "@/lib/business-profile";
 import { isEmailAddress, replySenderAddress } from "@/lib/growth/lead-reply";
 
 /**
@@ -22,10 +22,21 @@ export type Missing =
 
 export const MISSING_MESSAGE: Record<Missing, string> = {
   postal_address:
-    "Your business's postal address is missing from General information. US law (CAN-SPAM) requires one in every marketing email; a PO box is fine. Send it to us in a request and we'll add it.",
-  reply_to: "There's no email address for your customers' replies to go to. Send us one in a request.",
+    "Your business's postal address is missing from your profile. US law (CAN-SPAM) requires one in every marketing email; a PO box is fine.",
+  reply_to: "There's no email address for your customers' replies to go to. Add your business email to your profile.",
   sender: "Sending isn't switched on for this portal yet. We'll let you know when it is.",
   links: "Unsubscribe links can't be made on this portal yet. We'll let you know when it is.",
+};
+
+/**
+ * The gaps the client can close themselves, and the profile field that
+ * closes each one. The address is the profile's `address`; replies go to the
+ * profile's public `email` (see `sendingReadiness`), so that is the field to
+ * fill when there is nowhere for them to go. The other two are ours.
+ */
+export const MISSING_FIX: Partial<Record<Missing, { href: string; label: string }>> = {
+  postal_address: { href: profileFieldHref("address"), label: "Add your address" },
+  reply_to: { href: profileFieldHref("email"), label: "Add a business email" },
 };
 
 /**
