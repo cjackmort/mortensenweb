@@ -217,7 +217,7 @@ function planTodo(facts: OptionalFacts): OnboardingTodo {
   }
   return {
     ...base,
-    detail: "Optional. A plan covers changes to your site; add-ons bring in customers.",
+    detail: "A plan covers changes to your site each month; add-ons bring in more customers.",
     href: "/dashboard/welcome",
     action: "See plans",
     done: false,

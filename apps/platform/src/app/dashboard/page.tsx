@@ -20,6 +20,7 @@ import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import { needsListingReminder } from "@/db/repositories/client/listings";
+import { GetStartedBanner } from "./get-started/banner";
 import { resolveClientAnalytics } from "@/lib/analytics/resolve";
 import {
   RANGES,
@@ -128,6 +129,11 @@ export default async function ClientDashboard({
             <SiteLink analytics={analytics} />
           </Suspense>
         </div>
+
+        {/* Streams in: setup progress must never hold up the page. */}
+        <Suspense fallback={null}>
+          <GetStartedBanner ctx={ctx} />
+        </Suspense>
 
         {remindListings && (
           <p className="notice notice-action">

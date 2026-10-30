@@ -1,0 +1,140 @@
+/*
+ * Get started, and its banner on the home page. Beside the page, like the
+ * Growth features' styles. The step mark follows the shop's setup steps and
+ * the Get listed checklist, so the three read as one family.
+ */
+
+.todo-meter {
+  display: block;
+  height: 0.4rem;
+  margin: 0 0 var(--stack);
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.todo-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-fill);
+  transition: width 0.4s var(--ease-out);
+}
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem 0.9rem;
+  align-items: start;
+  padding: 1rem var(--pane-pad);
+}
+
+.todo + .todo {
+  border-top: 1px solid var(--border);
+}
+
+.todo-mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font: 500 0.8rem / 1 var(--mono);
+  color: var(--muted);
+}
+
+.todo--done .todo-mark {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent, #fff);
+}
+
+.todo-body > strong {
+  display: block;
+  line-height: 1.35;
+  padding-top: 0.1rem;
+}
+
+.todo--done .todo-body > strong {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.todo-body p {
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.todo--done .todo-body p {
+  color: var(--muted);
+}
+
+.todo-action {
+  white-space: nowrap;
+}
+
+.todo-link {
+  align-self: center;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+/* On a phone the button drops under the words, lined up with them. */
+@media (max-width: 34rem) {
+  .todo {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .todo-action,
+  .todo-link {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* ---------------------------------------------------------- home banner */
+
+.get-started-banner {
+  display: grid;
+  grid-template-columns: auto minmax(6rem, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  margin-bottom: var(--stack);
+  padding: 0.85rem 1.1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-wash);
+  color: var(--text);
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.get-started-banner:hover .get-started-banner-next {
+  text-decoration: underline;
+}
+
+.get-started-banner .todo-meter {
+  margin: 0;
+  background: var(--surface);
+}
+
+.get-started-banner-next {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.get-started-banner-next::after {
+  content: " →";
+}
+
+@media (max-width: 40rem) {
+  .get-started-banner {
+    grid-template-columns: 1fr;
+  }
+}
