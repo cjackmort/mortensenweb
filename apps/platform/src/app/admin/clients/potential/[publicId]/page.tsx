@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { getDb } from "@/db/client";
@@ -7,11 +8,13 @@ import {
   getPotentialClient,
   updatePotentialClient,
 } from "@/db/repositories/admin/potential-clients";
+import { convertProspect, readConversion } from "@/db/repositories/admin/conversion";
 import {
   POTENTIAL_CLIENT_ERRORS,
   PotentialClientFields,
   potentialClientFromForm,
 } from "../fields";
+import { ConversionPanel } from "./conversion-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +69,28 @@ export default async function EditPotentialClientPage({
     redirect("/admin/clients#potential-clients");
   }
 
+  // The operator API's conversion, with the operator as the actor. The report
+  // is read back from the audit log on the redirect, not passed through it.
+  async function convert(formData: FormData) {
+    "use server";
+    const session = await currentUser();
+    if (!session || session.role !== "admin") redirect("/login");
+
+    const outcome = await convertProspect(adminContextFrom(session), await getDb(), publicId, {
+      invite: formData.get("invite") === "on",
+      via: "admin",
+    });
+    // The redirect is to this same page, which the router would otherwise
+    // only scroll to, leaving the button where the report should be.
+    revalidatePath(`/admin/clients/potential/${publicId}`);
+    revalidatePath("/admin/clients");
+    redirect(
+      `/admin/clients/potential/${publicId}${outcome.ok ? "" : "?error=conversion_in_progress"}#conversion`,
+    );
+  }
+
+  const conversion = await readConversion(db, publicId);
+
   return (
     <>
       <main className="shell">
@@ -80,6 +105,12 @@ export default async function EditPotentialClientPage({
 
           <button type="submit">Save changes</button>
         </form>
+
+        <ConversionPanel
+          businessName={prospect.businessName}
+          conversion={conversion}
+          convert={convert}
+        />
 
         <form className="card" action={remove} style={{ maxWidth: "34rem" }}>
           <div className="card-head">

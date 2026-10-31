@@ -110,4 +110,5 @@ export function potentialClientFromForm(formData: FormData) {
 export const POTENTIAL_CLIENT_ERRORS: Record<string, string> = {
   invalid_name: "Please enter the business name.",
   invalid_url: "That doesn't look like a website address.",
+  conversion_in_progress: "A conversion is already running for them. Refresh in a minute for its report.",
 };

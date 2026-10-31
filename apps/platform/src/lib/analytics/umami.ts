@@ -355,13 +355,18 @@ export async function provisionWebsite(input: {
  * is recorded, and the dashboard shows a zero that looks like "no visitors".
  */
 export function trackingSnippet(websiteId: string): string {
+  return `<script defer src="${trackingScriptUrl()}" data-website-id="${websiteId}"></script>`;
+}
+
+/** Where the configured Umami serves its tracking script. */
+export function trackingScriptUrl(): string {
   const base = process.env.UMAMI_API_BASE_URL ?? "";
   const scriptOrigin = base
     .replace(/\/api\/?$/, "")
     .replace(/^https:\/\/api\.umami\.is\/v1$/, "https://cloud.umami.is")
     .replace(/\/$/, "");
 
-  return `<script defer src="${scriptOrigin}/script.js" data-website-id="${websiteId}"></script>`;
+  return `${scriptOrigin}/script.js`;
 }
 
 function toBreakdown(rows: UmamiMetric[], limit = 6): Breakdown[] {

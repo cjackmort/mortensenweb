@@ -210,6 +210,14 @@ export interface NewClientInput {
   bookingEnabled?: boolean;
   /** A store: opens the online shop in their portal. */
   shopEnabled?: boolean;
+  /**
+   * Become the client of an organization that already exists rather than a
+   * new one: a potential client's holding organization, which owns the
+   * concept site, its repository and its brief. Adopting it moves nothing —
+   * every row already points at it — where creating a fresh organization
+   * would mean re-parenting each of them and missing one eventually.
+   */
+  adoptOrganizationId?: string;
 }
 
 /**
@@ -247,18 +255,22 @@ export async function createClient(
     slug = `${base}-${suffix}`;
   }
 
-  const orgRows = await db
-    .insert(organizations)
-    .values({
-      publicId: newPublicId(),
-      name,
-      slug,
-      kind: "client",
-      timezone: process.env.BUSINESS_TIMEZONE ?? "America/Denver",
-    })
-    .returning({ id: organizations.id, publicId: organizations.publicId });
+  const timezone = process.env.BUSINESS_TIMEZONE ?? "America/Denver";
+  const orgRows = input.adoptOrganizationId
+    ? await db
+        .update(organizations)
+        // The holding organization's `prospect-…` slug and default timezone
+        // were placeholders for a tenant nobody could reach; now somebody can.
+        .set({ name, slug, timezone, updatedAt: new Date() })
+        .where(eq(organizations.id, input.adoptOrganizationId))
+        .returning({ id: organizations.id, publicId: organizations.publicId })
+    : await db
+        .insert(organizations)
+        .values({ publicId: newPublicId(), name, slug, kind: "client", timezone })
+        .returning({ id: organizations.id, publicId: organizations.publicId });
 
-  const organization = orgRows[0]!;
+  const organization = orgRows[0];
+  if (!organization) throw new NotFoundError("Organization not found");
 
   const clientRows = await db
     .insert(clients)
@@ -288,6 +300,7 @@ export async function createClient(
       slug,
       bookingEnabled: input.bookingEnabled ?? false,
       shopEnabled: input.shopEnabled ?? false,
+      adoptedOrganization: Boolean(input.adoptOrganizationId),
     },
   });
 

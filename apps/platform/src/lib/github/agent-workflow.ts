@@ -103,12 +103,28 @@ export async function installAgentCaller(
   repo: Repo,
   branch: string,
 ): Promise<AgentWorkflowResult> {
-  const existing = await getFileContent(repo, AGENT_WORKFLOW_PATH, branch);
-  if (existing?.content === AGENT_CALLER_WORKFLOW) return "current";
-
-  await putFileContent(repo, AGENT_WORKFLOW_PATH, {
+  return installWorkflowFile(repo, branch, {
+    path: AGENT_WORKFLOW_PATH,
     content: AGENT_CALLER_WORKFLOW,
     message: COMMIT_MESSAGE,
+  });
+}
+
+/**
+ * Write one portal-owned workflow file, replacing whatever differs and writing
+ * nothing when it already matches. Shared by the agent and deploy callers.
+ */
+export async function installWorkflowFile(
+  repo: Repo,
+  branch: string,
+  file: { path: string; content: string; message: string },
+): Promise<AgentWorkflowResult> {
+  const existing = await getFileContent(repo, file.path, branch);
+  if (existing?.content === file.content) return "current";
+
+  await putFileContent(repo, file.path, {
+    content: file.content,
+    message: file.message,
     branch,
     sha: existing?.sha,
   });

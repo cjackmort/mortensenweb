@@ -230,10 +230,19 @@ export async function verifyAndGoLive(
   let analyticsWebsiteId: string | null = null;
   let analyticsNote: string | undefined;
 
-  const provisioned = await provisionWebsite({
-    name: site.businessName ?? site.name,
-    domain,
-  });
+  // A site converted from a concept was given its Umami website then, and that
+  // id is already in its pages. Provisioning again under the real domain would
+  // make a second website, point the dashboard at it, and leave the site
+  // reporting to the first: a dashboard of zeros for a site with visitors.
+  const [connected] = await db
+    .select({ websiteId: analyticsConnections.umamiWebsiteId })
+    .from(analyticsConnections)
+    .where(eq(analyticsConnections.siteId, site.id))
+    .limit(1);
+
+  const provisioned: Awaited<ReturnType<typeof provisionWebsite>> = connected?.websiteId
+    ? { ok: true, websiteId: connected.websiteId, created: false }
+    : await provisionWebsite({ name: site.businessName ?? site.name, domain });
 
   if (provisioned.ok) {
     analyticsWebsiteId = provisioned.websiteId;
