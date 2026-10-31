@@ -113,6 +113,13 @@ export interface IssueInput {
   description?: string | null;
   category: string;
   priority: string;
+  /** Small or big, as the client said or an operator corrected (D7). Null before 0048. */
+  size?: "small" | "big" | null;
+  /**
+   * Only a small change is the client's to ask for: their site is not live and
+   * no plan is charged (D7). The run hands a bigger one back instead of doing it.
+   */
+  smallOnly?: boolean;
   desiredTiming?: string | null;
   /** Short-lived signed URLs. They expire; that is why they carry a caveat. */
   /**
@@ -197,7 +204,7 @@ export function renderIssueBody(input: IssueInput): string {
     "## Change request",
     "",
     `Portal reference: \`${input.requestPublicId}\``,
-    `Category: ${input.category} · Priority: ${input.priority}`,
+    `Category: ${input.category} · Priority: ${input.priority}${input.size ? ` · Size: ${input.size}` : ""}`,
     ...(input.desiredTiming ? [`Requested timing: ${input.desiredTiming}`] : []),
     "",
     "### What the client asked for",
@@ -223,6 +230,22 @@ export function renderIssueBody(input: IssueInput): string {
     "- No dependency is added, removed, or upgraded to satisfy this request.",
     "- No credential, environment variable, or workflow file is modified.",
   ];
+
+  if (input.smallOnly) {
+    sections.push(
+      "",
+      "### Small changes only",
+      "",
+      "This owner's site is not live yet and they have no plan, so only a **small",
+      "change** is theirs to ask for: wording, prices, opening hours, contact",
+      "details, or swapping a photo. If doing what they asked properly needs more",
+      "than that — a new page or section, a change to the layout or design, or",
+      "something new the site should do — do not make it. Escalate instead, with",
+      "`<!-- agent-escalation: bigger change: what it needs -->`, and tell the",
+      "owner in one sentence that this one comes with putting their site live or",
+      "a care plan. Do not make part of it to fit.",
+    );
+  }
 
   if (input.allowedPaths?.length) {
     sections.push(

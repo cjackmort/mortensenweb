@@ -19,11 +19,12 @@ import {
 import { cancelChangeRequest } from "@/db/repositories/admin/cancel";
 import { NotFoundError } from "@/db/repositories/context";
 import { attachImageToRequest } from "@/db/repositories/client/attachments";
+import { getChangeAccess } from "@/db/repositories/client/change-access";
 import {
   consumeChange,
-  getEntitlements,
   refundChange,
 } from "@/db/repositories/client/entitlements";
+import { freeTierRefusal } from "@/lib/requests/free-tier";
 import {
   MAX_ATTACHMENTS_PER_REQUEST,
   REJECTION_MESSAGES,
@@ -95,7 +96,13 @@ export type RequestSubmission =
       message: string;
       openRequest: { publicId: string; title: string; status: string };
     }
-  | { ok: false; reason?: "locked" | "invalid"; message: string };
+  /**
+   * Before the build is paid and with no plan (decision D7): a big change, or
+   * a second small one this month. Also an offer rather than an error — the
+   * answer is "put your site live", and the form links to it.
+   */
+  | { ok: false; reason: "needs_payment" | "free_change_used"; message: string }
+  | { ok: false; reason?: "invalid"; message: string };
 
 export async function submitChangeRequest(
   _previous: RequestSubmission | null,
@@ -119,6 +126,7 @@ export async function submitChangeRequest(
   const category = String(formData.get("category") ?? "other");
   const priority = String(formData.get("priority") ?? "normal");
   const sitePublicId = String(formData.get("sitePublicId") ?? "").trim();
+  const sizeValue = String(formData.get("size") ?? "");
 
   if (title.length < 3) {
     return {
@@ -126,6 +134,10 @@ export async function submitChangeRequest(
       message: "Please give the request a short title so we know what it is.",
     };
   }
+  if (sizeValue !== "small" && sizeValue !== "big") {
+    return { ok: false, reason: "invalid", message: "Say whether this is a small change or a bigger one." };
+  }
+  const size = sizeValue;
 
   const files = formData
     .getAll("photos")
@@ -169,18 +181,21 @@ export async function submitChangeRequest(
     return { ok: false, reason: "invalid", message: selection.message };
   }
 
-  // Gate one: has the commercial relationship started at all? Checked before
-  // the allowance because "you haven't paid yet" and "you're out of changes"
-  // are different conversations, and answering the second to someone who has
-  // not paid would be nonsense.
-  const entitlements = await getEntitlements(db, ctx);
-  if (entitlements && !entitlements.changeRequestsUnlocked) {
+  // Gate one: which rules apply (decision D7). Before the build is paid and
+  // with no plan, small changes are free — one a month — and big ones wait.
+  // Checked before the allowance because "put your site live first" and
+  // "you're out of changes" are different conversations.
+  const access = await getChangeAccess(db, ctx);
+  if (!access) {
     return {
       ok: false,
-      reason: "locked",
-      message:
-        "Change requests unlock once your first payment goes through. Head to Billing to get set up.",
+      reason: "invalid",
+      message: "Your account is not linked to a client record yet. Please contact us.",
     };
+  }
+  if (access.tier === "free") {
+    const refusal = freeTierRefusal({ size, used: access.used });
+    if (refusal) return { ok: false, reason: refusal.reason, message: refusal.message };
   }
 
   // Gate two: is something already in flight for this site? Before the
@@ -211,29 +226,36 @@ export async function submitChangeRequest(
     };
   }
 
-  // Gate three: is there allowance left? This *consumes* it — the claim happens
-  // before the request is created, so two submissions racing for the last
-  // change cannot both win. If anything below fails, it is handed back.
-  const claim = await consumeChange(db, ctx);
-  if (!claim.ok) {
-    if (claim.reason === "no_client") {
+  // Gate three: is there allowance left? On a plan this *consumes* it — the
+  // claim happens before the request is created, so two submissions racing for
+  // the last change cannot both win. If anything below fails, it is handed
+  // back. A free small change spends no plan allowance: it is taken as a
+  // courtesy, and counted by `freeSmallChangesUsed` from the request itself.
+  let claim: { allowanceId: string; remaining: number | null } | null = null;
+  if (access.tier === "plan") {
+    const consumed = await consumeChange(db, ctx);
+    if (!consumed.ok) {
+      if (consumed.reason === "no_client") {
+        return {
+          ok: false,
+          reason: "invalid",
+          message: "Your account is not linked to a client record yet. Please contact us.",
+        };
+      }
       return {
         ok: false,
-        reason: "invalid",
-        message: "Your account is not linked to a client record yet. Please contact us.",
+        reason: "allowance_exhausted",
+        message:
+          consumed.included === 1
+            ? "You've used your change for this month."
+            : `You've used all ${consumed.included} of your changes this month.`,
+        included: consumed.included,
+        overagePerChangeCents: consumed.overagePerChangeCents,
       };
     }
-    return {
-      ok: false,
-      reason: "allowance_exhausted",
-      message:
-        claim.included === 1
-          ? "You've used your change for this month."
-          : `You've used all ${claim.included} of your changes this month.`,
-      included: claim.included,
-      overagePerChangeCents: claim.overagePerChangeCents,
-    };
+    claim = { allowanceId: consumed.allowanceId, remaining: consumed.remaining };
   }
+  const remaining = claim ? claim.remaining : access.tier === "free" ? Math.max(0, access.included - access.used - 1) : null;
 
   let created;
   try {
@@ -241,16 +263,18 @@ export async function submitChangeRequest(
       title,
       description: description || undefined,
       category: category as never,
+      size,
       priority: priority as never,
       sitePublicId: sitePublicId || undefined,
-      allowanceId: claim.allowanceId,
+      allowanceId: claim?.allowanceId,
+      billing: claim ? "included" : "courtesy",
       idempotencyKey: idempotencyKey || undefined,
     });
   } catch (error) {
     // The allowance was claimed and the request was not created. Give it back —
     // charging someone for a change that does not exist is a billing error they
     // will notice and we would not.
-    await refundChange(db, claim.allowanceId);
+    if (claim) await refundChange(db, claim.allowanceId);
     throw error;
   }
 
@@ -258,13 +282,13 @@ export async function submitChangeRequest(
   // above and the insert. It created the request; this one must not be charged
   // for it, so the change claimed a moment ago goes straight back.
   if (created.duplicate) {
-    await refundChange(db, claim.allowanceId);
+    if (claim) await refundChange(db, claim.allowanceId);
     return {
       ok: true,
       publicId: created.publicId,
       attached: selection.assets.length,
       rejected: [],
-      remaining: claim.remaining,
+      remaining,
       duplicate: true,
     };
   }
@@ -341,7 +365,7 @@ export async function submitChangeRequest(
     publicId: created.publicId,
     attached,
     rejected,
-    remaining: claim.remaining,
+    remaining,
   };
 }
 

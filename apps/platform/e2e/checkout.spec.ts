@@ -10,7 +10,8 @@ import * as step from "./steps";
  *   npm run e2e:checkout --workspace apps/platform
  *
  * The flow is a list of steps from `steps.ts`. Decision D1 is the order: the
- * client sees the built preview first, and paying for the build is "Put it
+ * client sees the built preview first (with one free small change a month
+ * until then, decision D7), and paying for the build is "Put it
  * live". A plan alone never pays for the build, and a build a 100%-off code
  * took to zero still does.
  */
@@ -29,9 +30,14 @@ test("a new client sees their site, pays to put it live, and is let in", async (
   await test.step("the built site comes first, before anything is asked for", () =>
     step.expectPreviewShown(page, "live"));
 
-  await test.step("before paying, nothing is unlocked and nothing is recorded", async () => {
+  await test.step("before paying, small changes only and nothing is recorded", async () => {
     await step.expectPayItemDone(page, false);
-    await step.expectChangeRequestsUnlocked(page, false);
+    await step.expectChangeTier(page, "free");
+  });
+
+  await test.step("the month's free small change goes through, and a second waits (decision D7)", async () => {
+    await step.sendSmallChange(page, "New phone number");
+    await step.expectFreeChangeUsed(page);
   });
 
   const eventsBefore = (await step.eventsDelivered(page)).length;
@@ -49,7 +55,7 @@ test("a new client sees their site, pays to put it live, and is let in", async (
 
   await test.step("the build is paid and the client is let in", async () => {
     await step.expectPayItemDone(page, true);
-    await step.expectChangeRequestsUnlocked(page, true);
+    await step.expectChangeTier(page, "plan");
     await step.expectPaymentsRecorded(page, [dollars(BUILD.priceCents)]);
   });
 });
@@ -73,7 +79,7 @@ test("a new client pays for the site and a plan together, recorded as two paymen
 
   await test.step("the build and the plan are each their own row, and the client is let in", async () => {
     await step.expectPayItemDone(page, true);
-    await step.expectChangeRequestsUnlocked(page, true);
+    await step.expectChangeTier(page, "plan");
     await step.expectPaymentsRecorded(page, [dollars(BUILD.priceCents), dollars(plan.monthlyCents)]);
   });
 });
@@ -95,7 +101,7 @@ test("a 100%-off build code puts the site live for nothing", async ({ page }) =>
 
   await test.step("the build counts as paid — not asked for $500 again — and the zero is what is recorded", async () => {
     await step.expectPayItemDone(page, true);
-    await step.expectChangeRequestsUnlocked(page, true);
+    await step.expectChangeTier(page, "plan");
     await step.expectPaymentsRecorded(page, ["0.00"]);
   });
 });
@@ -129,10 +135,16 @@ test.describe("a plan paid while the build invoice is still open", () => {
   });
 
   test("does not count the website as paid", async () => {
-    // Roadmap P1.3: any invoice that collected money used to unlock the
-    // client, so $50 for a plan let in a client who still owed the $500
-    // build. The unlock now follows the build being paid.
-    await step.expectChangeRequestsUnlocked(page, false);
+    // Roadmap P1.3: any invoice that collected money used to count as the
+    // build, so $50 for a plan marked a client paid who still owed the $500.
+    // The build stays owed: Get started still asks for it, and the site
+    // cannot go live.
     await step.expectPayItemDone(page, false);
+  });
+
+  test("puts their changes on the plan they pay for (decision D7)", async () => {
+    // A plan Stripe charges is a paid plan: its rules, not the free tier's,
+    // even with the build still owed.
+    await step.expectChangeTier(page, "plan");
   });
 });

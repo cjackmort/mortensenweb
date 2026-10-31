@@ -130,15 +130,39 @@ export async function expectPayItemDone(page: Page, done: boolean): Promise<void
   }
 }
 
-export async function expectChangeRequestsUnlocked(page: Page, unlocked: boolean): Promise<void> {
+/**
+ * Which rules the requests page offers (decision D7): before the build is paid
+ * and with no plan, small changes only, one a month; after, the plan's rules
+ * and bigger changes too.
+ */
+export async function expectChangeTier(page: Page, tier: "free" | "plan"): Promise<void> {
   await page.goto("/dashboard/requests");
-  const lockedNotice = page.getByText("Change requests unlock once your first payment goes through.");
-  if (unlocked) {
-    await expect(page.getByRole("heading", { name: "Make a request" })).toBeVisible();
-    await expect(lockedNotice).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Make a request" })).toBeVisible();
+  const freeNote = page.getByText("Until your site is live, small changes are free");
+  const bigger = page.getByRole("radio", { name: /Bigger change/ });
+  if (tier === "free") {
+    await expect(freeNote).toBeVisible();
+    await expect(bigger).toBeDisabled();
   } else {
-    await expect(lockedNotice).toBeVisible();
+    await expect(freeNote).toHaveCount(0);
+    await expect(bigger).toBeEnabled();
   }
+}
+
+/** The month's free small change, sent from the requests page before paying. */
+export async function sendSmallChange(page: Page, title: string): Promise<void> {
+  await page.goto("/dashboard/requests");
+  await page.getByLabel("Title").fill(title);
+  await page.getByLabel("Description").fill("The phone number in the footer should be 555-0100.");
+  await page.getByRole("radio", { name: /Small change/ }).check();
+  await page.getByRole("button", { name: "Send request" }).click();
+  await expect(page.getByText("Request sent.")).toBeVisible();
+}
+
+/** With the free change used, the form gives way to when the next one opens. */
+export async function expectFreeChangeUsed(page: Page): Promise<void> {
+  await page.goto("/dashboard/requests");
+  await expect(page.getByText("You’ve used this month’s free small change.")).toBeVisible();
 }
 
 /**

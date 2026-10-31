@@ -518,6 +518,7 @@ export async function listAllChangeRequests(
       title: changeRequests.title,
       status: changeRequests.status,
       priority: changeRequests.priority,
+      size: changeRequests.size,
       organizationName: organizations.name,
       isInternal: clients.isInternal,
       createdAt: changeRequests.createdAt,

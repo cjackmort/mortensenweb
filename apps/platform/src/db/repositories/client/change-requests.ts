@@ -227,6 +227,8 @@ export interface NewChangeRequestInput {
   title: string;
   description?: string;
   category?: "content" | "design" | "bug" | "seo" | "feature" | "other";
+  /** Small or big, as the client said (D7). */
+  size?: "small" | "big";
   priority?: "low" | "normal" | "high" | "urgent";
   desiredTiming?: string;
   sitePublicId?: string;
@@ -301,6 +303,7 @@ export async function createChangeRequest(
       title: input.title.trim(),
       description: input.description ?? null,
       category: input.category ?? "other",
+      size: input.size ?? null,
       priority: input.priority ?? "normal",
       desiredTiming: input.desiredTiming ?? null,
       status: "submitted",

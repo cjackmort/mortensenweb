@@ -313,6 +313,14 @@ export const requestCategoryEnum = pgEnum("request_category", [
   "other",
 ]);
 
+/**
+ * How big a change request is (decision D7, 0048). Small: wording, prices,
+ * hours, contact details, a photo swap. Big: new pages or sections, layout,
+ * design or features. Before the build is paid and with no plan, a client gets
+ * one small change a month and no big ones.
+ */
+export const requestSizeEnum = pgEnum("request_size", ["small", "big"]);
+
 export const actorTypeEnum = pgEnum("actor_type", [
   "client",
   "admin",
