@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { emptyWeek, type FullWeek, type TimeRange } from "./slots";
-import { clockToMinutes, isIsoDate, isTimeZone, MINUTES_PER_DAY, type IsoDate } from "./time";
+import { emptyWeek, MAX_RANGES_PER_DAY, normalizeRanges, type FullWeek, type TimeRange } from "./slots";
+import { clockToMinutes, isIsoDate, isTimeZone, MINUTES_PER_DAY, weekdayOf, type IsoDate } from "./time";
 
 /**
  * What a client can set on the Availability page, and the checks every
@@ -27,6 +27,13 @@ export const DEFAULT_RULES: AvailabilityRules = {
   requiresApproval: false,
 };
 
+/**
+ * Whether a booking client's settings, when the portal first makes them, ask
+ * the client to approve each request. They can switch it off under "How
+ * booking works"; settings that already exist are never touched.
+ */
+export const APPROVAL_FOR_NEW_SETTINGS = true;
+
 export const SLOT_LENGTHS = [15, 20, 30, 45, 60, 90, 120] as const;
 export const BUFFERS = [0, 5, 10, 15, 30, 60] as const;
 export const NOTICES = [0, 60, 120, 240, 720, 1440, 2880, 10080] as const;
@@ -42,9 +49,6 @@ export const TIME_ZONES: ReadonlyArray<{ value: string; label: string }> = [
   { value: "America/Anchorage", label: "Alaska" },
   { value: "Pacific/Honolulu", label: "Hawaii" },
 ];
-
-/** Plenty for split shifts; a ceiling on a form posted by hand. */
-export const MAX_RANGES_PER_DAY = 6;
 
 export const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
@@ -126,18 +130,83 @@ export interface OverrideInput {
   ranges: TimeRange[];
 }
 
-/** "Days off and different hours": a date, and either closed or one block of hours. */
+const UNREADABLE_HOURS = "The hours could not be read. Reload the page and try again.";
+const BACKWARDS_HOURS = "Each block of hours needs a start before its end.";
+
+/**
+ * One day's blocks of hours, as the calendar's editor posts them:
+ * `[{ "start": "09:00", "end": "12:00" }, …]`. Sorted and merged where they
+ * overlap, so what is stored is what the website will offer. Closed days
+ * are a separate choice, so a list that comes to nothing is refused unless
+ * the caller means "closed".
+ */
+export function parseRangeList(raw: unknown, options: { allowEmpty: boolean }): Parsed<TimeRange[]> {
+  let json: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return { ok: false, message: UNREADABLE_HOURS };
+    }
+  }
+  const parsed = z.array(clockRange).max(MAX_RANGES_PER_DAY).safeParse(json);
+  if (!parsed.success) {
+    const tooMany = parsed.error.issues[0]?.code === "too_big";
+    return { ok: false, message: tooMany ? `Use at most ${MAX_RANGES_PER_DAY} blocks of hours in a day.` : UNREADABLE_HOURS };
+  }
+  const read: TimeRange[] = [];
+  for (const r of parsed.data) {
+    const range = readRange(r.start, r.end);
+    if (!range) return { ok: false, message: BACKWARDS_HOURS };
+    read.push(range);
+  }
+  const ranges = normalizeRanges(read);
+  if (ranges.length === 0 && !options.allowEmpty) {
+    return { ok: false, message: "Give the hours for that day, with the start before the end." };
+  }
+  return { ok: true, value: ranges };
+}
+
+/**
+ * A date closed, or with its own hours. The calendar sends `ranges`, any
+ * number of blocks; the older days-off form sends one `start` and `end`.
+ */
 export function parseOverride(
-  form: { date: unknown; mode: unknown; start: unknown; end: unknown },
+  form: { date: unknown; mode: unknown; start: unknown; end: unknown; ranges?: unknown },
   today: IsoDate,
 ): Parsed<OverrideInput> {
   if (!isIsoDate(form.date)) return { ok: false, message: "Pick a date." };
   if (form.date < today) return { ok: false, message: "That date has already passed." };
   if (form.mode === "closed") return { ok: true, value: { date: form.date, ranges: [] } };
   if (form.mode !== "hours") return { ok: false, message: "Choose closed, or different hours." };
+  if (form.ranges !== undefined && form.ranges !== null && form.ranges !== "") {
+    const list = parseRangeList(form.ranges, { allowEmpty: false });
+    return list.ok ? { ok: true, value: { date: form.date, ranges: list.value } } : list;
+  }
   const range = readRange(String(form.start ?? ""), String(form.end ?? ""));
   if (!range) return { ok: false, message: "Give the hours for that day, with the start before the end." };
   return { ok: true, value: { date: form.date, ranges: [range] } };
+}
+
+export interface WeekdayInput {
+  weekday: number;
+  /** Empty: closed every one of that weekday. */
+  ranges: TimeRange[];
+  /** The date the client was editing, whose own hours the change replaces. */
+  date: IsoDate | null;
+}
+
+/** "Repeat every Tuesday": one weekday's hours, and optionally the date it was set from. */
+export function parseWeekdayHours(form: { weekday: unknown; ranges: unknown; date?: unknown }): Parsed<WeekdayInput> {
+  const weekday = typeof form.weekday === "number" ? form.weekday : /^[0-6]$/.test(String(form.weekday)) ? Number(form.weekday) : NaN;
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return { ok: false, message: "Pick a day of the week." };
+  const list = parseRangeList(form.ranges, { allowEmpty: true });
+  if (!list.ok) return list;
+  const hasDate = form.date !== undefined && form.date !== null && form.date !== "";
+  if (hasDate && (!isIsoDate(form.date) || weekdayOf(form.date) !== weekday)) {
+    return { ok: false, message: `That date is not a ${WEEKDAY_NAMES[weekday]}.` };
+  }
+  return { ok: true, value: { weekday, ranges: list.value, date: hasDate ? (form.date as IsoDate) : null } };
 }
 
 /** Ranges as stored, re-checked on the way out: a row edited by hand must not crash the slot engine. */

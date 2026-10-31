@@ -9,10 +9,12 @@ import {
   removeDateOverride,
   saveDateOverride,
   saveRules,
+  saveWeekdayHours,
   saveWeeklyHours,
 } from "@/db/repositories/client/availability";
 import { decideAppointment, type Decision } from "@/db/repositories/client/availability-bookings";
 import { disconnectCalendar } from "@/db/repositories/client/availability-calendar";
+import { isIsoDate, weekdayOf } from "@/lib/availability/time";
 
 /**
  * Availability mutations. Each re-derives the tenant from the session — a
@@ -77,13 +79,25 @@ export async function saveRulesAction(_previous: AvailabilityActionResult | null
   );
 }
 
+/**
+ * One date's hours, from the calendar or the days-off form. With
+ * `repeat=weekly` the hours go to that date's weekday instead, for every week;
+ * the weekday is worked out here from the date, never taken from the form.
+ */
 export async function saveDayAction(_previous: AvailabilityActionResult | null, form: FormData) {
+  const date = text(form, "date");
+  if (text(form, "repeat") === "weekly") {
+    return run(({ db, ctx }) =>
+      saveWeekdayHours(db, ctx, { weekday: isIsoDate(date) ? weekdayOf(date) : "", ranges: text(form, "ranges"), date }),
+    );
+  }
   return run(({ db, ctx }) =>
     saveDateOverride(db, ctx, {
-      date: text(form, "date"),
+      date,
       mode: text(form, "mode"),
       start: text(form, "start"),
       end: text(form, "end"),
+      ranges: text(form, "ranges"),
     }),
   );
 }

@@ -544,3 +544,413 @@
 .avail-calendar-privacy {
   margin: 0 0 1rem;
 }
+
+/* --------------------------------------------------------------- calendar */
+
+.avail-cal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.avail-cal-title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.avail-cal-step {
+  flex: none;
+  width: var(--tap);
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.avail-cal-today {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+/* On a phone the way back to this month sits under the arrows, not squeezing the title. */
+@media (max-width: 39.99rem) {
+  .avail-cal-head {
+    flex-wrap: wrap;
+  }
+
+  .avail-cal-today {
+    order: 3;
+    flex-basis: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+.avail-cal-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+
+.avail-cal-grid th {
+  padding: 0.25rem 0;
+  text-align: center;
+  font: 500 0.72rem / 1.3 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.avail-cal-grid td {
+  padding: 0;
+  vertical-align: top;
+}
+
+.avail-cal-gap {
+  background: transparent;
+}
+
+/* A day. The portal's button look is reset: this is a cell, not a call to action. */
+.avail-cal-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.3rem 0.2rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: none;
+  font: 400 0.8rem / 1.2 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: center;
+  overflow: hidden;
+}
+
+.avail-cal-day:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.avail-cal-day:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  position: relative;
+  z-index: 1;
+}
+
+.avail-cal-num {
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.avail-cal-hours {
+  display: none;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.avail-cal-state {
+  font-size: 0.62rem;
+  color: var(--text-soft);
+}
+
+/* Closed: hatched as well as quiet, so it does not rest on colour. */
+.avail-cal-day--closed {
+  background: repeating-linear-gradient(135deg, var(--surface-sunk) 0 6px, var(--surface) 6px 12px);
+}
+
+.avail-cal-day--closed .avail-cal-num,
+.avail-cal-day--closed .avail-cal-hours,
+.avail-cal-day--closed .avail-cal-state {
+  color: var(--muted);
+}
+
+.avail-cal-day--open .avail-cal-state,
+.avail-cal-day--open .avail-cal-hours {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Hours set for this day alone: a corner, a shape rather than a shade. */
+.avail-cal-day--own::after,
+.avail-cal-key--own::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 0.65rem 0.65rem 0;
+  border-color: transparent var(--accent) transparent transparent;
+}
+
+.avail-cal-day--today {
+  border-width: 2px;
+  border-color: var(--text);
+}
+
+.avail-cal-day--today .avail-cal-num::after {
+  content: " •";
+}
+
+.avail-cal-day--past {
+  opacity: 0.45;
+  cursor: default;
+  background: var(--surface-sunk);
+}
+
+.avail-cal-day--past:hover {
+  background: var(--surface-sunk);
+  border-color: var(--border-strong);
+}
+
+/* Further out than the website shows yet: a dotted edge. */
+.avail-cal-day--beyond {
+  border-style: dotted;
+}
+
+.avail-cal-mark {
+  display: inline-block;
+  margin-top: auto;
+  padding: 0.05rem 0.2rem;
+  border: 1px solid var(--text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.avail-cal-mark--pending {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #fff;
+}
+
+.avail-cal-mark--confirmed {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.avail-cal-word {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .avail-cal-grid {
+    border-spacing: 3px;
+  }
+
+  .avail-cal-day {
+    min-height: 5.25rem;
+    padding: 0.4rem 0.35rem;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .avail-cal-hours {
+    display: block;
+  }
+
+  .avail-cal-state {
+    display: none;
+  }
+
+  .avail-cal-word {
+    display: inline;
+    font-weight: 500;
+  }
+}
+
+.avail-cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.avail-cal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.avail-cal-key {
+  position: relative;
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.avail-cal-key--closed {
+  background: repeating-linear-gradient(135deg, var(--surface-sunk) 0 3px, var(--surface) 3px 6px);
+}
+
+.avail-cal-key--beyond {
+  border-style: dotted;
+}
+
+.avail-cal-key--own::after {
+  border-width: 0 0.55rem 0.55rem 0;
+}
+
+/* --------------------------------------------------------- day editor dialog */
+
+.avail-dialog {
+  width: min(34rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--pane-shadow-lift);
+  overflow: auto;
+}
+
+.avail-dialog::backdrop {
+  background: rgb(16 20 24 / 55%);
+}
+
+.avail-dialog-body {
+  padding: 1.15rem 1.15rem 1.25rem;
+}
+
+.avail-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.avail-dialog-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.avail-dialog-sub {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.avail-dialog-x {
+  flex: none;
+  width: var(--tap);
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font: 400 1.6rem / 1 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.avail-dialog-x:hover,
+.avail-dialog-x:focus-visible {
+  background: var(--surface-sunk);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.avail-dialog-blocks {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.avail-dialog-closed {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.avail-dialog-tools {
+  font-size: 0.85rem;
+}
+
+.avail-dialog-tools button.link {
+  padding: 0.35rem 0;
+}
+
+.avail-dialog-bookings {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunk);
+}
+
+.avail-dialog-bookings h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.avail-dialog-bookings ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.avail-dialog-bookings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.avail-dialog-bookings .field-hint {
+  margin: 0.6rem 0 0;
+}
+
+.avail-repeat {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.avail-repeat-hint {
+  margin: 0 0 1rem;
+}
+
+.avail-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ----------------------------------------------------- waiting for an answer */
+
+.avail-waiting {
+  border-left: 4px solid var(--warning);
+}
+
+.avail-waiting .panel-head {
+  background: var(--warning-wash);
+}
+
+.avail-waiting-lede {
+  margin: 0 0 1rem;
+  color: var(--text-soft);
+}

@@ -8,6 +8,7 @@ import {
   type GoogleCalendarConfig,
 } from "@/lib/connections/providers/google-calendar";
 import { ProviderError } from "@/lib/connections/types";
+import { APPROVAL_FOR_NEW_SETTINGS } from "@/lib/availability/rules";
 import type { Interval } from "@/lib/availability/slots";
 import { assertMutable, type TenantContext } from "../context";
 import { disconnect, markNeedsReconnect, readLiveConnection, storeTokenUpdate } from "./connections";
@@ -104,7 +105,8 @@ async function writeCalendarState(
 ): Promise<void> {
   await db
     .insert(availabilitySettings)
-    .values({ organizationId, ...values, createdAt: now, updatedAt: now })
+    // Only the insert carries the approval default: the update below must not touch a row that exists.
+    .values({ organizationId, requiresApproval: APPROVAL_FOR_NEW_SETTINGS, ...values, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: availabilitySettings.organizationId, set: { ...values, updatedAt: now } });
 }
 

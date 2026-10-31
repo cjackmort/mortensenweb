@@ -18,6 +18,7 @@ import {
   removeDateOverride,
   saveDateOverride,
   saveRules,
+  saveWeekdayHours,
   saveWeeklyHours,
 } from "@/db/repositories/client/availability";
 import { decideAppointment, listAppointments } from "@/db/repositories/client/availability-bookings";
@@ -510,5 +511,260 @@ describe("Google Calendar busy times", () => {
     vi.stubGlobal("fetch", revoke);
     await disconnectCalendar(db, acme.ctx, NOW);
     expect(revoke).toHaveBeenCalledWith("https://oauth2.googleapis.com/revoke", expect.anything());
+  });
+});
+
+// Tuesday 2026-10-20, Denver (MDT, UTC-6): 10:00 is 16:00Z, 14:00 is 20:00Z.
+const TUESDAY = "2026-10-20";
+const TEN_TO_ELEVEN_AND_TWO_TO_THREE = JSON.stringify([
+  { start: "10:00", end: "11:00" },
+  { start: "14:00", end: "15:00" },
+]);
+
+async function slotsOn(date: string) {
+  const feed = await openTimesForSite(db, acmeSite, { from: date, to: date }, deps);
+  return feed.ok ? feed.availability.days[0]!.slots.map((s) => s.start) : null;
+}
+
+describe("a day's hours from the calendar", () => {
+  it("saves several blocks for one date, and the website offers exactly those times", async () => {
+    const saved = await saveDateOverride(
+      db,
+      acme.ctx,
+      { date: TUESDAY, mode: "hours", start: "", end: "", ranges: TEN_TO_ELEVEN_AND_TWO_TO_THREE },
+      NOW,
+    );
+    expect(saved).toEqual({ ok: true, message: "Saved. That day has its own hours." });
+    const view = await getAvailability(db, acme.ctx, NOW);
+    expect(view.overrides).toEqual([
+      {
+        publicId: expect.any(String),
+        date: TUESDAY,
+        ranges: [
+          { start: 600, end: 660 },
+          { start: 840, end: 900 },
+        ],
+      },
+    ]);
+    expect(await slotsOn(TUESDAY)).toEqual(["2026-10-20T16:00:00.000Z", "2026-10-20T20:00:00.000Z"]);
+    // The week itself is untouched: the next Tuesday still follows 9 to 12.
+    expect(view.weekly[2]).toEqual([{ start: 540, end: 720 }]);
+  });
+
+  it("replaces what the date had when it is saved again, and can close it", async () => {
+    const own = { date: TUESDAY, mode: "hours", start: "", end: "" };
+    await saveDateOverride(db, acme.ctx, { ...own, ranges: TEN_TO_ELEVEN_AND_TWO_TO_THREE }, NOW);
+    await saveDateOverride(db, acme.ctx, { ...own, ranges: JSON.stringify([{ start: "13:00", end: "14:00" }]) }, NOW);
+    expect(await slotsOn(TUESDAY)).toEqual(["2026-10-20T19:00:00.000Z"]);
+    expect((await getAvailability(db, acme.ctx, NOW)).overrides).toHaveLength(1);
+
+    await saveDateOverride(db, acme.ctx, { ...own, mode: "closed", ranges: "[]" }, NOW);
+    expect(await slotsOn(TUESDAY)).toEqual([]);
+  });
+
+  it("merges blocks that overlap, and refuses an empty, backwards or oversized list", async () => {
+    const overlapping = JSON.stringify([
+      { start: "10:00", end: "12:00" },
+      { start: "11:00", end: "13:00" },
+    ]);
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "hours", start: "", end: "", ranges: overlapping }, NOW);
+    expect((await getAvailability(db, acme.ctx, NOW)).overrides[0]!.ranges).toEqual([{ start: 600, end: 780 }]);
+
+    const refused = async (ranges: string) =>
+      saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "hours", start: "", end: "", ranges }, NOW);
+    expect((await refused("[]")).ok).toBe(false);
+    expect((await refused(JSON.stringify([{ start: "15:00", end: "10:00" }]))).ok).toBe(false);
+    expect((await refused("not json")).ok).toBe(false);
+    const seven = Array.from({ length: 7 }, (_, i) => {
+      const hour = String(8 + i).padStart(2, "0");
+      return { start: `${hour}:00`, end: `${hour}:30` };
+    });
+    expect((await refused(JSON.stringify(seven))).ok).toBe(false);
+    // Every refusal left the earlier save alone.
+    expect((await getAvailability(db, acme.ctx, NOW)).overrides[0]!.ranges).toEqual([{ start: 600, end: 780 }]);
+  });
+
+  it("still takes the single from/until pair the days-off form sends", async () => {
+    const saved = await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "hours", start: "13:00", end: "15:00" }, NOW);
+    expect(saved.ok).toBe(true);
+    expect(await slotsOn(TUESDAY)).toEqual(["2026-10-20T19:00:00.000Z", "2026-10-20T20:00:00.000Z"]);
+  });
+});
+
+describe("a client who sets only particular days", () => {
+  beforeEach(async () => {
+    await db.delete(availabilityWeeklyHours);
+  });
+
+  it("counts as set up and open, and takes a booking on the day they opened", async () => {
+    expect(await isAvailabilitySetUp(db, acme.ctx, NOW)).toBe(false);
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "hours", start: "", end: "", ranges: TEN_TO_ELEVEN_AND_TWO_TO_THREE }, NOW);
+
+    expect(await isAvailabilitySetUp(db, acme.ctx, NOW)).toBe(true);
+    expect((await previewSlots(db, acme.ctx, { now: NOW })).open).toBe(true);
+    expect(await slotsOn(TUESDAY)).toEqual(["2026-10-20T16:00:00.000Z", "2026-10-20T20:00:00.000Z"]);
+    expect(await slotsOn("2026-10-27")).toEqual([]);
+    const tenAm = new Date("2026-10-20T16:00:00.000Z");
+    expect(await requestBooking(db, booking(tenAm), deps)).toMatchObject({ ok: true });
+  });
+
+  it("does not count a day that is only closed", async () => {
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "closed", start: "", end: "" }, NOW);
+    expect(await isAvailabilitySetUp(db, acme.ctx, NOW)).toBe(false);
+    expect((await previewSlots(db, acme.ctx, { now: NOW })).open).toBe(false);
+  });
+});
+
+describe("repeating a day's hours every week", () => {
+  it("writes that weekday's hours and leaves the other days alone", async () => {
+    const saved = await saveWeekdayHours(db, acme.ctx, { weekday: "2", ranges: TEN_TO_ELEVEN_AND_TWO_TO_THREE }, NOW);
+    expect(saved).toEqual({ ok: true, message: expect.stringContaining("Every Tuesday") });
+    const { weekly } = await getAvailability(db, acme.ctx, NOW);
+    expect(weekly[2]).toEqual([
+      { start: 600, end: 660 },
+      { start: 840, end: 900 },
+    ]);
+    expect(weekly[1]).toEqual([{ start: 540, end: 720 }]);
+    expect(weekly[3]).toEqual([{ start: 540, end: 720 }]);
+    expect(weekly[0]).toEqual([]);
+    expect(await slotsOn("2026-10-27")).toEqual(["2026-10-27T16:00:00.000Z", "2026-10-27T20:00:00.000Z"]);
+  });
+
+  it("clears the date it was set from, so that date follows the new week", async () => {
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "closed", start: "", end: "" }, NOW);
+    await saveDateOverride(db, acme.ctx, { date: "2026-10-27", mode: "closed", start: "", end: "" }, NOW);
+    await saveWeekdayHours(db, acme.ctx, { weekday: "2", ranges: TEN_TO_ELEVEN_AND_TWO_TO_THREE, date: TUESDAY }, NOW);
+
+    expect(await slotsOn(TUESDAY)).toEqual(["2026-10-20T16:00:00.000Z", "2026-10-20T20:00:00.000Z"]);
+    // A different Tuesday the client closed on its own stays closed.
+    expect(await slotsOn("2026-10-27")).toEqual([]);
+    expect((await getAvailability(db, acme.ctx, NOW)).overrides.map((o) => o.date)).toEqual(["2026-10-27"]);
+  });
+
+  it("closes every one of that weekday with an empty list", async () => {
+    await saveWeekdayHours(db, acme.ctx, { weekday: "3", ranges: "[]" }, NOW);
+    expect((await getAvailability(db, acme.ctx, NOW)).weekly[3]).toEqual([]);
+    expect(await slotsOn("2026-10-21")).toEqual([]);
+  });
+
+  it("refuses a weekday that is not one, a date on another weekday, and hours that do not read", async () => {
+    const before = (await getAvailability(db, acme.ctx, NOW)).weekly;
+    const backwards = JSON.stringify([{ start: "17:00", end: "09:00" }]);
+    expect((await saveWeekdayHours(db, acme.ctx, { weekday: "7", ranges: "[]" }, NOW)).ok).toBe(false);
+    expect((await saveWeekdayHours(db, acme.ctx, { weekday: "x", ranges: "[]" }, NOW)).ok).toBe(false);
+    expect((await saveWeekdayHours(db, acme.ctx, { weekday: "2", ranges: "[]", date: "2026-10-21" }, NOW)).ok).toBe(false);
+    expect((await saveWeekdayHours(db, acme.ctx, { weekday: "2", ranges: backwards }, NOW)).ok).toBe(false);
+    expect((await getAvailability(db, acme.ctx, NOW)).weekly).toEqual(before);
+  });
+
+  it("is refused while an operator is only viewing as the client", async () => {
+    const viewing = tenantContextFrom(
+      { userId: acme.userId, organizationId: acme.organizationId, role: "admin", status: "active", sessionEpoch: 0 },
+      acme.organizationId,
+      { impersonating: true },
+    );
+    await expect(saveWeekdayHours(db, viewing, { weekday: "2", ranges: "[]" }, NOW)).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
+describe("approval is the default for a new booking client", () => {
+  beforeEach(async () => {
+    // A client who has saved nothing yet: no settings row at all.
+    await db.delete(availabilitySettings);
+    await db.delete(availabilityWeeklyHours);
+  });
+
+  async function requiresApproval() {
+    const [row] = await db.select().from(availabilitySettings).where(eq(availabilitySettings.organizationId, acme.organizationId));
+    return row?.requiresApproval;
+  }
+
+  it("makes the first weekly-hours save create settings that need approval, so a request waits", async () => {
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    expect(await requiresApproval()).toBe(true);
+    const view = await getAvailability(db, acme.ctx, NOW);
+    expect(view.rules.requiresApproval).toBe(true);
+    // Made for the client, not saved by them: the rules form still reads as unsaved.
+    expect(view.rulesSaved).toBe(false);
+    // The database's own defaults apply (30-minute slots, two hours' notice), so 10 AM is the first time open.
+    expect(await requestBooking(db, booking(TEN_AM), deps)).toMatchObject({ ok: true, status: "pending" });
+  });
+
+  it("does the same when the first thing set is a day", async () => {
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "closed", start: "", end: "" }, NOW);
+    expect(await requiresApproval()).toBe(true);
+  });
+
+  it("does the same when connecting Google Calendar is what creates the row", async () => {
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    await db.delete(availabilitySettings);
+    await completeConnect(
+      db,
+      acme.ctx,
+      "google_calendar",
+      {
+        externalId: "google-sub-1",
+        displayName: "owner@acme.example",
+        scope: "openid email https://www.googleapis.com/auth/calendar.freebusy",
+        accessToken: "access-1",
+        refreshToken: "refresh-1",
+        expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+      },
+      NOW,
+    );
+    const quiet = (async () => Response.json({ calendars: { "owner@acme.example": { busy: [] } } })) as unknown as typeof fetch;
+    await openTimesForSite(db, acmeSite, {}, { ...deps, config: CONFIG, fetchImpl: quiet });
+    expect(await requiresApproval()).toBe(true);
+  });
+
+  it("leaves settings that already exist exactly as they were", async () => {
+    await rules(acme);
+    expect(await requiresApproval()).toBe(false);
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    await saveDateOverride(db, acme.ctx, { date: TUESDAY, mode: "closed", start: "", end: "" }, NOW);
+    expect(await requiresApproval()).toBe(false);
+    expect((await getAvailability(db, acme.ctx, NOW)).rulesSaved).toBe(true);
+  });
+
+  it("shows approval on to a client who has set nothing yet, so saving the rules form keeps it", async () => {
+    const view = await getAvailability(db, acme.ctx, NOW);
+    expect(view.rules.requiresApproval).toBe(true);
+    expect(view.rulesSaved).toBe(false);
+    await saveRules(
+      db,
+      acme.ctx,
+      { timeZone: "America/Denver", slotMinutes: "30", bufferMinutes: "0", minNoticeMinutes: "0", horizonDays: "14", requiresApproval: view.rules.requiresApproval },
+      NOW,
+    );
+    expect(await requiresApproval()).toBe(true);
+  });
+
+  it("leaves a client who already has hours but no settings row confirming straight away", async () => {
+    // How clients who only ever saved their hours were stored before settings were made with them.
+    await db.insert(availabilityWeeklyHours).values({ organizationId: acme.organizationId, weekday: 1, ranges: [{ start: 540, end: 720 }] });
+    expect((await getAvailability(db, acme.ctx, NOW)).rules.requiresApproval).toBe(false);
+    expect(await requestBooking(db, booking(TEN_AM), deps)).toMatchObject({ ok: true, status: "confirmed" });
+  });
+
+  it("lets the client turn it off, and keeps it off", async () => {
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    await rules(acme);
+    expect(await requiresApproval()).toBe(false);
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    expect(await requiresApproval()).toBe(false);
+  });
+
+  it("emails the customer on both answers", async () => {
+    await saveWeeklyHours(db, acme.ctx, WEEKDAYS_9_TO_12, NOW);
+    await requestBooking(db, booking(TEN_AM), deps);
+    const lee = booking(new Date("2026-10-19T17:00:00.000Z"));
+    await requestBooking(db, { ...lee, request: { ...lee.request, name: "Lee Customer", email: "lee@customer.example" } }, deps);
+    outbox.length = 0;
+    const [first, second] = (await listAppointments(db, acme.ctx, NOW)).pending;
+    await decideAppointment(db, acme.ctx, first!.publicId, "approve", deps);
+    await decideAppointment(db, acme.ctx, second!.publicId, "decline", deps);
+    expect(outbox.map((m) => m.to)).toEqual(["dana@customer.example", "lee@customer.example"]);
+    expect(outbox[0]!.subject).toMatch(/^Confirmed:/);
+    expect(outbox[1]!.subject).toMatch(/couldn't take your booking/);
   });
 });
