@@ -31,11 +31,11 @@ export const PEAK_COVER = 0.73;
 /**
  * `--accent-fill` in light; the site's `--accent` (blue on dark) in dark.
  *
- * Light's strength is as high as contrast allows: 0.19 tints the ground by
- * at most 14%, and --muted text on that ground stays at 4.5:1. 0.2 already
- * dips under.
+ * Light is at 0.25 so the smoke is clear at a glance on the signed-in
+ * pages. That tints the ground by at most 18%, which is why --muted went
+ * one shade darker: it stays at 4.5:1 there.
  */
-const ON_LIGHT = { color: "#1552d6", intensity: "0.19" } as const;
+const ON_LIGHT = { color: "#1552d6", intensity: "0.25" } as const;
 const ON_DARK = { color: "#7ea6ff", intensity: "0.1" } as const;
 
 export function backdropAttributes(tone: BackdropTone, prefersDark: boolean): Record<string, string> {

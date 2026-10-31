@@ -15,8 +15,8 @@ const EVERY_CASE = [
   backdropAttributes("dark", true),
 ];
 
-/** The ground and --muted from globals.css, light and dark. */
-const LIGHT = { ground: "#f4f5f2", muted: "#5b6270" };
+/** The ground, --muted and --accent (links) from globals.css, light and dark. */
+const LIGHT = { ground: "#f4f5f2", muted: "#555c6a", accent: "#1552d6" };
 const DARK = { ground: "#0e1116", muted: "#97a0ac" };
 
 const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -52,6 +52,11 @@ describe("backdropAttributes", () => {
   it("keeps muted text on the most-tinted light ground at 4.5:1", () => {
     const ground = mostTinted(LIGHT.ground, backdropAttributes("auto", false));
     expect(contrast(channels(LIGHT.muted), ground)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps links on the most-tinted light ground at 4.5:1", () => {
+    const ground = mostTinted(LIGHT.ground, backdropAttributes("auto", false));
+    expect(contrast(channels(LIGHT.accent), ground)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("keeps muted text on the most-tinted dark ground at 4.5:1", () => {

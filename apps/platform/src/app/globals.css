@@ -60,7 +60,9 @@
 
   --text: #101418;
   --text-soft: #3a4049;
-  --muted: #5b6270;
+  /* One shade darker than it was (#5b6270) so it still reads at 4.5:1 on the
+     ground where the moving backdrop is thickest. */
+  --muted: #555c6a;
 
   /* The one blue. `--accent` is for text and outlines; `--accent-fill` is for
      solid shapes — buttons, bars, the dot on a progress track. In light they
@@ -267,7 +269,7 @@ code {
  * The faint blue field behind every signed-in page and the sign-in screens
  * (components/noise-backdrop.tsx). Fixed, one layer below the page: over the
  * ground colour, under the grid and every pane. Panes keep their opaque
- * faces. Text set straight on the ground sees at most a 14% tint of blue,
+ * faces. Text set straight on the ground sees at most an 18% tint of blue,
  * which keeps --muted at 4.5:1 there; tests/noise-backdrop.test.ts holds
  * the line.
  */
