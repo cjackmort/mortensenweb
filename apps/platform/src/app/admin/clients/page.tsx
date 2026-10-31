@@ -4,10 +4,18 @@ import { currentUser } from "@/auth";
 import { SitePreview, siteHomeUrl } from "@/components/site-preview";
 import { getDb } from "@/db/client";
 import { adminContextFrom } from "@/db/repositories/context";
-import { listClients } from "@/db/repositories/admin/clients";
+import {
+  clientsWithLiveStripeBilling,
+  listArchivedClients,
+  listClients,
+} from "@/db/repositories/admin/clients";
 import { listSitesWithAnalytics } from "@/db/repositories/admin/sites";
 import { listPotentialClients } from "@/db/repositories/admin/potential-clients";
 import { PotentialClientsSection } from "./potential-clients-section";
+import { ArchivedClientsSection, RemovedNotice } from "./archived-clients-section";
+import { ClientTileGrid } from "./client-tile-grid";
+import { RemoveClientButton } from "./remove-client-button";
+import { STRIPE_BILLING_BLOCK } from "./remove-copy";
 import { StatRow } from "@/components/analytics-summary";
 import { TimeSeriesChart } from "@/components/time-series-chart";
 import { demoAnalytics } from "@/lib/analytics/demo";
@@ -41,18 +49,35 @@ const SITE_STATUS_LABEL: Record<string, string> = {
  * Gated twice like every admin surface: the page check below, and
  * `adminContextFrom`, which refuses a session that is not an active admin.
  */
-export default async function AdminClientsPage() {
+export default async function AdminClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ removed?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
 
+  const { removed } = await searchParams;
   const ctx = adminContextFrom(user);
   const db = await getDb();
-  const [clients, potentialClients] = await Promise.all([
+  const [clients, potentialClients, archivedClients] = await Promise.all([
     listClients(ctx, db),
     listPotentialClients(ctx, db),
+    listArchivedClients(ctx, db),
   ]);
+  // Asked once for the whole grid, so each tile can say up front that removal
+  // is blocked rather than letting the operator find out after confirming.
+  const stillBilled = await clientsWithLiveStripeBilling(
+    db,
+    clients.map((c) => c.clientPublicId),
+  );
+  // Only a client that really is archived gets the undo notice, so a hand-typed
+  // or stale `?removed=` shows nothing rather than a false confirmation.
+  const justRemoved = removed
+    ? archivedClients.find((c) => c.clientPublicId === removed)
+    : undefined;
   const umamiReady = isUmamiConfigured();
 
   // One site (the oldest, same convention as the client-detail page) and its
@@ -94,6 +119,13 @@ export default async function AdminClientsPage() {
           </div>
         </div>
 
+        {justRemoved && (
+          <RemovedNotice
+            clientPublicId={justRemoved.clientPublicId}
+            clientName={justRemoved.name}
+          />
+        )}
+
         {clients.length === 0 ? (
           <section className="card">
             <div className="empty">
@@ -110,9 +142,15 @@ export default async function AdminClientsPage() {
             </div>
           </section>
         ) : (
-          <div className="client-tile-grid">
+          <ClientTileGrid>
             {withSites.map(({ client: c, site, analytics }) => (
-              <details key={c.clientPublicId} className="client-tile">
+              /*
+               * `name` makes the tiles one exclusive group: opening one closes
+               * the one that was open, natively — no state, no script, and the
+               * summary the operator activated keeps focus. A browser that
+               * predates it just lets several stay open, as before.
+               */
+              <details key={c.clientPublicId} className="client-tile" name="client-tiles">
                 <summary>
                   <div className="client-tile-media">
                     <SitePreview
@@ -179,14 +217,21 @@ export default async function AdminClientsPage() {
                     >
                       View full client page →
                     </Link>
+                    <RemoveClientButton
+                      clientPublicId={c.clientPublicId}
+                      clientName={c.name}
+                      blockedReason={stillBilled.has(c.clientPublicId) ? STRIPE_BILLING_BLOCK : null}
+                    />
                   </div>
                 </div>
               </details>
             ))}
-          </div>
+          </ClientTileGrid>
         )}
 
         <PotentialClientsSection prospects={potentialClients} />
+
+        <ArchivedClientsSection archived={archivedClients} />
       </main>
     </>
   );

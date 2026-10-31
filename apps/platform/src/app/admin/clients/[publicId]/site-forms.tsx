@@ -69,11 +69,12 @@ export function AddSiteForm({
 /**
  * Which picture the client grid shows for this site.
  *
- * Presented as a choice rather than inferred, because the thing that decides
- * it — whether the site sends a `frame-ancestors` that names the portal — is
- * only observable in the browser that tries to frame it. The server cannot
- * check, so the copy tells the operator what `live` requires instead of a
- * validator pretending to know.
+ * Presented as a choice rather than inferred: whether `live` is right depends
+ * on whether the home page moves, which only the operator can see. What the
+ * server can check is whether the site will let the portal frame it, so saving
+ * `live` reads the site's `X-Frame-Options` and `frame-ancestors` first and, if
+ * either refuses, says which one and gives the header that fixes it — the
+ * alternative is a bare browser error drawn inside the tile.
  */
 export function PreviewModeForm({
   clientPublicId,
@@ -91,7 +92,16 @@ export function PreviewModeForm({
 
   return (
     <form action={formAction}>
-      {state && !state.ok && <p className="error">{state.message}</p>}
+      {state && !state.ok && (
+        <div role="alert">
+          <p className="error">{state.message}</p>
+          {state.fix && (
+            <p className="field-hint">
+              <code>{state.fix}</code>
+            </p>
+          )}
+        </div>
+      )}
       {state?.ok && <p className="notice notice-success">Saved.</p>}
 
       <input type="hidden" name="clientPublicId" value={clientPublicId} />
@@ -104,15 +114,17 @@ export function PreviewModeForm({
         defaultValue={currentMode}
       >
         <option value="screenshot">Screenshot from the last deploy</option>
-        <option value="live">Live page (animated sites)</option>
+        <option value="live">Live site — animated</option>
       </select>
       <p className="field-hint">
         The screenshot is taken on every deploy to <code>main</code> and
         published with the site. Choose <strong>live</strong> only for a site
         whose home page moves — a still picture of an animated background is
-        misleading — and only if that site&rsquo;s headers allow{" "}
-        <code>portal.mortensenweb.com</code> to frame it. Without that header
-        a live tile shows the client&rsquo;s initial and nothing else.
+        misleading. Saving checks the site&rsquo;s headers: it must send{" "}
+        <code>Content-Security-Policy: frame-ancestors &apos;self&apos;
+        https://portal.mortensenweb.com</code> and no{" "}
+        <code>X-Frame-Options</code>, or the tile shows a browser error
+        instead of the site.
       </p>
 
       <button type="submit" className="secondary" disabled={pending}>

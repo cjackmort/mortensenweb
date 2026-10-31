@@ -199,9 +199,10 @@ export async function listSitesWithAnalytics(
  * Choose how the client grid draws this site's thumbnail.
  *
  * `live` is only meaningful when the site itself names the portal in
- * `frame-ancestors`; nothing here can check that, because the refusal happens
- * in the operator's browser and is invisible to the server. The form says so
- * rather than pretending to validate it.
+ * `frame-ancestors`. This function only stores the choice; the caller checks
+ * the site's headers first (`liveThumbnailGate`), because a refused frame is
+ * invisible to the server once it is saved and shows the operator a bare
+ * browser error in the tile.
  */
 export async function setSitePreviewMode(
   _ctx: AdminContext,
@@ -215,6 +216,30 @@ export async function setSitePreviewMode(
     .where(eq(sites.publicId, sitePublicId))
     .returning({ id: sites.id });
   return { ok: updated.length > 0 };
+}
+
+/**
+ * The columns a site's home address is built from (see `siteHomeUrl`), for a
+ * site that belongs to the given organization. Throws if it does not.
+ */
+export async function getOrganizationSiteAddress(
+  _ctx: AdminContext,
+  db: Database,
+  organizationId: string,
+  sitePublicId: string,
+) {
+  const rows = await db
+    .select({
+      primaryDomain: sites.primaryDomain,
+      productionUrl: sites.productionUrl,
+      netlifySiteName: sites.netlifySiteName,
+    })
+    .from(sites)
+    .where(and(eq(sites.publicId, sitePublicId), eq(sites.organizationId, organizationId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError();
+  return row;
 }
 
 /** Resolve a site that belongs to the given organization, or throw. */

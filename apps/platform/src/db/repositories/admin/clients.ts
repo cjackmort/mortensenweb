@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   servicePlans,
@@ -137,6 +137,168 @@ export async function designateInternalClient(
     changed: true,
     previousClientPublicId: previous?.clientPublicId ?? null,
   };
+}
+
+/**
+ * Stripe's words for a subscription that has ended and will never charge again.
+ * Anything else — including a status we have not seen — still counts as live,
+ * so an unfamiliar state refuses a removal instead of allowing one.
+ */
+const ENDED_STRIPE_STATUSES = ["canceled", "incomplete_expired"];
+
+/**
+ * Which of these clients a Stripe subscription is still billing, by public id.
+ *
+ * "Still billing" includes one scheduled to end at the period's close: it
+ * charges until then, and archiving would hide a customer who is paying.
+ */
+export async function clientsWithLiveStripeBilling(
+  db: Database,
+  clientPublicIds: string[],
+): Promise<Set<string>> {
+  if (clientPublicIds.length === 0) return new Set();
+
+  const rows = await db
+    .selectDistinct({ clientPublicId: clients.publicId })
+    .from(subscriptions)
+    .innerJoin(clients, eq(subscriptions.clientId, clients.id))
+    .where(
+      and(
+        inArray(clients.publicId, clientPublicIds),
+        eq(subscriptions.provider, "stripe"),
+        sql`${subscriptions.status} <> 'cancelled'`,
+        or(
+          isNull(subscriptions.providerStatus),
+          notInArray(subscriptions.providerStatus, ENDED_STRIPE_STATUSES),
+        ),
+      ),
+    );
+  return new Set(rows.map((row) => row.clientPublicId));
+}
+
+export type ArchiveClientOutcome =
+  | { ok: true; name: string }
+  | {
+      ok: false;
+      reason: "not_found" | "already_archived" | "internal" | "active_subscription";
+    };
+
+/**
+ * Remove a client from the Clients list. Archived, never deleted.
+ *
+ * Only `clients.archived_at` changes, and every client-facing list and rollup
+ * already filters on it. Their payments, plan, site, repository connection and
+ * organization are left as they were, and nothing is sent to GitHub, Netlify or
+ * a registrar — taking a client off the list is not the same as taking their
+ * website down.
+ *
+ * Refused for the agency's own site, which the MortensenWeb tab depends on, and
+ * for a client a Stripe subscription is still charging: archiving would hide a
+ * paying customer, and there is no Stripe-side cancellation here to undo it.
+ */
+export async function archiveClient(
+  ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+): Promise<ArchiveClientOutcome> {
+  const [target] = await db
+    .select({
+      id: clients.id,
+      organizationId: clients.organizationId,
+      isInternal: clients.isInternal,
+      archivedAt: clients.archivedAt,
+      name: organizations.name,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+
+  if (!target) return { ok: false, reason: "not_found" };
+  if (target.archivedAt) return { ok: false, reason: "already_archived" };
+  if (target.isInternal) return { ok: false, reason: "internal" };
+  if ((await clientsWithLiveStripeBilling(db, [clientPublicId])).has(clientPublicId)) {
+    return { ok: false, reason: "active_subscription" };
+  }
+
+  const now = new Date();
+  await db
+    .update(clients)
+    .set({ archivedAt: now, updatedAt: now })
+    .where(and(eq(clients.id, target.id), isNull(clients.archivedAt)));
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: target.organizationId,
+    action: "client.archived",
+    entityType: "client",
+    entityId: clientPublicId,
+    metadata: { name: target.name },
+  });
+
+  return { ok: true, name: target.name };
+}
+
+export type RestoreClientOutcome =
+  | { ok: true; name: string }
+  | { ok: false; reason: "not_found" | "not_archived" };
+
+/** Put a removed client back on the Clients list, as they were. */
+export async function restoreClient(
+  ctx: AdminContext,
+  db: Database,
+  clientPublicId: string,
+): Promise<RestoreClientOutcome> {
+  const [target] = await db
+    .select({
+      id: clients.id,
+      organizationId: clients.organizationId,
+      archivedAt: clients.archivedAt,
+      name: organizations.name,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .where(eq(clients.publicId, clientPublicId))
+    .limit(1);
+
+  if (!target) return { ok: false, reason: "not_found" };
+  if (!target.archivedAt) return { ok: false, reason: "not_archived" };
+
+  await db
+    .update(clients)
+    .set({ archivedAt: null, updatedAt: new Date() })
+    .where(eq(clients.id, target.id));
+
+  await db.insert(auditLog).values({
+    actorUserId: ctx.userId,
+    organizationId: target.organizationId,
+    action: "client.restored",
+    entityType: "client",
+    entityId: clientPublicId,
+    metadata: { name: target.name },
+  });
+
+  return { ok: true, name: target.name };
+}
+
+/**
+ * Clients taken off the list, most recently removed first.
+ *
+ * Leaves out the agency's own site: it is not a client, and the only way it
+ * leaves the list is by being designated, which is its own flow.
+ */
+export async function listArchivedClients(_ctx: AdminContext, db: Database) {
+  return db
+    .select({
+      clientPublicId: clients.publicId,
+      name: organizations.name,
+      primaryContactName: clients.primaryContactName,
+      archivedAt: clients.archivedAt,
+    })
+    .from(clients)
+    .innerJoin(organizations, eq(clients.organizationId, organizations.id))
+    .where(and(isNotNull(clients.archivedAt), eq(clients.isInternal, false)))
+    .orderBy(desc(clients.archivedAt));
 }
 
 /**
