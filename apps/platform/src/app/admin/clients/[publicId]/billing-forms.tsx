@@ -71,6 +71,11 @@ export function RaiseRequestForm({
         placeholder="Website management — March"
       />
 
+      <label className="checkbox">
+        <input type="checkbox" name="forBuild" />
+        <span>This is for the website build (paying it lets them go live)</span>
+      </label>
+
       <button type="submit" disabled={pending}>
         {pending ? "Raising…" : "Raise payment request"}
       </button>

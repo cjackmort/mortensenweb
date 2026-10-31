@@ -68,6 +68,12 @@ vi.mock("@/lib/payments/stripe", async () => {
         invoices: {
           list: async () => ({ data: stripeState.paidInvoices }),
         },
+        // The one-off checkout pass: nothing completed by default.
+        checkout: {
+          sessions: {
+            list: async () => ({ data: [] }),
+          },
+        },
       }) as never,
   };
 });
@@ -82,6 +88,10 @@ const { runScheduledReconcile, stripeSyncStatus } = await import(
 
 let clientId: string;
 
+/** The website build already paid, so a plan's invoice is what unlocks (decision D1). */
+async function buildAlreadyPaid(): Promise<void> {
+  await db.update(clients).set({ buildPaidAt: new Date() }).where(eq(clients.id, clientId));
+}
 
 const CUSTOMER = "cus_test_1";
 const SUBSCRIPTION = "sub_test_1";
@@ -379,7 +389,8 @@ describe("settlement is not cash", () => {
     expect(row[0]!.unlocked).toBeNull();
   });
 
-  it("unlocks on an invoice that did collect", async () => {
+  it("unlocks on an invoice that did collect, once the build is paid", async () => {
+    await buildAlreadyPaid();
     await processStripeEvent(db, event("invoice.paid", invoiceObject()));
 
     const row = await db
@@ -643,6 +654,7 @@ describe("checkout completion", () => {
 
 describe("refunds and disputes", () => {
   it("records for review rather than clawing back access", async () => {
+    await buildAlreadyPaid();
     await processStripeEvent(db, event("invoice.paid", invoiceObject()));
 
     const outcome = await processStripeEvent(
@@ -786,6 +798,7 @@ describe("promos", () => {
  */
 describe("reconciliation repairs what the webhook missed", () => {
   it("records a settled invoice whose webhook never arrived", async () => {
+    await buildAlreadyPaid();
     stripeState.paidInvoices = [invoiceObject()];
 
     const result = await runScheduledReconcile(db);

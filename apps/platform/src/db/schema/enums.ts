@@ -397,6 +397,8 @@ export const paymentPurposeEnum = pgEnum("payment_purpose", [
   "subscription",
   "extra_change",
   "other",
+  // Paying one is what marks the website build paid (0047).
+  "build",
 ]);
 
 // ---- Briefs ---------------------------------------------------------------

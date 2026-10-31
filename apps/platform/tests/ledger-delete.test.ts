@@ -75,11 +75,12 @@ const { applyPaidInvoice } = await import("@/db/repositories/admin/stripe-webhoo
 const today = () => businessDate(new Date());
 const thisMonth = () => today().slice(0, 7);
 
-async function paidInvoice(amountCents = 5000, receivedOn = today()) {
+async function paidInvoice(amountCents = 5000, receivedOn = today(), forBuild = false) {
   const request = await raisePaymentRequest(admin, db, {
     organizationId: orgId,
     amountCents,
     dueOn: receivedOn,
+    forBuild,
   });
   const confirmed = await confirmPaymentReceived(admin, db, request.publicId, {
     method: "venmo",
@@ -200,15 +201,18 @@ describe("deleting a payment", () => {
   });
 
   it("never locks the client's features again", async () => {
-    const { paymentPublicId } = await paidInvoice();
+    // The build's invoice: paying one is what unlocks a client.
+    const { paymentPublicId } = await paidInvoice(50000, today(), true);
     const before = (await db.select().from(clients).where(eq(clients.id, clientId)))[0]!;
     expect(before.analyticsUnlockedAt).toBeInstanceOf(Date);
+    expect(before.buildPaidAt).toBeInstanceOf(Date);
 
     await deletes.voidPayment(admin, db, paymentPublicId, {});
 
     const after = (await db.select().from(clients).where(eq(clients.id, clientId)))[0]!;
     expect(after.analyticsUnlockedAt).toEqual(before.analyticsUnlockedAt);
     expect(after.changeRequestsUnlockedAt).toEqual(before.changeRequestsUnlockedAt);
+    expect(after.buildPaidAt).toEqual(before.buildPaidAt);
   });
 
   it("makes the invoice it paid unpaid again, and a second Mark paid counts once", async () => {

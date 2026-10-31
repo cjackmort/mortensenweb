@@ -88,6 +88,13 @@ export function WelcomeCheckout({
   const chosenPlan = offered.find((p) => p.key === planKey) ?? null;
   const redirecting = pending || result?.ok === true;
   const canPay = stripeReady && basket !== null && !redirecting;
+  // Paying for the build is what puts the site live (decision D1), so the
+  // button says so, with the whole of what is due today.
+  const payLabel = basket?.includesBuild
+    ? `Put it live — ${formatMoney(basket.dueTodayCents)}`
+    : basket
+      ? "Continue to secure payment"
+      : "Nothing to pay yet";
 
   function toggle(key: string) {
     setTicked((current) => {
@@ -209,7 +216,7 @@ export function WelcomeCheckout({
               <input key={key} type="hidden" name="addOns" value={key} />
             ))}
             <button type="submit" disabled={!canPay}>
-              {redirecting ? "Opening Stripe…" : basket ? "Continue to secure payment" : "Nothing to pay yet"}
+              {redirecting ? "Opening Stripe…" : payLabel}
             </button>
           </form>
           <p className="welcome-fine">You&rsquo;ll enter your card on Stripe&rsquo;s secure page, not here.</p>
@@ -226,7 +233,7 @@ export function WelcomeCheckout({
             <strong>{formatMoney(basket.dueTodayCents)}</strong>
           </span>
           <button type="submit" form="welcome-checkout" disabled={!canPay} tabIndex={-1}>
-            {redirecting ? "Opening Stripe…" : "Continue"}
+            {redirecting ? "Opening Stripe…" : basket.includesBuild ? "Put it live" : "Continue"}
           </button>
         </div>
       )}
@@ -316,7 +323,7 @@ function Summary({
       <p className="welcome-empty">
         {siteDue.kind === "invoice"
           ? "Your invoice is paid on its own, above. Choose a plan here if you'd like one."
-          : "Your site is paid for. Choose a plan or add-ons if you'd like them."}
+          : "Your website is paid for. Choose a plan or add-ons if you'd like them."}
       </p>
     );
   }
@@ -354,7 +361,7 @@ function Summary({
         <p className="welcome-fine">
           {basket.mode === "subscription"
             ? `Your code ${promo.code}${promo.terms ? ` (${promo.terms})` : ""} is applied on the payment page.`
-            : `Your code ${promo.code} applies when you choose a plan.`}
+            : `Your code ${promo.code} applies when you choose a plan. A website code can be entered on the payment page.`}
         </p>
       )}
     </>

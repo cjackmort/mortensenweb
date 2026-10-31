@@ -50,6 +50,7 @@ export const PURPOSE_LABEL: Record<string, string> = {
   subscription: "Monthly plan",
   extra_change: "Extra change",
   other: "One-off",
+  build: "Website build",
 };
 
 export function plural(n: number, one: string, many = `${one}s`): string {

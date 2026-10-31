@@ -1,10 +1,11 @@
-import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import type { Database } from "@/db/client";
 import {
   auditLog,
   clients,
+  paymentRequests,
   payments,
   subscriptions,
   webhookDeliveries,
@@ -24,6 +25,7 @@ import {
   matchClient,
   mirrorSubscription,
 } from "./stripe-webhooks";
+import { settleOneOffCheckout } from "./stripe-one-off";
 
 /**
  * Checking Stripe against ourselves.
@@ -71,6 +73,7 @@ import {
 
 const MAX_SUBSCRIPTIONS = 200;
 const MAX_INVOICES = 200;
+const MAX_CHECKOUTS = 100;
 
 export interface ReconcileFinding {
   kind:
@@ -115,6 +118,8 @@ export interface ReconcileResult {
   ok: boolean;
   checkedSubscriptions: number;
   checkedInvoices: number;
+  /** Completed one-off (payment-mode) checkouts for one of our invoices. */
+  checkedCheckouts: number;
   findings: ReconcileFinding[];
   /** Set when the pass could not complete. Never reported as healthy. */
   error: string | null;
@@ -136,6 +141,7 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       ok: false,
       checkedSubscriptions: 0,
       checkedInvoices: 0,
+      checkedCheckouts: 0,
       findings,
       error: "Stripe is not configured.",
     };
@@ -145,6 +151,7 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
 
   let checkedSubscriptions = 0;
   let checkedInvoices = 0;
+  let checkedCheckouts = 0;
 
   try {
     // ---- Subscriptions -----------------------------------------------------
@@ -298,16 +305,18 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       checkedInvoices += 1;
       if (!invoice.id) continue;
 
+      // The plan row, and the build row beside it when the invoice carried
+      // the build: what Stripe collected is their sum.
       const idempotencyKey = `stripe_invoice:${invoice.id}`;
       const existing = await db
-        .select({ id: payments.id, amountCents: payments.amountCents })
+        .select({ key: payments.idempotencyKey, amountCents: payments.amountCents })
         .from(payments)
-        .where(eq(payments.idempotencyKey, idempotencyKey))
-        .limit(1);
+        .where(inArray(payments.idempotencyKey, [idempotencyKey, `${idempotencyKey}:build`]));
 
-      if (existing[0]) {
+      if (existing.some((row) => row.key === idempotencyKey)) {
         const expected = collectedCents(invoice);
-        if (existing[0].amountCents !== expected) {
+        const recorded = existing.reduce((sum, row) => sum + row.amountCents, 0);
+        if (recorded !== expected) {
           // Never silently corrected. A ledger amount changing under an
           // operator's feet is worse than one that is flagged as disputed.
           findings.push({
@@ -315,7 +324,7 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
             repaired: false,
             clientId: null,
             reference: invoice.id,
-            detail: `Ledger has ${existing[0].amountCents}, Stripe collected ${expected}.`,
+            detail: `Ledger has ${recorded}, Stripe collected ${expected}.`,
           });
         }
         continue;
@@ -356,6 +365,8 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       });
     }
 
+    checkedCheckouts = await reconcileOneOffCheckouts(db, stripe, findings);
+
     // ---- Deliveries needing a human ---------------------------------------
     const stuck = await db
       .select({
@@ -387,6 +398,7 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       ok: true,
       checkedSubscriptions,
       checkedInvoices,
+      checkedCheckouts,
       findings,
       error: null,
     };
@@ -396,10 +408,78 @@ export async function reconcileStripe(db: Database): Promise<ReconcileResult> {
       ok: false,
       checkedSubscriptions,
       checkedInvoices,
+      checkedCheckouts,
       findings,
       error: error instanceof Error ? error.message : "unknown",
     };
   }
+}
+
+/**
+ * One-off checkouts — the build on its own, an invoice paid by card, an extra
+ * change — whose webhook never arrived.
+ *
+ * These have no Stripe invoice, so the invoice pass above never saw them: a
+ * client who paid $500 for their website while the endpoint was down stayed
+ * on "pay for your website", locked, with nothing anywhere saying so. A
+ * completed session for one of our invoices that the invoice does not show as
+ * paid is settled through the receiver's own `settleOneOffCheckout`, which
+ * re-reads the session, checks the client against the invoice, and sends
+ * anything doubtful to review exactly as a delivered event would.
+ */
+async function reconcileOneOffCheckouts(
+  db: Database,
+  stripe: Stripe,
+  findings: ReconcileFinding[],
+): Promise<number> {
+  const sessions = await stripe.checkout.sessions.list({ status: "complete", limit: MAX_CHECKOUTS });
+  let checked = 0;
+
+  for (const session of sessions.data.slice(0, MAX_CHECKOUTS)) {
+    const requestId = session.metadata?.payment_request_id;
+    if (session.mode !== "payment" || !requestId) continue;
+    if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") continue;
+    checked += 1;
+
+    const [request] = await db
+      .select({ status: paymentRequests.status })
+      .from(paymentRequests)
+      .where(eq(paymentRequests.publicId, requestId))
+      .limit(1);
+    if (request?.status === "paid") continue;
+
+    const match = await matchClient(db, {
+      metadata: session.metadata,
+      customerId: typeof session.customer === "string" ? session.customer : (session.customer?.id ?? null),
+    });
+    if (!request || !match) {
+      findings.push({
+        kind: "missing_payment",
+        repaired: false,
+        clientId: match?.clientId ?? null,
+        reference: session.id,
+        detail: `Checkout ${session.id} was paid for invoice ${requestId}, which ${request ? "no client claims" : "does not exist here"}.`,
+      });
+      continue;
+    }
+
+    const settled = await settleOneOffCheckout(db, {
+      sessionId: session.id,
+      eventType: "checkout.session.completed",
+      match,
+    });
+    const repaired = settled.deliveryStatus === "processed";
+    findings.push({
+      kind: "missing_payment",
+      repaired,
+      clientId: match.clientId,
+      reference: session.id,
+      detail: repaired
+        ? `Checkout ${session.id} paid invoice ${requestId} at Stripe, but its webhook never arrived. Recorded it.`
+        : `Checkout ${session.id} paid invoice ${requestId}, which could not be settled: ${"note" in settled.outcome ? settled.outcome.note : settled.outcome.status}`,
+    });
+  }
+  return checked;
 }
 
 /**
@@ -473,6 +553,7 @@ export async function runScheduledReconcile(
       error: result.error,
       checkedSubscriptions: result.checkedSubscriptions,
       checkedInvoices: result.checkedInvoices,
+      checkedCheckouts: result.checkedCheckouts,
       repaired: result.findings.filter((f) => f.repaired).length,
       needsReview: result.findings.filter((f) => !f.repaired).length,
       // Bounded so one bad pass cannot write an unbounded blob into the log.

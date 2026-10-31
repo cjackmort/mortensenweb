@@ -17,6 +17,7 @@ import {
 import { newPublicId } from "@/lib/ids";
 import { getOnboarding, loadOnboardingFacts } from "@/db/repositories/client/onboarding";
 import { getClientSections } from "@/db/repositories/client/sections";
+import { markBuildPaid } from "@/db/repositories/build-standing";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
 
@@ -46,6 +47,7 @@ async function facts(tenant: SeededTenant) {
   return loaded;
 }
 
+/** The build paid: its ledger row, and the fact every payment path records beside it. */
 async function payFor(tenant: SeededTenant) {
   await db.insert(payments).values({
     publicId: newPublicId(),
@@ -54,6 +56,7 @@ async function payFor(tenant: SeededTenant) {
     method: "cash",
     receivedOn: "2026-10-01",
   });
+  await markBuildPaid(db, tenant.clientId, { source: "manual_payment" });
 }
 
 async function fillDetails(tenant: SeededTenant, details: Record<string, string>) {

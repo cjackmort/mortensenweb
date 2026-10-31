@@ -17,7 +17,7 @@ export interface Account {
   password: string;
 }
 
-export type SeededClient = "build" | "invoice";
+export type SeededClient = "build" | "invoice" | "live" | "code";
 
 export interface DeliveredEvent {
   id: string;
@@ -70,8 +70,24 @@ export async function choosePlan(page: Page, planName: string): Promise<void> {
   await expect(option.getByRole("radio")).toBeChecked();
 }
 
+/** The welcome page's pay button, whatever it says, and on to Stripe. */
 export async function continueToPayment(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Continue to secure payment" }).first().click();
+  await page.locator("#welcome-checkout button[type=submit]").click();
+  await page.waitForURL(`${FAKE_STRIPE_URL}/checkout/**`);
+}
+
+/** The built site comes first: its picture and a link to its Netlify address (decision D1). */
+export async function expectPreviewShown(page: Page, client: SeededClient): Promise<void> {
+  await expect(page.getByRole("heading", { name: "Your new website" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open your site" })).toHaveAttribute(
+    "href",
+    `https://welcome-${client}-e2e.netlify.app`,
+  );
+}
+
+/** "Put it live — $500": paying for the build is what puts the site live. */
+export async function putItLive(page: Page, dollars: string): Promise<void> {
+  await page.getByRole("button", { name: `Put it live — $${dollars}` }).first().click();
   await page.waitForURL(`${FAKE_STRIPE_URL}/checkout/**`);
 }
 
@@ -82,6 +98,13 @@ export async function amountDueOnStripe(page: Page): Promise<string> {
   await expect(page.getByText("Local stand-in for Stripe Checkout")).toBeVisible();
   const due = await page.getByRole("row", { name: /Due today/ }).innerText();
   return due.match(/\$([\d,.]+)/)![1]!;
+}
+
+/** A code typed on Stripe's page, as a client with a build code does. */
+export async function applyPromotionCode(page: Page, code: string): Promise<void> {
+  await page.getByLabel("Promotion code").fill(code);
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByText(`Code ${code} applied.`)).toBeVisible();
 }
 
 /** Pay, and come back to the portal the way Stripe sends a client back. */
@@ -119,15 +142,20 @@ export async function expectChangeRequestsUnlocked(page: Page, unlocked: boolean
 }
 
 /**
- * The ledger on Billing — the `payments` table — holds exactly one row, for
- * this many dollars, e.g. `550.00`. The card panel above it shows its own
- * list of Stripe receipts under an `h3`; the `h2` is the ledger.
+ * The ledger on Billing — the `payments` table — holds exactly these rows, in
+ * dollars, e.g. `["500.00", "50.00"]`: a first invoice with the build on it is
+ * the build's row and the plan's. The card panel above it shows its own list
+ * of Stripe receipts under an `h3`; the `h2` is the ledger.
  */
-export async function expectPaymentRecorded(page: Page, dollars: string): Promise<void> {
+export async function expectPaymentsRecorded(page: Page, dollars: string[]): Promise<void> {
   await page.goto("/dashboard/billing");
   const ledger = page.locator("section.card").filter({ has: page.getByRole("heading", { name: "Payment history", level: 2 }) });
-  await expect(ledger.getByText("1 recorded")).toBeVisible();
-  await expect(ledger.getByRole("row").filter({ hasText: `$${dollars}` })).toHaveCount(1);
+  await expect(ledger.getByText(`${dollars.length} recorded`)).toBeVisible();
+  for (const amount of new Set(dollars)) {
+    await expect(ledger.getByRole("row").filter({ hasText: `$${amount}` })).toHaveCount(
+      dollars.filter((d) => d === amount).length,
+    );
+  }
 }
 
 /** Every event the stand-in sent since `before` reached the portal and was acted on. */

@@ -2,6 +2,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, clients, paymentRequests, payments } from "@/db/schema";
 import { newPublicId } from "@/lib/ids";
+import { markBuildPaid } from "../build-standing";
+import { expireOpenCheckouts } from "./checkout-expiry";
 import { unlockClientFeatures } from "./entitlements";
 import type { PaymentMethod } from "./billing";
 import type { AdminContext } from "../context";
@@ -40,6 +42,8 @@ export interface ManualPaymentInput {
    * job the invoice's reference does for `confirmPaymentReceived`.
    */
   idempotencyKey: string;
+  /** The operator says this is the website build fee: it marks the build paid. */
+  coversBuild?: boolean;
 }
 
 export type ManualPaymentResult =
@@ -50,11 +54,13 @@ export type ManualPaymentResult =
  * Record money that came in with no invoice: a build fee by check, a Venmo
  * for something agreed on the phone.
  *
- * It is income like any other, so it is in the ledger at once. It also
- * unlocks the client's features, as every confirmed payment does — idempotent
- * and first-write-wins, so it never resets an earlier unlock. It does not lift
- * a dunning pause: that belongs to an overdue invoice, and money not marked
- * against it has not settled it.
+ * It is income like any other, so it is in the ledger at once. It is the
+ * build only when the operator says so (`coversBuild`) — never by being
+ * money — and then the build is marked paid and any open checkout that would
+ * charge for it again is closed. It unlocks the client's features as every
+ * confirmed payment does, which `unlockClientFeatures` refuses while the build
+ * is owed. It does not lift a dunning pause: that belongs to an overdue
+ * invoice, and money not marked against it has not settled it.
  */
 export async function recordManualPayment(
   ctx: AdminContext,
@@ -95,7 +101,7 @@ export async function recordManualPayment(
       receivedOn: input.receivedOn,
       recordedBy: ctx.userId,
       status: "recorded",
-      note: input.note.trim() || null,
+      note: input.note.trim() || (input.coversBuild ? "Website build" : null),
     })
     .onConflictDoNothing({ target: payments.idempotencyKey })
     .returning({ publicId: payments.publicId });
@@ -110,6 +116,22 @@ export async function recordManualPayment(
   }
 
   const paymentPublicId = inserted[0]!.publicId;
+
+  if (input.coversBuild) {
+    await markBuildPaid(db, client.id, {
+      source: "manual_payment",
+      actorUserId: ctx.userId,
+      reference: paymentPublicId,
+      amountCents: input.amountCents,
+    });
+    await expireOpenCheckouts(db, {
+      clientId: client.id,
+      organizationId: client.organizationId,
+      includeBuild: true,
+      reason: "build_paid_manually",
+      actorUserId: ctx.userId,
+    });
+  }
 
   await unlockClientFeatures(db, client.id, {
     actorUserId: ctx.userId,
@@ -127,6 +149,7 @@ export async function recordManualPayment(
       amountCents: input.amountCents,
       method: input.method,
       receivedOn: input.receivedOn,
+      coversBuild: Boolean(input.coversBuild),
     },
   });
 
@@ -146,7 +169,9 @@ export async function recordManualPayment(
  *   mistake (`written_off`) because a bad debt is a fact an accountant asks
  *   about and a typo is not.
  *
- * None of these sends anything to the client or changes their features.
+ * None of these sends anything to the client or changes their features. The
+ * last two close the invoice's Stripe checkout if it is still open: nobody
+ * owes it any more, so nobody can pay it.
  */
 export type NotPaidOutcome = "still_owed" | "cancel" | "write_off";
 
@@ -168,6 +193,8 @@ export async function markInvoiceNotPaid(
       status: paymentRequests.status,
       reference: paymentRequests.reference,
       amountCents: paymentRequests.amountCents,
+      clientId: paymentRequests.clientId,
+      providerReference: paymentRequests.providerReference,
       organizationId: clients.organizationId,
     })
     .from(paymentRequests)
@@ -207,6 +234,14 @@ export async function markInvoiceNotPaid(
       .where(and(eq(paymentRequests.id, request.id), inArray(paymentRequests.status, [...UNPAID])))
       .returning({ id: paymentRequests.id });
     if (changed.length === 0) return { ok: false, reason: "not_unpaid" };
+
+    await expireOpenCheckouts(db, {
+      clientId: request.clientId,
+      organizationId: request.organizationId,
+      sessionIds: [request.providerReference],
+      reason: outcome === "cancel" ? "invoice_cancelled" : "invoice_written_off",
+      actorUserId: ctx.userId,
+    });
   }
 
   await db.insert(auditLog).values({

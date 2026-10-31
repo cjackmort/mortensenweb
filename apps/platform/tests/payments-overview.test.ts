@@ -391,22 +391,48 @@ describe("Not paid", () => {
 });
 
 describe("Record payment", () => {
-  it("adds money that came in outside Stripe to the ledger and unlocks the client", async () => {
+  it("adds money that came in outside Stripe to the ledger, and leaves the build owed", async () => {
     const c = await seedClient("Cash Co", { price: 2500 });
+
+    const result = await recordManualPayment(admin, db, {
+      clientPublicId: c.clientPublicId,
+      amountCents: 2500,
+      method: "venmo",
+      receivedOn: "2026-10-12",
+      note: "October",
+      idempotencyKey: "manual:form-1",
+    });
+
+    expect(result).toMatchObject({ ok: true, duplicate: false });
+    expect((await ledgerSummary(admin, db, "2026-10")).month.incomeCents).toBe(2500);
+    // Money is not the build unless the operator says it is (decision D1).
+    const [client] = await db.select().from(clients).where(eq(clients.id, c.clientId));
+    expect(client!.buildPaidAt).toBeNull();
+    expect(client!.changeRequestsUnlockedAt).toBeNull();
+  });
+
+  it("marks the build paid and unlocks the client when the operator records it as the build fee", async () => {
+    const c = await seedClient("Check Co", { price: 2500 });
 
     const result = await recordManualPayment(admin, db, {
       clientPublicId: c.clientPublicId,
       amountCents: 50000,
       method: "check",
       receivedOn: "2026-10-12",
-      note: "Site build",
-      idempotencyKey: "manual:form-1",
+      note: "",
+      idempotencyKey: "manual:form-build",
+      coversBuild: true,
     });
 
     expect(result).toMatchObject({ ok: true, duplicate: false });
-    expect((await ledgerSummary(admin, db, "2026-10")).month.incomeCents).toBe(50000);
     const [client] = await db.select().from(clients).where(eq(clients.id, c.clientId));
+    expect(client!.buildPaidAt).toBeInstanceOf(Date);
     expect(client!.analyticsUnlockedAt).toBeInstanceOf(Date);
+    const [row] = await db.select().from(payments).where(eq(payments.clientId, c.clientId));
+    expect(row!.note).toBe("Website build");
+    const marked = await db.select().from(auditLog).where(eq(auditLog.action, "build.paid"));
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.metadata).toMatchObject({ source: "manual_payment", amountCents: 50000 });
   });
 
   it("records a double-submitted form once", async () => {
