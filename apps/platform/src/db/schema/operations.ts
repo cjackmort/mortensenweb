@@ -76,6 +76,9 @@ export const changeRequests = pgTable(
      * depends on how much of the allowance was left *at that moment*. A request
      * submitted as the third of three included changes stays `included` even
      * after the client submits a fourth.
+     *
+     * `courtesy` on a request a client submitted is their free small change
+     * before the site is live (D7), not an operator favour — see the enum.
      */
     billing: billingTreatmentEnum("billing").notNull().default("included"),
     /** The period this request was counted against. Null for courtesy work. */
