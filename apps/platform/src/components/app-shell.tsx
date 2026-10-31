@@ -8,6 +8,7 @@ import { ADMIN_NAV, clientNav } from "./shell-nav";
 import { ShellFrame } from "./shell-frame";
 import { UserAvatar } from "./user-avatar";
 import { PrivacyFooter } from "./privacy-link";
+import { NoiseBackdrop } from "./noise-backdrop";
 
 /**
  * The chrome around every signed-in page: brand, identity, navigation, sign-out.
@@ -116,6 +117,7 @@ export function AppShell({
 
   return (
     <div className="app">
+      <NoiseBackdrop />
       <ShellFrame
         items={isAdmin ? ADMIN_NAV : clientNav(clientSections, unreadLeads)}
         notice={notice}
