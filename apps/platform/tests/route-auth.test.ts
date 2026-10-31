@@ -111,6 +111,10 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
     reason: "operator API: convert a potential client (bearer token)",
     checks: "handleOperatorRequest(",
   },
+  "api/operator/clients/[publicId]/repository/route.ts": {
+    reason: "operator API: connect a client's existing repository (bearer token)",
+    checks: "handleOperatorRequest(",
+  },
 
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },

@@ -111,6 +111,20 @@ export function createGithubFake(ApiError: ErrorClass) {
     const rest = match[3] ?? "";
     const body = options.body ?? {};
 
+    // The repository itself: it exists once anything has been put on a branch.
+    if (rest === "" && method === "GET") {
+      const exists = [...state.branches.keys()].some((key) => key.startsWith(`${repo}@`));
+      return exists
+        ? respond(200, {
+            id: 1,
+            node_id: `R_${repo.split("/")[1]}`,
+            name: repo.split("/")[1],
+            full_name: repo,
+            default_branch: "main",
+          })
+        : respond(404, {});
+    }
+
     if (rest === "/generate" && method === "POST") {
       const created = `${body.owner}/${body.name}`;
       branch(created, "main");

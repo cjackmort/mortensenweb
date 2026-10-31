@@ -60,3 +60,23 @@ export const convertBody = z.strictObject({
 });
 
 export type ConvertBody = z.infer<typeof convertBody>;
+
+export const connectRepositoryBody = z.strictObject({
+  /**
+   * `owner/name`. A repository named only of dots would climb out of the GitHub
+   * path it is placed in, so it is refused here rather than at the request.
+   */
+  repo: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9-]+\/(?!\.+$)[A-Za-z0-9._-]+$/, "Use owner/name."),
+  /** The Netlify site's name, such as `hair-by-graci`. Found from the repository when left out. */
+  netlifySiteName: z
+    .string()
+    .trim()
+    .max(63)
+    .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "Use the Netlify site's name, such as my-site, not its address.")
+    .optional(),
+});
+
+export type ConnectRepositoryBody = z.infer<typeof connectRepositoryBody>;

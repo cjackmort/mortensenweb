@@ -164,6 +164,12 @@ export interface NetlifySite {
   url: string;
   ssl_url: string;
   admin_url: string;
+  /** Present on a site read back; `repo_*` are set only when it builds from Git. */
+  build_settings?: {
+    repo_url?: string | null;
+    repo_path?: string | null;
+    repo_branch?: string | null;
+  } | null;
 }
 
 /**
@@ -202,6 +208,43 @@ export async function getSite(siteId: string): Promise<NetlifySite | null> {
     { allowStatuses: [404] },
   );
   return status === 404 ? null : data;
+}
+
+/**
+ * Whether a site builds from a repository.
+ *
+ * Sites the portal creates are unlinked (see the top of this file) and deploy
+ * from a workflow in their repository. A site that was already live is usually
+ * linked instead, so Netlify builds every push itself — and a deploy workflow
+ * added to that repository would publish each change a second time. Netlify
+ * says which in `build_settings`: both `repo_url` and `repo_path` are set when
+ * linked, and either is taken as the answer.
+ */
+export type SiteGitLink =
+  | { status: "linked"; repoUrl: string | null; repoPath: string | null; branch: string | null }
+  | { status: "unlinked" };
+
+const filled = (value: string | null | undefined): string | null => value?.trim() || null;
+
+export function gitLinkOf(site: Pick<NetlifySite, "build_settings">): SiteGitLink {
+  const repoUrl = filled(site.build_settings?.repo_url);
+  const repoPath = filled(site.build_settings?.repo_path);
+  if (!repoUrl && !repoPath) return { status: "unlinked" };
+  return { status: "linked", repoUrl, repoPath, branch: filled(site.build_settings?.repo_branch) };
+}
+
+/**
+ * Ask Netlify whether one site builds from a repository. Takes an id or a
+ * default subdomain (`name.netlify.app`), as Netlify does.
+ *
+ * `not_found` is its own answer, and a failed request throws: an outage must
+ * not read as "not linked", because the caller acts on that by deploying.
+ */
+export async function getSiteGitLink(
+  siteIdOrDomain: string,
+): Promise<SiteGitLink | { status: "not_found" }> {
+  const site = await getSite(siteIdOrDomain);
+  return site ? gitLinkOf(site) : { status: "not_found" };
 }
 
 // ---------------------------------------------------------------------------

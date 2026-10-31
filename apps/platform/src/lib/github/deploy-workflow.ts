@@ -12,7 +12,10 @@
  * place usually deploys through Netlify's Git integration, and adding this
  * caller there would publish every change twice, racing each other. Converting
  * a potential client is the one caller today: its concept repository was
- * scaffolded by `scaffoldSite`.
+ * scaffolded by `scaffoldSite`. A conversion can also reach a repository
+ * connected in place, so it asks Netlify whether the site is linked to Git
+ * first (`deployPath` in `db/repositories/admin/conversion-steps.ts`) and skips
+ * this when it is.
  *
  * `templates/client-repo/.github/workflows/deploy.yml` is the same text as a
  * file a person can read. A test holds the two together.
