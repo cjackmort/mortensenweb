@@ -17,6 +17,7 @@ import {
 import { sendEmail } from "@/lib/email/mailer";
 import { provisionWebsite } from "@/lib/analytics/umami";
 import { verifyUrlServes } from "@/lib/netlify/api";
+import { buildStandingOf } from "../build-standing";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -34,7 +35,22 @@ import { NotFoundError } from "../context";
  * can take 48 hours, or declare success before it happened. The second is what
  * most systems do, and it is why clients get "your site is live!" emails
  * pointing at pages that do not load.
+ *
+ * Steps 1 and 3 both refuse until the website build is paid (decision D1):
+ * the client sees their built preview first and pays to put it live, so
+ * nothing goes live — and no domain is pointed at it — unpaid. Settled means
+ * paid, on the house, the agency's own, or waived (`buildStandingOf`).
  */
+
+const BUILD_UNPAID = {
+  dns: "The website build isn't paid yet, so the domain can't be connected. The client pays from their portal with “Put it live”; money that came in another way is recorded under Payments as the build fee.",
+  live: "The website build isn't paid yet, so this site can't go live. The client pays from their portal with “Put it live”; money that came in another way is recorded under Payments as the build fee.",
+} as const;
+
+async function buildSettled(clientId: string | null, db: Database): Promise<boolean> {
+  if (!clientId) return false;
+  return (await buildStandingOf(db, clientId)).settled;
+}
 
 // ---------------------------------------------------------------------------
 // Step 1 — instructions
@@ -44,7 +60,7 @@ export type DnsSendOutcome =
   | { ok: true; sent: boolean; domain: string; recordCount: number }
   | {
       ok: false;
-      reason: "not_found" | "no_domain" | "no_netlify" | "no_contact";
+      reason: "not_found" | "no_domain" | "no_netlify" | "no_contact" | "build_unpaid";
       message: string;
     };
 
@@ -60,6 +76,7 @@ export async function sendDnsInstructions(
       organizationId: sites.organizationId,
       primaryDomain: sites.primaryDomain,
       netlifySiteName: sites.netlifySiteName,
+      clientId: clients.id,
       contactName: clients.primaryContactName,
       contactEmail: clients.primaryContactEmail,
       businessName: organizations.name,
@@ -72,6 +89,10 @@ export async function sendDnsInstructions(
 
   const site = rows[0];
   if (!site) throw new NotFoundError();
+
+  if (!(await buildSettled(site.clientId, db))) {
+    return { ok: false, reason: "build_unpaid", message: BUILD_UNPAID.dns };
+  }
 
   const domain = site.primaryDomain ? apexDomain(site.primaryDomain) : null;
   if (!domain) {
@@ -157,7 +178,7 @@ export type GoLiveOutcome =
     }
   | {
       ok: false;
-      reason: "not_found" | "no_domain" | "not_resolving";
+      reason: "not_found" | "no_domain" | "not_resolving" | "build_unpaid";
       message: string;
     };
 
@@ -199,6 +220,10 @@ export async function verifyAndGoLive(
 
   const site = rows[0];
   if (!site) throw new NotFoundError();
+
+  if (!(await buildSettled(site.clientId, db))) {
+    return { ok: false, reason: "build_unpaid", message: BUILD_UNPAID.live };
+  }
 
   const domain = site.primaryDomain ? apexDomain(site.primaryDomain) : null;
   if (!domain) {

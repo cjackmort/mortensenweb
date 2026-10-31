@@ -10,6 +10,7 @@ import {
   reclaimStalledRequest,
 } from "@/db/repositories/admin/agent-jobs";
 import { holdPreview, releasePreview } from "@/db/repositories/admin/release";
+import { setRequestSize } from "@/db/repositories/admin/request-size";
 import { redoAfterClientChanges } from "@/db/repositories/admin/revisions";
 
 /**
@@ -214,4 +215,33 @@ export async function reclaimStalledRequestAction(
     ok: true,
     message: "Marked as failed. The client's change has been handed back.",
   };
+}
+
+/**
+ * Correcting the size a client gave a request (decision D7). See
+ * `db/repositories/admin/request-size`: only the label changes.
+ */
+export type SizeResult = { ok: boolean; message: string };
+
+export async function setRequestSizeAction(
+  _previous: SizeResult | null,
+  formData: FormData,
+): Promise<SizeResult> {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") {
+    return { ok: false, message: "Only an admin can change a request's size." };
+  }
+
+  const requestPublicId = String(formData.get("requestPublicId") ?? "").trim();
+  const size = String(formData.get("size") ?? "");
+  if (!requestPublicId) return { ok: false, message: "No request specified." };
+  if (size !== "small" && size !== "big") return { ok: false, message: "Choose small or big." };
+
+  const db = await getDb();
+  const outcome = await setRequestSize(adminContextFrom(user), db, requestPublicId, size);
+  if (!outcome.ok) return { ok: false, message: "No such request." };
+
+  revalidatePath("/admin/requests");
+  revalidatePath("/dashboard/requests");
+  return { ok: true, message: outcome.changed ? `Now ${size}.` : `Already ${size}.` };
 }

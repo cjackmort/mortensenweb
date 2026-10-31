@@ -112,6 +112,21 @@ sandbox key and once with the live key in `.env.stripe`.
 with a price attached is a plan a complimentary client can be put through
 checkout on.
 
+### The website build
+
+| What | Price | Stripe product | Stripe lookup key |
+|---|---|---|---|
+| Website build | $500, once | "Website build" | `build_website_v1` |
+
+A real product and a one-off price, made by the same `stripe:setup --apply`
+(`lib/payments/build.ts`). The welcome checkout's "Put it live" charges it by
+price id, alone or as the one-off line on a plan's first invoice, and the
+receiver finds that line by the product to mark the build paid and record it as
+its own ledger row. Until the price exists on an account, "Put it live" refuses
+with "Paying for your website online isn't switched on yet" — so run the setup
+against the live key **before** deploying the code that uses it. A build-only
+promo code (roadmap P1.4) is restricted to this product.
+
 **Lookup keys, not price ids.** A price id differs between the sandbox and the
 live account, so a hardcoded one makes the same commit wrong in one of the two
 environments. The lookup key is a string we choose and set identically in both.

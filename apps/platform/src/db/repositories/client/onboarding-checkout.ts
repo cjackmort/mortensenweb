@@ -1,11 +1,10 @@
-import { and, asc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { BUILD, type GrowthFeatureKey } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
-import { auditLog, clients, organizations, paymentRequests, payments, servicePlans, subscriptions } from "@/db/schema";
+import { auditLog, clients, organizations, paymentRequests, servicePlans, sites, subscriptions } from "@/db/schema";
 import { anchorDayFor } from "@/lib/billing/billing-day";
 import { businessDate } from "@/lib/billing/period";
-import { derivedPublicId } from "@/lib/ids";
 import {
   BUILD_LINE_NAME,
   basketSignature,
@@ -17,6 +16,7 @@ import {
   type PriceRef,
   type SiteDue,
 } from "@/lib/onboarding/checkout";
+import { priceForBuild, productIdOf } from "@/lib/payments/build";
 import { usablePromo } from "@/lib/payments/promos";
 import {
   priceForAddOn,
@@ -26,6 +26,7 @@ import {
   type SellableKey,
 } from "@/lib/payments/stripe";
 import { generatePaymentReference } from "@/lib/payments/venmo";
+import { buildInvoicePublicId, buildStandingFor } from "../build-standing";
 import { assertMutable, type TenantContext } from "../context";
 import { sellablePlanCards, type PlanCard } from "./plan-choice";
 import { beginStripePayment } from "./stripe-payment";
@@ -37,15 +38,17 @@ import { assignedPlanFor, ensureCustomer, liveSubscription, type ResolvedClient 
  *
  * ## One checkout, using what already settles payments
  *
- * - **A plan is chosen** → a subscription-mode session: the plan and add-ons
- *   by price id, and the build as a one-time line Stripe puts on the first
- *   invoice only. Settled by the receiver's existing `invoice.paid` path,
- *   which records the payment and unlocks the client; the add-on lines are
- *   mirrored by `syncStripeAddOns` exactly as if added from the Plan tab.
+ * - **A plan is chosen** → a subscription-mode session: the plan, add-ons and
+ *   build each by price id — the build on the "Website build" product, as a
+ *   one-time line Stripe puts on the first invoice only. Settled by the
+ *   receiver's `invoice.paid` path, which records the build and the plan as
+ *   two ledger rows and marks the build paid; the add-on lines are mirrored by
+ *   `syncStripeAddOns` exactly as if added from the Plan tab.
  * - **Only the build** → a payment-mode session through `beginStripePayment`,
- *   against an invoice for the build made here. That is the one-off path
- *   every operator-raised invoice already takes, so its settlement, receipt
- *   and double-click guards are reused rather than repeated.
+ *   against an invoice for the build made here (`purpose = 'build'`). That is
+ *   the one-off path every operator-raised invoice already takes, so its
+ *   settlement, receipt and double-click guards are reused rather than
+ *   repeated, and settling it is what marks the build paid.
  *
  * An invoice an operator already raised is never put in this basket: it is
  * paid with its own button, on its own reference (see `buildWelcomeBasket`).
@@ -59,11 +62,11 @@ import { assignedPlanFor, ensureCustomer, liveSubscription, type ResolvedClient 
  */
 
 const OPEN_SITE_INVOICE = ["open", "overdue", "awaiting_confirmation"] as const;
-const WAIVED_INVOICE = ["cancelled", "written_off"];
 
 export interface WelcomeClient extends ResolvedClient {
   isInternal: boolean;
-  changeRequestsUnlockedAt: Date | null;
+  buildPaidAt: Date | null;
+  freeBuildOn: string | null;
   promoCode: string | null;
   promoTerms: string | null;
 }
@@ -81,7 +84,8 @@ async function welcomeClient(db: Database, ctx: TenantContext): Promise<WelcomeC
       promoCode: clients.promoCode,
       promoTerms: clients.promoTerms,
       isInternal: clients.isInternal,
-      changeRequestsUnlockedAt: clients.changeRequestsUnlockedAt,
+      buildPaidAt: clients.buildPaidAt,
+      freeBuildOn: clients.freeBuildOn,
     })
     .from(clients)
     .innerJoin(organizations, eq(organizations.id, clients.organizationId))
@@ -90,38 +94,23 @@ async function welcomeClient(db: Database, ctx: TenantContext): Promise<WelcomeC
   return row ?? null;
 }
 
-/**
- * The build invoice's public id: the same every time for the same client, so
- * the unique index on `public_id` makes "one build invoice per client" true
- * however many times the button is pressed.
- */
-export function buildInvoicePublicId(clientId: string): Promise<string> {
-  return derivedPublicId(`website-build:${clientId}`);
-}
+export { buildInvoicePublicId };
 
 /**
  * What this client owes for their website, from the billing records.
  *
- * In order: on the house; the agency's own site; paid already (their first
- * payment unlocked them, or money is in the ledger); an invoice open for
- * them; a build invoice an operator cancelled or wrote off; and otherwise
- * the published build price. "Paid already" comes before open invoices, so a
+ * In order: on the house; the agency's own site; the build paid
+ * (`clients.build_paid_at` — its own line or invoice, never some other
+ * payment); an invoice open for them; the build waived; and otherwise the
+ * published build price. "Paid" comes before open invoices, so a
  * long-standing client's monthly invoice is never mistaken for their site.
  */
 export async function siteDueFor(
   db: Database,
-  client: Pick<WelcomeClient, "clientId" | "compPlanId" | "isInternal" | "changeRequestsUnlockedAt">,
+  client: Pick<WelcomeClient, "clientId" | "compPlanId" | "isInternal" | "buildPaidAt" | "freeBuildOn">,
 ): Promise<SiteDue> {
-  if (client.compPlanId) return { kind: "none", reason: "complimentary" };
-  if (client.isInternal) return { kind: "none", reason: "internal" };
-  if (client.changeRequestsUnlockedAt) return { kind: "none", reason: "paid" };
-
-  const [paid] = await db
-    .select({ id: payments.id })
-    .from(payments)
-    .where(and(eq(payments.clientId, client.clientId), eq(payments.status, "recorded"), gt(payments.amountCents, 0)))
-    .limit(1);
-  if (paid) return { kind: "none", reason: "paid" };
+  const standing = await buildStandingFor(db, client);
+  if (standing.settled && standing.reason !== "waived") return { kind: "none", reason: standing.reason };
 
   const open = await db
     .select({
@@ -153,13 +142,7 @@ export async function siteDueFor(
     };
   }
 
-  const [build] = await db
-    .select({ status: paymentRequests.status })
-    .from(paymentRequests)
-    .where(eq(paymentRequests.publicId, await buildInvoicePublicId(client.clientId)))
-    .limit(1);
-  if (build && WAIVED_INVOICE.includes(build.status)) return { kind: "none", reason: "waived" };
-
+  if (standing.settled) return { kind: "none", reason: "waived" };
   return { kind: "build", amountCents: BUILD.priceCents };
 }
 
@@ -188,6 +171,45 @@ export interface WelcomeOffer {
   billingDay: number | null;
   /** A promo an operator attached, as it was described when attached. */
   promo: { code: string; terms: string | null } | null;
+  /** The site the agent built, to look at before paying to put it live. Null before it has a URL. */
+  preview: SitePreviewView | null;
+}
+
+export interface SitePreviewView {
+  name: string;
+  /** Where the built site can be opened: its Netlify address until it is live on the domain. */
+  url: string;
+  live: boolean;
+}
+
+/**
+ * The client's site as they can see it today (decision D1: the preview comes
+ * first, payment puts it live). The business's first site. Before launch its
+ * domain still points at whatever was there, so the address is the Netlify
+ * one the deploy publishes to.
+ */
+async function sitePreviewFor(db: Database, ctx: TenantContext): Promise<SitePreviewView | null> {
+  const [site] = await db
+    .select({
+      name: sites.name,
+      status: sites.status,
+      primaryDomain: sites.primaryDomain,
+      productionUrl: sites.productionUrl,
+      netlifySiteName: sites.netlifySiteName,
+    })
+    .from(sites)
+    .where(and(eq(sites.organizationId, ctx.organizationId), isNull(sites.archivedAt)))
+    .orderBy(asc(sites.createdAt))
+    .limit(1);
+  if (!site) return null;
+
+  const live = site.status === "live";
+  const url = live
+    ? (site.productionUrl ?? (site.primaryDomain ? `https://${site.primaryDomain}` : null))
+    : site.netlifySiteName
+      ? `https://${site.netlifySiteName}.netlify.app`
+      : null;
+  return url ? { name: site.name, url, live } : null;
 }
 
 /** Everything the welcome page shows. Null when the account has no client record. */
@@ -195,7 +217,11 @@ export async function getWelcomeOffer(db: Database, ctx: TenantContext): Promise
   const client = await welcomeClient(db, ctx);
   if (!client) return null;
 
-  const [siteDue, billed] = await Promise.all([siteDueFor(db, client), processorBilledPlan(db, client.clientId)]);
+  const [siteDue, billed, preview] = await Promise.all([
+    siteDueFor(db, client),
+    processorBilledPlan(db, client.clientId),
+    sitePreviewFor(db, ctx),
+  ]);
   const choosable = !client.compPlanId && !billed;
   const cards = choosable ? await sellablePlanCards(db, client.clientId) : null;
 
@@ -207,6 +233,7 @@ export async function getWelcomeOffer(db: Database, ctx: TenantContext): Promise
     currentPlanName: billed?.name ?? null,
     billingDay: cards?.billingDay ?? null,
     promo: client.promoCode ? { code: client.promoCode, terms: client.promoTerms } : null,
+    preview,
   };
 }
 
@@ -349,7 +376,7 @@ async function ensureBuildInvoice(
       dueOn: businessDate(),
       note: BUILD_LINE_NAME,
       status: "open",
-      purpose: "other",
+      purpose: "build",
     })
     // On the public id only: a clash on the reference is a real error, not
     // a second press of the button.
@@ -390,7 +417,12 @@ async function subscribe(
       const price = await priceForAddOn(key);
       if (price) addOnPrices[key] = { id: price.id };
     }
-    const items = stripeLineItems(basket, { plan: planPrice ? { id: planPrice.id } : null, addOns: addOnPrices });
+    const buildPrice = basket.includesBuild ? await priceForBuild() : null;
+    const items = stripeLineItems(basket, {
+      plan: planPrice ? { id: planPrice.id } : null,
+      addOns: addOnPrices,
+      build: buildPrice ? { id: buildPrice.id } : null,
+    });
     if (!items.ok) {
       return {
         ok: false,
@@ -418,6 +450,7 @@ async function subscribe(
       items: items.items,
       anchorDay,
       promoCodeId: promo?.id ?? "",
+      buildProductId: buildPrice ? productIdOf(buildPrice) : "",
       urls,
     });
     if (!session.url) {
@@ -441,6 +474,8 @@ interface WelcomeSessionInput {
   anchorDay: number | null;
   /** Empty when no promo is attached, or it can no longer be used. */
   promoCodeId: string;
+  /** The "Website build" product, when the build is in the basket. */
+  buildProductId: string;
   urls: { successUrl: string; cancelUrl: string };
 }
 
@@ -473,8 +508,14 @@ async function welcomeSession(input: WelcomeSessionInput): Promise<{ url: string
         client_reference_id: client.publicId,
         subscription_data: {
           // What every later subscription and invoice event carries; the
-          // receiver matches the tenant on it.
-          metadata: { client_public_id: client.publicId, client_id: client.clientId, plan_key: basket.planKey ?? "" },
+          // receiver matches the tenant on it, and finds the build's line on
+          // the first invoice by `build_product`.
+          metadata: {
+            client_public_id: client.publicId,
+            client_id: client.clientId,
+            plan_key: basket.planKey ?? "",
+            build_product: input.buildProductId,
+          },
           ...(anchorDay ? { billing_cycle_anchor_config: { day_of_month: anchorDay } } : {}),
         },
         metadata: {

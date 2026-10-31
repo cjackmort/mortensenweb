@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { CHANGE_SIZES } from "@mortensenweb/plans";
+import { dayLabel } from "@/lib/requests/free-tier";
 import { statusLabel } from "@/lib/requests/status";
 import { submitChangeRequest, type RequestSubmission } from "./actions";
 import {
@@ -35,6 +37,24 @@ export interface AllowanceSummary {
   remaining: number | null;
   label: string;
   overagePerChangeCents: number | null;
+}
+
+/** Before the build is paid and with no plan: small changes only, this many a month (D7). */
+export interface FreeTierSummary {
+  used: number;
+  included: number;
+  /** `YYYY-MM-DD`: when the next one opens. */
+  resetsOn: string;
+}
+
+/** Where paying opens up the rest: the build, or a plan. Said the same way everywhere on this form. */
+function PayToUnlock() {
+  return (
+    <>
+      <a href="/dashboard/welcome">Put your site live</a> or{" "}
+      <a href="/dashboard/plan">choose a care plan</a> for bigger changes, and more of them.
+    </>
+  );
 }
 
 function formatMoney(cents: number): string {
@@ -130,14 +150,17 @@ function newIdempotencyKey(): string {
 export function RequestForm({
   sites,
   allowance,
-  locked,
+  freeTier,
   assets,
   folders,
 }: {
   sites: SiteOption[];
   allowance: AllowanceSummary | null;
-  /** True until the first payment clears. The form is replaced, not disabled. */
-  locked: boolean;
+  /**
+   * Set until the build is paid or a plan is charged (D7): small changes only,
+   * a few a month. Once those are used the form is replaced, not disabled.
+   */
+  freeTier: FreeTierSummary | null;
   /** Ready images from the media library, to choose from. */
   assets: PickableAsset[];
   folders: PickableFolder[];
@@ -233,10 +256,10 @@ export function RequestForm({
     }
   }, [state?.ok]);
 
-  // Locked replaces the form rather than disabling it. A greyed-out form with
-  // an explanation underneath still invites someone to fill it in and find out
-  // it does not work.
-  if (locked) {
+  // The month's free changes used: the notice replaces the form rather than
+  // disabling it. A greyed-out form with an explanation underneath still
+  // invites someone to fill it in and find out it does not work.
+  if (freeTier && freeTier.used >= freeTier.included && !state?.ok) {
     return (
       <div className="card">
         <div className="card-head">
@@ -244,12 +267,11 @@ export function RequestForm({
         </div>
         <div className="notice">
           <p style={{ marginTop: 0 }}>
-            <strong>Change requests unlock once your first payment goes
-            through.</strong>
+            <strong>You&rsquo;ve used this month&rsquo;s free small change.</strong>{" "}
+            The next one opens on {dayLabel(freeTier.resetsOn)}.
           </p>
           <p style={{ marginBottom: 0 }}>
-            Head to <a href="/dashboard/billing">Billing</a> to get set up — it
-            takes a minute, and everything opens up straight afterwards.
+            <PayToUnlock />
           </p>
         </div>
       </div>
@@ -373,6 +395,18 @@ export function RequestForm({
             after.
           </p>
         </div>
+      ) : state && !state.ok && (state.reason === "needs_payment" || state.reason === "free_change_used") ? (
+        /* Before the build is paid: a big change, or the month's free one
+           used. An offer, like an exhausted allowance — they have done
+           nothing wrong, and the way on is to put the site live. */
+        <div className="notice">
+          <p style={{ marginTop: 0 }}>
+            <strong>{state.message}</strong>
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            <PayToUnlock />
+          </p>
+        </div>
       ) : (
         state && !state.ok && <p className="error">{state.message}</p>
       )}
@@ -380,6 +414,15 @@ export function RequestForm({
       {/* Suppressed once the refusal notice is up: it carries the same figures
           and the same offer, and showing both says it twice in a row. */}
       {allowance && !exhausted && <AllowanceMeter allowance={allowance} />}
+
+      {/* Said before they start typing, like the allowance meter: finding the
+          rule at the point of sending is the version that makes people angry. */}
+      {freeTier && (
+        <p className="field-hint">
+          Until your site is live, small changes are free: {freeTier.included} a month
+          {freeTier.used > 0 ? `, ${freeTier.used} used so far` : ""}. <PayToUnlock />
+        </p>
+      )}
 
       {/* Said out loud, because text reappearing unannounced reads as a bug
           rather than as the safety net it is. */}
@@ -425,6 +468,35 @@ export function RequestForm({
         onChange={(event) => setDescription(event.target.value)}
       />
       <p className="field-hint">No need to be technical — we&rsquo;ll work out the details.</p>
+
+      {/* The one classification still asked of the client (decision D7),
+          because it decides what can be taken before the site is live. The
+          examples do the deciding; we correct it if it was wrong. */}
+      <fieldset style={{ border: 0, padding: 0, margin: "0 0 1rem" }}>
+        <legend style={{ fontWeight: 600, marginBottom: "0.5rem" }}>How big is it?</legend>
+        {CHANGE_SIZES.map((option) => {
+          const unavailable = Boolean(freeTier) && option.key === "big";
+          return (
+            <label key={option.key} className="checkbox">
+              <input
+                type="radio"
+                name="size"
+                value={option.key}
+                required
+                disabled={unavailable}
+                // Only one choice is open before the site is live; otherwise
+                // the client chooses, rather than a default choosing for them.
+                defaultChecked={Boolean(freeTier) && option.key === "small"}
+                style={{ width: "auto", minHeight: "auto", margin: "0.2rem 0 0", flexShrink: 0, accentColor: "var(--accent)" }}
+              />
+              <span>
+                <strong>{option.name}</strong> — {option.examples}
+                {unavailable && <span className="muted"> Comes with putting your site live, or a care plan.</span>}
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
 
       {/* One site is the normal case, so the picker only appears when the
           choice is real. Two questions where one has a single possible answer

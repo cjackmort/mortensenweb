@@ -2,10 +2,11 @@
  * Check a Stripe account is ready for the portal, and fix what can be fixed.
  *
  * A new account — and every account's live mode — starts empty. Checkout
- * resolves a plan by price *lookup key*, so until the care-plan prices and the
- * operator-only test plan exist with exactly the keys in
- * `lib/payments/stripe.ts`, every "Set up automatic payment" answers "That plan
- * has no price configured". This makes
+ * resolves a plan by price *lookup key*, so until the care-plan prices, the
+ * website build price and the operator-only test plan exist with exactly the
+ * keys in `lib/payments/stripe.ts` and `lib/payments/build.ts`, every "Set up
+ * automatic payment" answers "That plan has no price configured" and every
+ * "Put it live" refuses. This makes
  * them, subscribes the webhook endpoint to the events the receiver handles,
  * and checks the one thing only the dashboard can do: the customer portal.
  *
@@ -21,7 +22,8 @@
  * `--portal=https://…` points the webhook somewhere other than production.
  */
 
-import { PLANS } from "@mortensenweb/plans";
+import { BUILDS, PLANS } from "@mortensenweb/plans";
+import { BUILD_PRODUCT_NAME, lookupKeyForBuild, productIdOf } from "@/lib/payments/build";
 import { HANDLED_CONNECT_EVENTS } from "@/lib/shop/connect";
 import {
   HANDLED_STRIPE_EVENTS,
@@ -106,6 +108,68 @@ async function ensurePrices(): Promise<void> {
         nickname: plan.name,
         product_data: { name: plan.name, metadata: plan.metadata },
         metadata: plan.metadata,
+      },
+      { idempotencyKey: `stripe-setup:price:${lookupKey}` },
+    );
+    report("done", `${lookupKey} → created ${created.id}`);
+  }
+}
+
+/**
+ * The website build: a one-off price on one "Website build" product.
+ *
+ * One product for every build because that product is what a build promo code
+ * is restricted to (roadmap P1.4): a coupon whose `applies_to.products` is
+ * exactly this product can only come off the build. The product is found from
+ * any existing build price, so a later build joins the same one.
+ */
+async function ensureBuildPrices(): Promise<void> {
+  const stripe = requireStripe();
+  console.log("\nWebsite build");
+
+  const keys = BUILDS.map((b) => lookupKeyForBuild(b.key));
+  const found = await stripe.prices.list({ lookup_keys: keys, active: true, limit: 10 });
+  const byKey = new Map(found.data.map((price) => [price.lookup_key, price]));
+  let product = found.data[0] ? productIdOf(found.data[0]) : null;
+
+  for (const build of BUILDS) {
+    const lookupKey = lookupKeyForBuild(build.key);
+    const price = byKey.get(lookupKey);
+    if (price) {
+      const right = price.unit_amount === build.priceCents && price.currency === "usd" && !price.recurring;
+      // Never edited, for the same reason as the plans: a price is immutable.
+      report(
+        right ? "ok" : "FIX",
+        right
+          ? `${lookupKey} → ${price.id} ($${build.priceCents / 100}, one-off, product ${productIdOf(price)})`
+          : `${lookupKey} → ${price.id} is ${price.unit_amount} ${price.currency}${price.recurring ? " recurring" : ""}, ` +
+              `expected ${build.priceCents} usd one-off. Create a _v2 price and move the key.`,
+      );
+      continue;
+    }
+
+    if (!apply) {
+      report("todo", `${lookupKey} missing — would create "${BUILD_PRODUCT_NAME}" at $${build.priceCents / 100}, one-off`);
+      continue;
+    }
+
+    if (!product) {
+      const created = await stripe.products.create(
+        { name: BUILD_PRODUCT_NAME, metadata: { kind: "website_build" } },
+        { idempotencyKey: "stripe-setup:product:website-build" },
+      );
+      product = created.id;
+      report("done", `${BUILD_PRODUCT_NAME} product → created ${created.id}`);
+    }
+
+    const created = await stripe.prices.create(
+      {
+        currency: "usd",
+        unit_amount: build.priceCents,
+        lookup_key: lookupKey,
+        nickname: `${BUILD_PRODUCT_NAME}: ${build.name}`,
+        product,
+        metadata: { build_key: build.key },
       },
       { idempotencyKey: `stripe-setup:price:${lookupKey}` },
     );
@@ -242,6 +306,7 @@ async function main(): Promise<void> {
   console.log(`Stripe ${live ? "LIVE" : "test"} mode${apply ? "" : " — report only, pass --apply to make changes"}`);
 
   await ensurePrices();
+  await ensureBuildPrices();
   await ensureWebhook();
   await ensureConnectWebhook();
   await checkCustomerPortal();

@@ -7,10 +7,8 @@ import {
   listRequestTimelines,
   listSites,
 } from "@/db/repositories/client/change-requests";
-import {
-  getAllowance,
-  getEntitlements,
-} from "@/db/repositories/client/entitlements";
+import { getChangeAccess } from "@/db/repositories/client/change-access";
+import { getAllowance } from "@/db/repositories/client/entitlements";
 import { listPreviewsAwaitingDecision } from "@/db/repositories/client/previews";
 import {
   listAssets,
@@ -62,7 +60,7 @@ export default async function ClientRequestsPage() {
   const [
     sites,
     requests,
-    entitlements,
+    access,
     allowance,
     previews,
     pickableAssets,
@@ -70,7 +68,7 @@ export default async function ClientRequestsPage() {
   ] = await Promise.all([
     listSites(db, ctx),
     listChangeRequests(db, ctx, { limit: 50 }),
-    getEntitlements(db, ctx),
+    getChangeAccess(db, ctx),
     getAllowance(db, ctx),
     listPreviewsAwaitingDecision(db, ctx),
     // Bounded. A client with a thousand images should not have all of them
@@ -86,10 +84,12 @@ export default async function ClientRequestsPage() {
     requests.map((r) => r.publicId),
   );
 
-  // No client record at all is treated as unlocked rather than locked. That
-  // case is a gap on our side, and the proportionate response to our own gap
-  // is not to block someone out of the thing they are paying for.
-  const locked = entitlements ? !entitlements.changeRequestsUnlocked : false;
+  // Before the build is paid and with no plan (decision D7): small changes
+  // only, one a month. No client record at all is shown the ordinary form —
+  // a gap on our side is not a reason to block someone — and the action
+  // answers it honestly if they submit.
+  const freeTier =
+    access?.tier === "free" ? { used: access.used, included: access.included, resetsOn: access.resetsOn } : null;
 
   const inProgress = requests.filter((r) => isOpen(r.status));
   const finished = requests.filter((r) => !isOpen(r.status));
@@ -127,7 +127,7 @@ export default async function ClientRequestsPage() {
 
         <RequestForm
           sites={sites.map((s) => ({ publicId: s.publicId, name: s.name }))}
-          locked={locked}
+          freeTier={freeTier}
           /* Only `ready` images are offered. One still processing has no
              thumbnail and could not be used by an agent, so offering it would
              be inviting a client to choose something that will be refused at
@@ -143,7 +143,7 @@ export default async function ClientRequestsPage() {
           }))}
           folders={pickableFolders}
           allowance={
-            allowance
+            allowance && !freeTier
               ? {
                   included: allowance.included,
                   used: allowance.used,

@@ -67,4 +67,4 @@ If you had to work something out — a page generated from a data file, a class 
 
 ## Escalation is a correct outcome
 
-Escalate when the change needs a decision only the owner can make, an asset that does not exist, a new page or structural rewrite on a site whose structure you cannot reproduce safely, or when you have tried and are not confident. A specific reason — "needs the new price for the second service too" — lets a person finish it in minutes.
+Escalate when the change needs a decision only the owner can make, an asset that does not exist, a new page or structural rewrite on a site whose structure you cannot reproduce safely, or when you have tried and are not confident. Escalate, too, when the issue has a **Small changes only** section and the work is bigger than wording, a price, hours, contact details or a photo swap — a new page or section, a layout or design change, new functionality. That owner's site is not live yet; do not make part of it to fit, and say "bigger change" in the reason. A specific reason — "needs the new price for the second service too" — lets a person finish it in minutes.

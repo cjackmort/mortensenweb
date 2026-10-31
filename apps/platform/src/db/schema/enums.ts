@@ -313,6 +313,14 @@ export const requestCategoryEnum = pgEnum("request_category", [
   "other",
 ]);
 
+/**
+ * How big a change request is (decision D7, 0048). Small: wording, prices,
+ * hours, contact details, a photo swap. Big: new pages or sections, layout,
+ * design or features. Before the build is paid and with no plan, a client gets
+ * one small change a month and no big ones.
+ */
+export const requestSizeEnum = pgEnum("request_size", ["small", "big"]);
+
 export const actorTypeEnum = pgEnum("actor_type", [
   "client",
   "admin",
@@ -378,6 +386,13 @@ export const notificationStatusEnum = pgEnum("notification_status", [
  * goodwill gesture, must be distinguishable in the ledger from one the client
  * paid for. Without it the only way to not charge someone is to quietly skip
  * the accounting, which is how revenue figures stop being true.
+ *
+ * Two kinds of `courtesy`, told apart by who raised the request. One a client
+ * submitted (`created_by_user_id` is a client user, `size = 'small'`) is the
+ * free small change every client gets before their site is live (decision
+ * D7, `change-tier.ts`) — an entitlement, not a favour. Anything else is the
+ * operator's own goodwill or setup work. A report of favours done has to make
+ * that split, or every new client's free change reads as one.
  */
 export const billingTreatmentEnum = pgEnum("billing_treatment", [
   "included",
@@ -397,6 +412,8 @@ export const paymentPurposeEnum = pgEnum("payment_purpose", [
   "subscription",
   "extra_change",
   "other",
+  // Paying one is what marks the website build paid (0047).
+  "build",
 ]);
 
 // ---- Briefs ---------------------------------------------------------------

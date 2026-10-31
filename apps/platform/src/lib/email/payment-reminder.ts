@@ -24,6 +24,13 @@ export interface PaymentReminderInput {
   dueOn: Date;
   daysOverdue: number;
   portalUrl: string;
+  /**
+   * A card payment Stripe tried and could not take, rather than an invoice
+   * left unpaid. Changes the opening — "if you have already sent it across"
+   * is wrong for an automatic charge — and links to `payUrl`, Stripe's page
+   * for the invoice, where another card can be used.
+   */
+  cardDeclined?: { payUrl: string | null };
 }
 
 interface StageCopy {
@@ -34,6 +41,14 @@ interface StageCopy {
 
 function copyFor(input: PaymentReminderInput): StageCopy {
   const amount = formatCurrency(input.amountCents);
+
+  if (input.cardDeclined && input.stage === "first_reminder") {
+    return {
+      subject: `Your ${amount} card payment didn't go through`,
+      opening: `We tried to take your ${amount} payment by card on ${formatDate(input.dueOn)}, and it didn't go through — usually a card that has expired or been replaced. We'll try again automatically over the next few days. To sort it now, pay with another card using the button below.`,
+      consequence: "Nothing changes on your site. We will keep working as normal.",
+    };
+  }
 
   switch (input.stage) {
     case "first_reminder":
@@ -81,7 +96,7 @@ export function buildPaymentReminderEmail(
 ): EmailMessage {
   const copy = copyFor(input);
   const greeting = input.contactName ? `Hi ${input.contactName},` : "Hi there,";
-  const billingUrl = `${input.portalUrl.replace(/\/$/, "")}/billing`;
+  const billingUrl = input.cardDeclined?.payUrl ?? `${input.portalUrl.replace(/\/$/, "")}/billing`;
   const amount = formatCurrency(input.amountCents);
 
   const text = `${greeting}
@@ -112,7 +127,7 @@ email and we will look into it.
   <tr><td style="padding:0 16px 14px;font-size:13px;color:#78716c">Due</td><td style="padding:0 16px 14px;text-align:right">${escapeHtml(formatDate(input.dueOn))}</td></tr>
 </table>
 <div style="text-align:center;margin:0 0 24px">
-  <a href="${billingUrl}" style="display:inline-block;background:#1c1917;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600">Pay invoice</a>
+  <a href="${escapeHtml(billingUrl)}" style="display:inline-block;background:#1c1917;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600">Pay invoice</a>
 </div>
 <p style="margin:0 0 24px;font-size:14px;color:#57534e">${escapeHtml(copy.consequence)}</p>
 <hr style="border:none;border-top:1px solid #e7e5e4;margin:0 0 20px">

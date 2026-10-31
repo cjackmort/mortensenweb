@@ -29,6 +29,7 @@ import {
   previewDecisionEnum,
   requestCategoryEnum,
   requestPriorityEnum,
+  requestSizeEnum,
   requestStatusEnum,
   scanStatusEnum,
   visibilityEnum,
@@ -54,6 +55,13 @@ export const changeRequests = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     category: requestCategoryEnum("category").notNull().default("other"),
+    /**
+     * Small or big, as the client said and an operator may correct (D7).
+     * Before the build is paid and with no plan, only small changes are
+     * taken, one a month. Null for requests from before 0048, and for ones
+     * an operator raised, which no size rule applies to.
+     */
+    size: requestSizeEnum("size"),
     priority: requestPriorityEnum("priority").notNull().default("normal"),
     desiredTiming: text("desired_timing"),
     status: requestStatusEnum("status").notNull().default("submitted"),
@@ -68,6 +76,9 @@ export const changeRequests = pgTable(
      * depends on how much of the allowance was left *at that moment*. A request
      * submitted as the third of three included changes stays `included` even
      * after the client submits a fourth.
+     *
+     * `courtesy` on a request a client submitted is their free small change
+     * before the site is live (D7), not an operator favour — see the enum.
      */
     billing: billingTreatmentEnum("billing").notNull().default("included"),
     /** The period this request was counted against. Null for courtesy work. */

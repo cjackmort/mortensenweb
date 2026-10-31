@@ -33,6 +33,38 @@
   color: var(--text-soft);
 }
 
+/* ---------------------------------------------------------- the preview */
+
+/*
+ * The site's home page at the 16:9 the deploy captured it at. The ground is
+ * on this box, under the picture, so a shot that has not been published yet
+ * leaves the site's initial on it rather than an empty rectangle
+ * (components/site-preview.tsx).
+ */
+.welcome-preview-media {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 1rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+}
+
+.welcome-preview-media:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.welcome-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+
 /* ---------------------------------------------------------- the website */
 
 .welcome-build-price {

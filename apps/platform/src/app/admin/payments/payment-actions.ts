@@ -147,6 +147,11 @@ const RecordForm = z.object({
   requestPublicId: z.string().default(""),
   /** One per opened dialog: a double submit records once. */
   formKey: z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "Reopen the form and try again."),
+  /** With no invoice: the money is the website build fee. */
+  coversBuild: z
+    .literal("on")
+    .optional()
+    .transform((value) => value === "on"),
   ...receiptFields,
 });
 
@@ -179,6 +184,7 @@ export async function recordPaymentAction(
     receivedOn: input.receivedOn,
     note: input.note,
     idempotencyKey: `manual:${input.formKey}`,
+    coversBuild: input.coversBuild,
   });
 
   if (!result.ok) return { ok: false, message: "That client no longer exists." };
@@ -188,6 +194,8 @@ export async function recordPaymentAction(
     ok: true,
     message: result.duplicate
       ? "Already recorded. Nothing was added twice."
-      : `Recorded ${formatCurrency(amountCents)} by ${methodLabel(input.method)}. It's in the ledger.`,
+      : `Recorded ${formatCurrency(amountCents)} by ${methodLabel(input.method)}. It's in the ledger.${
+          input.coversBuild ? " The website build is marked paid." : ""
+        }`,
   };
 }

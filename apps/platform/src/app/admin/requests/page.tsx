@@ -9,6 +9,7 @@ import { ReleasePanel } from "./release-panel";
 import { isOpen, statusLabel, statusPill } from "@/lib/requests/status";
 import { formatDate } from "@/lib/time";
 import { DispatchButton } from "./dispatch-button";
+import { SizeForm } from "./size-form";
 
 export const dynamic = "force-dynamic";
 
@@ -192,6 +193,7 @@ function RequestTable({
             <th>Client</th>
             <th>Status</th>
             <th>Priority</th>
+            <th>Size</th>
             <th>Sent</th>
             <th>Run</th>
             <th>Agent</th>
@@ -228,6 +230,9 @@ function RequestTable({
                 ) : (
                   <span className="muted">{r.priority}</span>
                 )}
+              </td>
+              <td data-label="Size">
+                <SizeForm requestPublicId={r.publicId} size={r.size} />
               </td>
               <td data-label="Sent" className="nowrap">
                 {formatDate(r.createdAt)}

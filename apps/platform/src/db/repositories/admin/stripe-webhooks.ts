@@ -1,10 +1,11 @@
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import {
   auditLog,
   clientAddOns,
   clients,
+  paymentRequests,
   payments,
   servicePlans,
   subscriptions,
@@ -23,7 +24,12 @@ import {
   requireStripe,
   subscriptionIdFromInvoice,
 } from "@/lib/payments/stripe";
+import { splitInvoice, type InvoiceSplit } from "@/lib/payments/build";
+import { BUILD_LINE_NAME as BUILD_LEDGER_NOTE } from "@/lib/onboarding/checkout";
+import { buildInvoicePublicId, markBuildPaid } from "../build-standing";
+import { expireOpenCheckouts } from "./checkout-expiry";
 import { unlockClientFeatures } from "./entitlements";
+import { emailFailedCardPayment } from "./payment-failed-email";
 import { billingDayFromAnchor } from "@/lib/billing/billing-day";
 import { retireHandBilledPlans } from "./hand-billed-plans";
 import { settleOneOffCheckout } from "./stripe-one-off";
@@ -401,23 +407,33 @@ export async function mirrorSubscription(
 }
 
 /**
- * Record a settled invoice in the ledger.
+ * Record a settled invoice in the ledger: one row, or two when it carries the
+ * website build.
  *
  * Idempotent on `payments.idempotency_key`, which is derived from the invoice
- * id — so a duplicated `invoice.paid` inserts nothing the second time. This is
- * the belt to the delivery table's braces: the delivery id protects against
- * the same *event* twice, this protects against two different events
- * describing the same invoice.
+ * id — `stripe_invoice:<id>` for the plan and add-ons, and
+ * `stripe_invoice:<id>:build` for the build — so a duplicated `invoice.paid`
+ * inserts nothing the second time. This is the belt to the delivery table's
+ * braces: the delivery id protects against the same *event* twice, this
+ * protects against two different events describing the same invoice. The
+ * build row goes in first, so a plan row present means both are.
+ *
+ * Two rows because a subscription's first invoice holds two kinds of money:
+ * the build, once, and the plan's first month. One row booked the build as
+ * subscription revenue and read the covered period from `lines.data[0]` —
+ * which Stripe does not order, and which on that invoice can be the build's
+ * line. The plan row's period now comes from its own line (`splitInvoice`).
  *
  * `amount_paid` and not `total`. See the module comment: a zero invoice, one
  * settled from credit, and one marked paid by hand are all `paid`, and none of
- * them is money that arrived.
+ * them is money that arrived. A build that a 100%-off code took to zero is
+ * recorded as the zero it is.
  */
 async function recordInvoicePayment(
   db: Database,
-  clientId: string,
-  organizationId: string,
+  match: { clientId: string; organizationId: string },
   invoice: Stripe.Invoice,
+  split: InvoiceSplit,
   source: "stripe_webhook" | "stripe_reconcile",
 ): Promise<"recorded" | "already" | "no_cash"> {
   const cents = collectedCents(invoice);
@@ -447,48 +463,62 @@ async function recordInvoicePayment(
     localSubscriptionId = rows[0]?.id ?? null;
   }
 
-  const line = invoice.lines?.data[0];
-  const periodStart = line?.period?.start
-    ? businessDate(new Date(line.period.start * 1000))
-    : null;
-  const periodEnd = line?.period?.end
-    ? businessDate(new Date(line.period.end * 1000))
-    : null;
+  const common = {
+    clientId: match.clientId,
+    currency: (invoice.currency ?? "usd").toUpperCase(),
+    method: "stripe" as const,
+    provider: "stripe",
+    providerReference: invoice.id,
+    receiptUrl: invoice.hosted_invoice_url ?? null,
+    receivedOn: businessDate(
+      invoice.status_transitions?.paid_at
+        ? new Date(invoice.status_transitions.paid_at * 1000)
+        : new Date(),
+    ),
+    // No `recordedBy`: nobody confirmed this by hand. The audit row below
+    // records that it was automatic, which is more honest than attributing
+    // it to whichever admin happened to configure the webhook.
+    recordedBy: null,
+    status: "recorded" as const,
+  };
+
+  if (split.buildCents !== null) {
+    await db
+      .insert(payments)
+      .values({
+        ...common,
+        publicId: newPublicId(),
+        // Paid once, for the site: not a month of the subscription.
+        subscriptionId: null,
+        amountCents: split.buildCents,
+        idempotencyKey: `${idempotencyKey}:build`,
+        note:
+          split.buildCents === 0
+            ? `${BUILD_LEDGER_NOTE} — settled without collecting cash (a code took it to zero, or credit).`
+            : BUILD_LEDGER_NOTE,
+      })
+      .onConflictDoNothing({ target: payments.idempotencyKey });
+  }
 
   await db
     .insert(payments)
     .values({
+      ...common,
       publicId: newPublicId(),
-      clientId,
       subscriptionId: localSubscriptionId,
-      amountCents: cents,
-      currency: (invoice.currency ?? "usd").toUpperCase(),
-      method: "stripe",
-      provider: "stripe",
-      providerReference: invoice.id,
-      receiptUrl: invoice.hosted_invoice_url ?? null,
+      amountCents: split.planCents,
       idempotencyKey,
-      coversPeriodStart: periodStart,
-      coversPeriodEnd: periodEnd,
-      receivedOn: businessDate(
-        invoice.status_transitions?.paid_at
-          ? new Date(invoice.status_transitions.paid_at * 1000)
-          : new Date(),
-      ),
-      // No `recordedBy`: nobody confirmed this by hand. The audit row below
-      // records that it was automatic, which is more honest than attributing
-      // it to whichever admin happened to configure the webhook.
-      recordedBy: null,
-      status: "recorded",
+      coversPeriodStart: split.planPeriod?.start ?? null,
+      coversPeriodEnd: split.planPeriod?.end ?? null,
       note:
-        cents === 0
+        split.planCents === 0
           ? "Stripe invoice settled without collecting cash (credit, zero total, or marked paid)."
           : null,
     })
     .onConflictDoNothing({ target: payments.idempotencyKey });
 
   await db.insert(auditLog).values({
-    organizationId,
+    organizationId: match.organizationId,
     action: "payment.recorded",
     entityType: "payment",
     entityId: invoice.id ?? "",
@@ -497,10 +527,48 @@ async function recordInvoicePayment(
       amountPaidCents: cents,
       invoiceTotalCents: invoice.total ?? 0,
       collectedCash: cents > 0,
+      buildCents: split.buildCents,
+      planCents: split.planCents,
     },
   });
 
   return cents > 0 ? "recorded" : "no_cash";
+}
+
+/**
+ * The build was just paid on a subscription's first invoice, so nothing else
+ * may charge for it: the welcome checkout's build-only invoice, if a client
+ * opened one before choosing a plan and paying through the other page, is
+ * withdrawn, and any checkout still open for the build is closed. An invoice
+ * the client says they paid another way (`awaiting_confirmation`) is left for
+ * the operator — that is a question about money, not a duplicate.
+ */
+async function closeOtherBuildCharges(
+  db: Database,
+  match: { clientId: string; organizationId: string },
+  invoiceId: string,
+): Promise<void> {
+  const buildInvoice = await buildInvoicePublicId(match.clientId);
+  const withdrawn = await db
+    .update(paymentRequests)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(and(eq(paymentRequests.publicId, buildInvoice), inArray(paymentRequests.status, ["open", "overdue"])))
+    .returning({ reference: paymentRequests.reference, amountCents: paymentRequests.amountCents });
+  if (withdrawn[0]) {
+    await db.insert(auditLog).values({
+      organizationId: match.organizationId,
+      action: "payment_request.cancelled",
+      entityType: "payment_request",
+      entityId: buildInvoice,
+      metadata: {
+        reference: withdrawn[0].reference,
+        amountCents: withdrawn[0].amountCents,
+        note: `The build was paid on Stripe invoice ${invoiceId}.`,
+        source: "stripe_webhook",
+      },
+    });
+  }
+  await expireOpenCheckouts(db, { ...match, includeBuild: true, reason: "build_paid" });
 }
 
 /**
@@ -512,9 +580,15 @@ async function recordInvoicePayment(
  * repaired into a different state than a delivered one produces: money
  * recorded but features left locked, or the reverse.
  *
- * Every step is idempotent — the ledger row is keyed on the invoice, the
- * mirror writes current Stripe state, the unlock is first-write-wins — so the
- * receiver and the job both reaching the same invoice changes nothing twice.
+ * Every step is idempotent — the ledger rows are keyed on the invoice, the
+ * mirror writes current Stripe state, the build and the unlock are
+ * first-write-wins — so the receiver and the job both reaching the same
+ * invoice changes nothing twice.
+ *
+ * The build is marked paid only by its own line on the invoice, whatever that
+ * line came to: $500, $400 after a code, or nothing at all after a 100%-off
+ * code. A plan's invoice, however much it collects, leaves the build owed and
+ * the client locked (`unlockClientFeatures` refuses).
  */
 export async function applyPaidInvoice(
   db: Database,
@@ -544,18 +618,23 @@ export async function applyPaidInvoice(
     await mirrorSubscription(db, match.clientId, match.organizationId, fresh);
   }
 
-  const outcome = await recordInvoicePayment(
-    db,
-    match.clientId,
-    match.organizationId,
-    invoice,
-    source,
-  );
+  const split = splitInvoice(invoice, invoiceMetadata(invoice));
+  const outcome = await recordInvoicePayment(db, match, invoice, split, source);
 
-  // Money arriving lifts any dunning pause and turns the features on.
-  // Idempotent and first-write-wins, so a renewal does not reset the original
-  // unlock date. Skipped for a comp client, whose entitlements are the
-  // operator's to decide.
+  // Outside the ledger's "already" short-cut on purpose: a run that wrote the
+  // rows and died before this line is finished by the retry.
+  const paysBuild = split.buildCents !== null;
+  if (paysBuild) {
+    const marked = await markBuildPaid(db, match.clientId, {
+      source: "stripe_invoice",
+      reference: invoice.id ?? null,
+      amountCents: split.buildCents ?? 0,
+    });
+    if (marked) await closeOtherBuildCharges(db, match, invoice.id ?? "");
+  }
+
+  // Money arriving lifts any dunning pause. Skipped for a comp client, whose
+  // standing is the operator's to decide.
   if (!comped && collectedCents(invoice) > 0) {
     await db
       .update(clients)
@@ -571,10 +650,15 @@ export async function applyPaidInvoice(
           sql`${clients.managementState} <> 'managed'`,
         ),
       );
+  }
 
+  // And turns the features on, once the build is paid — a build line on this
+  // invoice, or one paid before it. Idempotent and first-write-wins, so a
+  // renewal does not reset the original unlock date.
+  if (!comped && (collectedCents(invoice) > 0 || paysBuild)) {
     await unlockClientFeatures(db, match.clientId, {
       actorUserId: null,
-      reason: "stripe_invoice_paid",
+      reason: paysBuild ? "stripe_build_paid" : "stripe_invoice_paid",
     });
   }
 
@@ -771,6 +855,23 @@ export async function processStripeEvent(
             hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
           },
         });
+
+        // The client hears about it, once per invoice. After the state above
+        // is written and never able to fail the delivery: a mail outage must
+        // not make Stripe redeliver a failure the portal has already recorded.
+        if (event.type === "invoice.payment_failed" && (invoice.amount_due ?? 0) > 0) {
+          try {
+            const emailed = await emailFailedCardPayment(db, match, invoice);
+            if (emailed === "failed") {
+              console.error("[stripe:webhook] failed-payment email not sent", { invoice: invoice.id });
+            }
+          } catch (error) {
+            console.error("[stripe:webhook] failed-payment email threw", {
+              invoice: invoice.id,
+              message: error instanceof Error ? error.message : "unknown",
+            });
+          }
+        }
 
         await markDelivery(db, event.id, "processed");
         return {

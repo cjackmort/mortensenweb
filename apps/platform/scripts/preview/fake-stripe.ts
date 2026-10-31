@@ -9,14 +9,20 @@
  *
  * It answers what the welcome checkout calls — customers, prices by lookup
  * key, subscriptions, Checkout Sessions in both modes — from memory, with the
- * prices from `@mortensenweb/plans`. A session's page has a Pay button; pressing
+ * prices from `@mortensenweb/plans` and the one-off "Website build" price on
+ * its own product (`lib/payments/build.ts`). A session's page has a Pay button; pressing
  * it completes the session and posts the signed events Stripe would
  * (`checkout.session.completed`, and for a subscription also
  * `customer.subscription.created` and `invoice.paid`) to the portal, waiting
  * for each answer before redirecting, so the portal is settled by the time the
  * browser lands on the success page.
  *
- * What it does not do: promotion codes, tax, proration, billing-cycle anchors,
+ * One promotion code, on a session that allows codes: `BUILD100`, 100% off
+ * the Website build product and nothing else — enough to show a build a code
+ * took to zero settling as paid. A payment-mode session that comes to $0
+ * completes as `no_payment_required`, as Stripe's does.
+ *
+ * What it does not do: other codes, tax, proration, billing-cycle anchors,
  * renewals, refunds, disputes. A request it does not recognise is answered
  * 404 with its URL, and an input it cannot honour is refused, so a gap shows
  * as a failure rather than as a plausible wrong answer.
@@ -27,7 +33,8 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { PLANS } from "@mortensenweb/plans";
+import { BUILD, PLANS } from "@mortensenweb/plans";
+import { BUILD_PRODUCT_NAME, lookupKeyForBuild } from "@/lib/payments/build";
 import { lookupKeyForAddOn, lookupKeyForPlan, sellableAddOns, TEST_PLAN, type SellableKey } from "@/lib/payments/stripe";
 import { deliverEvent, eventEnvelope, type DeliveredEvent } from "./fake-stripe-webhooks";
 
@@ -37,12 +44,21 @@ const PORT = Number(process.env.FAKE_STRIPE_PORT ?? 12111);
 const PORTAL_URL = (process.env.PORTAL_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 const PERIOD_SECONDS = 30 * 86_400;
+const BUILD_PRODUCT = "prod_website_build";
+
+/** The codes the stand-in knows: percent off, and the one product it comes off. */
+const PROMOTION_CODES: Record<string, { percentOff: number; product: string }> = {
+  BUILD100: { percentOff: 100, product: BUILD_PRODUCT },
+};
 
 interface Line {
   description: string;
   amount: number;
   price: Obj;
+  product: string;
   recurring: boolean;
+  /** Taken off by a promotion code. */
+  discount: number;
 }
 
 interface SessionRecord {
@@ -50,6 +66,8 @@ interface SessionRecord {
   lines: Line[];
   subscriptionMetadata: Obj;
   paymentIntent: Obj | null;
+  allowPromotionCodes: boolean;
+  promotionCode: string | null;
 }
 
 interface State {
@@ -85,6 +103,17 @@ function stockPrices(): Map<string, Obj> {
   for (const plan of PLANS) add(lookupKeyForPlan(plan.key as SellableKey)!, plan.monthlyCents, `prod_${plan.key}`);
   add(lookupKeyForPlan(TEST_PLAN.key)!, TEST_PLAN.monthlyCents, `prod_${TEST_PLAN.key}`);
   for (const addOn of sellableAddOns()) add(lookupKeyForAddOn(addOn.key), addOn.monthlyCents, `prod_${addOn.key}`);
+  const build = lookupKeyForBuild();
+  prices.set(build, {
+    id: `price_${build}`,
+    object: "price",
+    active: true,
+    lookup_key: build,
+    unit_amount: BUILD.priceCents,
+    currency: "usd",
+    product: BUILD_PRODUCT,
+    recurring: null,
+  });
   return prices;
 }
 
@@ -132,15 +161,40 @@ function toLine(requested: Obj): Line | string {
   if (requested.price) {
     const price = [...state.prices.values()].find((p) => p.id === requested.price);
     if (!price) return `No such price: '${String(requested.price)}'`;
-    return { description: String(price.lookup_key), amount: Number(price.unit_amount), price, recurring: Boolean(price.recurring) };
+    return {
+      description: String(price.lookup_key),
+      amount: Number(price.unit_amount),
+      price,
+      product: String(price.product),
+      recurring: Boolean(price.recurring),
+      discount: 0,
+    };
   }
 
   const data = requested.price_data as Obj | undefined;
   if (!data) return "A line item needs a price or price_data.";
   if (data.recurring) return "The stand-in does not build recurring prices from price_data.";
-  const name = String((data.product_data as Obj | undefined)?.name ?? "Item");
-  const price = { id: id("price_data"), object: "price", unit_amount: Number(data.unit_amount), currency: "usd", recurring: null, lookup_key: null };
-  return { description: name, amount: Number(data.unit_amount), price, recurring: false };
+  if (data.product && data.product !== BUILD_PRODUCT) return `No such product: '${String(data.product)}'`;
+  const product = data.product ? BUILD_PRODUCT : id("prod");
+  const name = data.product ? BUILD_PRODUCT_NAME : String((data.product_data as Obj | undefined)?.name ?? "Item");
+  const price = { id: id("price_data"), object: "price", unit_amount: Number(data.unit_amount), currency: "usd", recurring: null, lookup_key: null, product };
+  return { description: name, amount: Number(data.unit_amount), price, product, recurring: false, discount: 0 };
+}
+
+const totalOf = (lines: Line[]) => lines.reduce((sum, l) => sum + l.amount - l.discount, 0);
+
+/** Take a known code off the lines it applies to, and restate the session's totals. */
+function applyPromotionCode(record: SessionRecord, code: string): string | null {
+  const promo = PROMOTION_CODES[code.trim().toUpperCase()];
+  if (!record.allowPromotionCodes) return "This checkout does not take codes.";
+  if (!promo) return "That code isn't valid.";
+  for (const line of record.lines) {
+    line.discount = line.product === promo.product ? Math.round((line.amount * promo.percentOff) / 100) : 0;
+  }
+  record.promotionCode = code.trim().toUpperCase();
+  record.view.amount_total = totalOf(record.lines);
+  record.view.total_details = { amount_discount: record.lines.reduce((sum, l) => sum + l.discount, 0) };
+  return null;
 }
 
 function createSession(body: Obj): [number, unknown] {
@@ -174,6 +228,7 @@ function createSession(body: Obj): [number, unknown] {
     currency: "usd",
     amount_subtotal: lines.reduce((sum, l) => sum + l.amount, 0),
     amount_total: lines.reduce((sum, l) => sum + l.amount, 0),
+    total_details: { amount_discount: 0 },
     subscription: null,
     payment_intent: null,
     line_items: list(
@@ -187,6 +242,8 @@ function createSession(body: Obj): [number, unknown] {
     lines,
     subscriptionMetadata,
     paymentIntent: body.mode === "payment" ? { metadata: (body.payment_intent_data as Obj | undefined)?.metadata ?? {} } : null,
+    allowPromotionCodes: body.allow_promotion_codes === "true",
+    promotionCode: null,
   });
   return [200, view];
 }
@@ -200,9 +257,21 @@ function sessionView(record: SessionRecord, expand: string[]): Obj {
   return { ...record.view, payment_intent: { ...intent, latest_charge: latestCharge } };
 }
 
-function checkoutPage(record: SessionRecord): string {
+function promotionForm(record: SessionRecord, error: string | null): string {
+  if (!record.allowPromotionCodes || record.view.status !== "open") return "";
+  if (record.promotionCode) return `<p>Code <strong>${escapeHtml(record.promotionCode)}</strong> applied.</p>`;
+  return `<form method="post" action="/checkout/${String(record.view.id)}/promo" style="margin-top:16px">
+<label>Promotion code <input name="code" autocomplete="off"></label> <button type="submit">Apply</button>
+${error ? `<p role="alert" style="color:#a1001a">${escapeHtml(error)}</p>` : ""}</form>`;
+}
+
+function checkoutPage(record: SessionRecord, error: string | null = null): string {
   const rows = record.lines
-    .map((l) => `<tr><td>${escapeHtml(l.description)}</td><td>${money(l.amount)}${l.recurring ? " / month" : ""}</td></tr>`)
+    .map(
+      (l) =>
+        `<tr><td>${escapeHtml(l.description)}</td><td>${money(l.amount)}${l.recurring ? " / month" : ""}</td></tr>` +
+        (l.discount ? `<tr><td>Discount</td><td>-${money(l.discount)}</td></tr>` : ""),
+    )
     .join("");
   const total = Number(record.view.amount_total);
   const sessionId = String(record.view.id);
@@ -213,6 +282,7 @@ function checkoutPage(record: SessionRecord): string {
 <h1 style="font-size:1.3rem">Checkout (${escapeHtml(String(record.view.mode))} mode)</h1>
 <table style="width:100%;border-collapse:collapse">${rows}
 <tr><th style="text-align:left;border-top:2px solid">Due today</th><th style="text-align:left;border-top:2px solid">${money(total)}</th></tr></table>
+${promotionForm(record, error)}
 ${
   open
     ? `<form method="post" action="/checkout/${sessionId}/pay" style="margin-top:24px">
@@ -239,6 +309,13 @@ async function completeSession(record: SessionRecord): Promise<void> {
   const total = Number(view.amount_total);
   view.status = "complete";
   view.payment_status = "paid";
+
+  if (view.mode === "payment" && total === 0) {
+    // Stripe's answer for a checkout a code took to nothing: complete, no charge.
+    view.payment_status = "no_payment_required";
+    await send([["checkout.session.completed", view]]);
+    return;
+  }
 
   if (view.mode === "payment") {
     const chargeId = id("ch");
@@ -280,13 +357,26 @@ async function completeSession(record: SessionRecord): Promise<void> {
     customer: view.customer,
     status: "paid",
     currency: "usd",
+    billing_reason: "subscription_create",
     total,
+    amount_due: total,
     amount_paid: total,
     hosted_invoice_url: `http://localhost:${PORT}/receipt/${invoiceId}`,
     status_transitions: { paid_at: started },
     // Where the 2025 API versions put what older ones had on the invoice itself.
     parent: { type: "subscription_details", subscription_details: { subscription: subscriptionId, metadata: record.subscriptionMetadata } },
-    lines: list(record.lines.map((l) => ({ id: id("il"), amount: l.amount, period: { start: started, end: started + PERIOD_SECONDS } })), ""),
+    lines: list(
+      record.lines.map((l) => ({
+        id: id("il"),
+        amount: l.amount,
+        discount_amounts: l.discount ? [{ amount: l.discount, discount: "di_fake" }] : [],
+        // A subscription's own lines, or the one-off build Checkout adds as an invoice item.
+        parent: { type: l.recurring ? "subscription_item_details" : "invoice_item_details" },
+        pricing: { price_details: { price: String(l.price.id), product: l.product } },
+        period: { start: started, end: l.recurring ? started + PERIOD_SECONDS : started },
+      })),
+      "",
+    ),
   };
 
   await send([
@@ -343,6 +433,23 @@ async function handlePage(request: IncomingMessage, response: ServerResponse, pa
   if (request.method === "GET" && page) {
     const record = state.sessions.get(page[1]!);
     reply(response, record ? 200 : 404, html, record ? checkoutPage(record) : "No such checkout.");
+    return true;
+  }
+
+  const promo = pathname.match(/^\/checkout\/([^/]+)\/promo$/);
+  if (request.method === "POST" && promo) {
+    const record = state.sessions.get(promo[1]!);
+    if (!record || record.view.status !== "open") {
+      reply(response, 409, html, "This checkout is not open.");
+      return true;
+    }
+    const code = new URLSearchParams(await readBody(request)).get("code") ?? "";
+    const error = applyPromotionCode(record, code);
+    if (error) {
+      reply(response, 400, html, checkoutPage(record, error));
+      return true;
+    }
+    reply(response, 303, html, "", { location: `/checkout/${String(record.view.id)}` });
     return true;
   }
 

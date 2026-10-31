@@ -20,8 +20,8 @@ import {
  *
  * ## What goes in, and how it is charged
  *
- * - **The site.** The published build price (`BUILD`), only while the client
- *   has never paid and nothing is invoiced. An invoice an operator raised is
+ * - **The site.** The published build price (`BUILD`), only while the build
+ *   is unpaid and nothing is invoiced. An invoice an operator raised is
  *   never folded in here: it has its own reference, its own settlement and
  *   its own pay button, and paying it twice — once here, once on Billing —
  *   is the mistake this keeps impossible.
@@ -252,36 +252,28 @@ export interface PriceRef {
 }
 
 /** The subset of a Checkout line item this builds. */
-export type CheckoutLineItem =
-  | { price: string; quantity: 1 }
-  | {
-      quantity: 1;
-      price_data: { currency: "usd"; unit_amount: number; product_data: { name: string } };
-    };
+export type CheckoutLineItem = { price: string; quantity: 1 };
 
 /**
  * The basket as Stripe Checkout line items.
  *
- * The plan and add-ons by price id, so Stripe charges the price it holds for
- * each lookup key. The build as an amount with no `recurring`, which Checkout
- * in subscription mode adds to the first invoice only. A line whose price is
- * missing refuses the whole basket: leaving it out would quietly charge for
- * less than the client chose, and give them a feature nothing pays for.
+ * Every line by price id, so Stripe charges the price it holds for each lookup
+ * key. The build is the one-off price on the "Website build" product
+ * (`lib/payments/build.ts`), which Checkout in subscription mode adds to the
+ * first invoice only — a real product rather than an amount, so it can be
+ * found on that invoice, reported on, and have a promo code restricted to it.
+ * A line whose price is missing refuses the whole basket: leaving it out would
+ * quietly charge for less than the client chose, and give them a feature, or a
+ * website, nothing pays for.
  */
 export function stripeLineItems(
   basket: Basket,
-  prices: { plan: PriceRef | null; addOns: Partial<Record<GrowthFeatureKey, PriceRef>> },
+  prices: { plan: PriceRef | null; addOns: Partial<Record<GrowthFeatureKey, PriceRef>>; build: PriceRef | null },
 ): { ok: true; items: CheckoutLineItem[] } | { ok: false; missing: string } {
   const items: CheckoutLineItem[] = [];
   for (const line of basket.lines) {
-    if (line.kind === "build") {
-      items.push({
-        quantity: 1,
-        price_data: { currency: "usd", unit_amount: line.amountCents, product_data: { name: line.name } },
-      });
-      continue;
-    }
-    const price = line.kind === "plan" ? prices.plan : prices.addOns[line.key as GrowthFeatureKey];
+    const price =
+      line.kind === "build" ? prices.build : line.kind === "plan" ? prices.plan : prices.addOns[line.key as GrowthFeatureKey];
     if (!price) return { ok: false, missing: line.name };
     items.push({ price: price.id, quantity: 1 });
   }

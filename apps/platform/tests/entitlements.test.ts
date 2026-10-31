@@ -22,6 +22,7 @@ import {
   refundChange,
 } from "@/db/repositories/client/entitlements";
 import { unlockClientFeatures } from "@/db/repositories/admin/entitlements";
+import { markBuildPaid } from "@/db/repositories/build-standing";
 import { currentPeriod, periodLabel } from "@/lib/billing/period";
 import { newPublicId } from "@/lib/ids";
 import { createTestDb } from "./helpers/db";
@@ -194,11 +195,26 @@ describe("feature unlocking", () => {
     expect(entitlements?.changeRequestsUnlocked).toBe(false);
   });
 
-  it("unlocks analytics and change requests together", async () => {
+  it("refuses to unlock anything while the website build is owed", async () => {
+    // Decision D1: a payment for a plan is not the build. Every payment path
+    // calls the unlock; this is where the answer is decided.
+    const outcome = await unlockClientFeatures(db, basic.clientId, {
+      reason: "payment_confirmed",
+    });
+    expect(outcome).toMatchObject({ changed: false, refused: "build_unpaid", changeRequestsUnlocked: false });
+
+    const entitlements = await getEntitlements(db, basic.ctx);
+    expect(entitlements?.analyticsUnlocked).toBe(false);
+    expect(entitlements?.changeRequestsUnlocked).toBe(false);
+  });
+
+  it("unlocks analytics and change requests together once the build is paid", async () => {
+    await markBuildPaid(db, basic.clientId, { source: "invoice_paid" });
     const outcome = await unlockClientFeatures(db, basic.clientId, {
       reason: "payment_confirmed",
     });
     expect(outcome.changed).toBe(true);
+    expect(outcome.refused).toBeUndefined();
 
     const entitlements = await getEntitlements(db, basic.ctx);
     expect(entitlements?.analyticsUnlocked).toBe(true);
@@ -206,6 +222,7 @@ describe("feature unlocking", () => {
   });
 
   it("does not move the unlock date on a second payment", async () => {
+    await markBuildPaid(db, basic.clientId, { source: "invoice_paid" });
     await unlockClientFeatures(db, basic.clientId, { reason: "first" });
 
     const first = (
@@ -228,12 +245,14 @@ describe("feature unlocking", () => {
     )[0]!.at;
 
     // "When did access begin" must answer the beginning, not the last renewal.
+    expect(first).toBeInstanceOf(Date);
     expect(after?.getTime()).toBe(first?.getTime());
   });
 
   it("withholds analytics from a plan that does not include it", async () => {
     const lite = await seedTenant("initech", "initech@example.test", planLiteId);
 
+    await markBuildPaid(db, lite.clientId, { source: "invoice_paid" });
     await unlockClientFeatures(db, lite.clientId, { reason: "payment_confirmed" });
 
     const entitlements = await getEntitlements(db, lite.ctx);

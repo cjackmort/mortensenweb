@@ -1,16 +1,17 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, clients, servicePlans, subscriptions } from "@/db/schema";
+import { buildStandingOf } from "../build-standing";
 import type { AdminContext } from "../context";
 
 /**
  * Granting and withdrawing what a client can use.
  *
- * The trigger in normal operation is a confirmed payment — the first one
- * unlocks analytics and change requests together, which is what the client was
- * promised when they were asked to pay. But the unlock is a separate act from
- * the payment, and lives here rather than being inlined into the ledger, for
- * two reasons:
+ * The trigger in normal operation is a confirmed payment once the website
+ * build is paid (decision D1) — that payment unlocks analytics and change
+ * requests together, which is what the client was promised when they were
+ * asked to pay. But the unlock is a separate act from the payment, and lives
+ * here rather than being inlined into the ledger, for two reasons:
  *
  *  - a client who paid in cash before the portal existed needs unlocking
  *    without a `payment_requests` row to hang it off;
@@ -26,6 +27,8 @@ export interface UnlockOutcome {
   changeRequestsUnlocked: boolean;
   /** True when this call is what changed things, false when already unlocked. */
   changed: boolean;
+  /** Set when nothing was unlocked because the website build is still owed. */
+  refused?: "build_unpaid";
 }
 
 /**
@@ -39,6 +42,12 @@ export interface UnlockOutcome {
  * Analytics is additionally conditional on the plan including it. A client on a
  * hosting-only plan who pays their invoice has bought hosting, and silently
  * handing them a feature they did not buy removes the reason to upgrade.
+ *
+ * Refused while the build is owed. This used to run on any payment, so $25 for
+ * a plan let in a client who still owed $500 for the site; every caller still
+ * calls it on every payment, and this is where the answer is decided, so a
+ * plan paid after the build — or the build paid after a plan — unlocks at the
+ * payment that settles both.
  */
 export async function unlockClientFeatures(
   db: Database,
@@ -70,6 +79,16 @@ export async function unlockClientFeatures(
   const row = planRows[0];
   if (!row) {
     return { analyticsUnlocked: false, changeRequestsUnlocked: false, changed: false };
+  }
+
+  const standing = await buildStandingOf(db, clientId);
+  if (!standing.settled) {
+    return {
+      analyticsUnlocked: row.analyticsUnlockedAt !== null,
+      changeRequestsUnlocked: row.changeRequestsUnlockedAt !== null,
+      changed: false,
+      refused: "build_unpaid",
+    };
   }
 
   // No plan on record yet is treated as "analytics included". A client who has
@@ -160,12 +179,13 @@ export async function lockClientFeatures(
 }
 
 /**
- * Clients who have paid but are still locked.
+ * Clients whose build is paid but who are still locked.
  *
  * This should always be empty. It exists because it is the query that proves
- * the unlock path is working — a non-empty result means a payment was confirmed
+ * the unlock path is working — a non-empty result means the build was paid
  * and the entitlement did not follow, which is invisible to the operator and
- * infuriating for the client, who paid and still cannot see anything.
+ * infuriating for the client, who paid and still cannot see anything. (A
+ * client who has paid for a plan but not the build is locked on purpose.)
  */
 export async function listPaidButLockedClients(db: Database) {
   return db
@@ -174,15 +194,6 @@ export async function listPaidButLockedClients(db: Database) {
       primaryContactEmail: clients.primaryContactEmail,
     })
     .from(clients)
-    .where(
-      and(
-        isNull(clients.changeRequestsUnlockedAt),
-        sql`EXISTS (
-          SELECT 1 FROM payments
-          WHERE payments.client_id = ${clients.id}
-            AND payments.status = 'recorded'
-        )`,
-      ),
-    )
+    .where(and(isNull(clients.changeRequestsUnlockedAt), isNotNull(clients.buildPaidAt)))
     .limit(50);
 }

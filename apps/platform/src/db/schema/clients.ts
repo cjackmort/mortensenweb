@@ -117,6 +117,19 @@ export const clients = pgTable(
     freeBuildValueCents: integer("free_build_value_cents"),
     freeBuildOn: date("free_build_on"),
 
+    /**
+     * When the website build was paid: its own line on a Stripe invoice or
+     * checkout, its invoice marked paid, or a manual payment recorded as the
+     * build. Never inferred from some other payment arriving — a client who
+     * pays $25 for a plan still owes the build.
+     *
+     * The gate for decision D1: going live and connecting the domain refuse
+     * while this is null, and so does unlocking change requests. First write
+     * wins (`markBuildPaid`), with a `build.paid` audit row naming the source.
+     * Clients unlocked before 0047 carry their unlock time.
+     */
+    buildPaidAt: timestamp("build_paid_at", { withTimezone: true }),
+
     dunningExemptUntil: timestamp("dunning_exempt_until", {
       withTimezone: true,
     }),

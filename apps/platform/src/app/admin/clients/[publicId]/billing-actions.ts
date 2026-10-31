@@ -48,6 +48,7 @@ export async function raiseRequestAction(
   const amountCents = parseAmountToCents(String(formData.get("amount") ?? ""));
   const dueOn = String(formData.get("dueOn") ?? "").trim();
   const note = String(formData.get("note") ?? "");
+  const forBuild = formData.get("forBuild") === "on";
 
   if (amountCents === null) {
     return {
@@ -74,6 +75,7 @@ export async function raiseRequestAction(
     amountCents,
     dueOn,
     note,
+    forBuild,
   });
 
   revalidatePath(`/admin/clients/${clientPublicId}`);

@@ -368,6 +368,44 @@ export const FREE_PORTAL: FreePortal = {
 };
 
 // ---------------------------------------------------------------------------
+// Change sizes
+// ---------------------------------------------------------------------------
+
+/**
+ * How big a change request is — decision D7, 2026-10-30.
+ *
+ * Before a client's site is live and with no plan, small changes are free —
+ * up to `FREE_SMALL_CHANGES_PER_MONTH` a month — and big ones wait for the
+ * build to be paid or a plan. The client picks the size from these examples;
+ * the operator can reclassify it. Once they pay, their plan's rules apply and
+ * the size is only a label.
+ */
+export type ChangeSize = "small" | "big";
+
+export interface ChangeSizeOption {
+  key: ChangeSize;
+  name: string;
+  /** In the client's terms, as the request form shows them. */
+  examples: string;
+}
+
+export const CHANGE_SIZES: ChangeSizeOption[] = [
+  {
+    key: "small",
+    name: "Small change",
+    examples: "Wording, prices, opening hours, contact details, or swapping a photo.",
+  },
+  {
+    key: "big",
+    name: "Bigger change",
+    examples: "A new page or section, a change to the layout or design, or something new the site should do.",
+  },
+];
+
+/** Small changes a month before the site is live and with no plan. Counted by submission, per calendar month. */
+export const FREE_SMALL_CHANGES_PER_MONTH = 1;
+
+// ---------------------------------------------------------------------------
 // Builds
 // ---------------------------------------------------------------------------
 

@@ -277,6 +277,12 @@ export function RecordPaymentForm({
         </>
       )}
       <ReceiptFields amount={amount ? centsToInput(amount) : ""} today={today} onAmountKey={applies} />
+      {!invoice && (
+        <label className="checkbox">
+          <input type="checkbox" name="coversBuild" />
+          <span>This is the website build fee (marks the build paid, so they can go live)</span>
+        </label>
+      )}
       <p className="hint">
         {invoice
           ? `Settles ${invoice.reference} and adds the payment to the ledger.`

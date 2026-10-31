@@ -2,9 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BUILD, GROWTH_FEATURES } from "@mortensenweb/plans";
 import { currentUser } from "@/auth";
+import { SitePreview } from "@/components/site-preview";
 import { getDb } from "@/db/client";
 import { tenantContextFrom } from "@/db/repositories/context";
-import { getWelcomeOffer, type WelcomeOffer } from "@/db/repositories/client/onboarding-checkout";
+import {
+  getWelcomeOffer,
+  type SitePreviewView,
+  type WelcomeOffer,
+} from "@/db/repositories/client/onboarding-checkout";
 import { ordinal } from "@/lib/billing/billing-day";
 import { formatMoney, type SiteDue } from "@/lib/onboarding/checkout";
 import { buildVenmoPaymentUrl, configuredVenmoHandle } from "@/lib/payments/venmo";
@@ -24,10 +29,12 @@ export const metadata = {
  * The welcome checkout: where a client lands after choosing their first
  * password, and where "Pay for your website" on Get started leads.
  *
- * One page for the three things the operator wants settled at the start —
- * paying for the site, a care plan if they want one, and any Growth add-ons —
- * with the total in view and one button to Stripe (`onboarding-checkout.ts`
- * explains how one checkout carries all three). Nothing is charged here.
+ * Decision D1: the agent builds the site first, so the page leads with it —
+ * the built preview, to open and look over — and paying for the build is
+ * "Put it live", the step that lets the operator connect the domain and
+ * launch. A care plan and Growth add-ons are optional beside it, with the
+ * total in view and one button to Stripe (`onboarding-checkout.ts` explains
+ * how one checkout carries all three). Nothing is charged here.
  *
  * A client with nothing to pay and nothing to choose — on the house, or
  * already paying by card — goes straight on to Get started.
@@ -79,6 +86,7 @@ export default async function WelcomePage({
     .split(",")
     .filter((key) => GROWTH_FEATURES.some((f) => f.key === key));
 
+  const owed = offer.siteDue.kind !== "none";
   return (
     <main className="shell welcome">
       <div className="masthead">
@@ -86,13 +94,21 @@ export default async function WelcomePage({
         <span>{offer.businessName}</span>
       </div>
       <p className="page-intro">
-        {firstVisit
-          ? "Your password is set. Next, pay for your website and pick any extras. Everything after the website is optional, and you can change it later."
-          : "Pay for your website and pick any extras. Everything after the website is optional."}
+        {firstVisit ? "Your password is set. " : ""}
+        {!owed
+          ? "Your website is paid for. Pick any extras if you’d like them; you can change them later."
+          : offer.preview
+            ? "Your new website is built. Have a look, and when you’re happy with it, put it live. A care plan and add-ons are optional, and you can change them later."
+            : "We’re building your website now. When it’s ready you’ll see it here, and put it live from this page. A care plan and add-ons are optional."}
       </p>
 
       <WelcomeCheckout
-        siteSection={<SiteSection offer={offer} />}
+        siteSection={
+          <>
+            <PreviewPanel preview={offer.preview} owed={owed} />
+            <SiteSection offer={offer} />
+          </>
+        }
         siteDue={offer.siteDue}
         plans={offer.plans ? plans : null}
         currentPlanName={offer.currentPlanName}
@@ -103,6 +119,42 @@ export default async function WelcomePage({
         promo={offer.promo}
       />
     </main>
+  );
+}
+
+/**
+ * The site itself, first: a picture of its home page (the deploy's own shot,
+ * `components/site-preview.tsx`) and a link to open it. Before launch that is
+ * its Netlify address — the domain still points at whatever was there.
+ */
+function PreviewPanel({ preview, owed }: { preview: SitePreviewView | null; owed: boolean }) {
+  if (!preview) return null;
+  return (
+    <section className="panel welcome-preview" aria-labelledby="welcome-preview">
+      <div className="panel-head">
+        <h2 id="welcome-preview">{preview.live ? "Your website" : "Your new website"}</h2>
+        <span className="panel-sub">{preview.live ? "Live" : "Preview"}</span>
+      </div>
+      <div className="panel-body">
+        <a
+          className="welcome-preview-media"
+          href={preview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${preview.name} in a new tab`}
+        >
+          <SitePreview url={preview.url} name={preview.name} fallbackInitial={preview.name.charAt(0).toUpperCase()} />
+        </a>
+        <p className="welcome-preview-actions">
+          <a className="button secondary" href={preview.url} target="_blank" rel="noopener noreferrer">
+            Open your site
+          </a>
+          {!preview.live && owed && (
+            <span className="muted">This is the site that goes live on your domain once it&rsquo;s paid for.</span>
+          )}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -126,7 +178,7 @@ function SiteSection({ offer }: { offer: WelcomeOffer }) {
   return (
     <section className="panel" aria-labelledby="welcome-site">
       <div className="panel-head">
-        <h2 id="welcome-site">Your website</h2>
+        <h2 id="welcome-site">Put it live</h2>
         <span className="panel-sub">{due.kind === "build" ? "Paid once" : `Invoice ${due.reference}`}</span>
       </div>
       <div className="panel-body">
@@ -141,7 +193,7 @@ function BuildDetail({ amountCents }: { amountCents: number }) {
     <div className="welcome-build">
       <p className="welcome-build-price">
         <strong>{formatMoney(amountCents)}</strong>
-        <span>for the design and build</span>
+        <span>for the design and build, and putting it live on your domain</span>
       </p>
       <ul className="plan-features">
         {BUILD.includes.map((line) => (

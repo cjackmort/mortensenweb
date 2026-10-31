@@ -209,12 +209,13 @@ describe("cheaperPlanFor", () => {
 });
 
 describe("stripeLineItems", () => {
-  it("sends prices by id for the plan and add-ons, and the build as a one-time amount", () => {
+  it("sends every line by price id, the build as the Website build product's price", () => {
     const basket = basketOf({ siteDue: BUILD_DUE, plans: OFFERED, planKey: "lite", addOns: ["reviews"] })!;
 
     const result = stripeLineItems(basket, {
       plan: { id: "price_lite" },
       addOns: { reviews: { id: "price_reviews" } },
+      build: { id: "price_build" },
     });
 
     expect(result).toEqual({
@@ -222,14 +223,7 @@ describe("stripeLineItems", () => {
       items: [
         { price: "price_lite", quantity: 1 },
         { price: "price_reviews", quantity: 1 },
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: BUILD.priceCents,
-            product_data: { name: "Website build" },
-          },
-        },
+        { price: "price_build", quantity: 1 },
       ],
     });
   });
@@ -237,13 +231,24 @@ describe("stripeLineItems", () => {
   it("refuses rather than leaving out a line whose Stripe price is missing", () => {
     const basket = basketOf({ siteDue: PAID, plans: OFFERED, planKey: "lite", addOns: ["reviews"] })!;
 
-    expect(stripeLineItems(basket, { plan: { id: "price_lite" }, addOns: {} })).toEqual({
+    expect(stripeLineItems(basket, { plan: { id: "price_lite" }, addOns: {}, build: null })).toEqual({
       ok: false,
       missing: "Review requests",
     });
-    expect(stripeLineItems(basket, { plan: null, addOns: { reviews: { id: "x" } } })).toEqual({
+    expect(stripeLineItems(basket, { plan: null, addOns: { reviews: { id: "x" } }, build: null })).toEqual({
       ok: false,
       missing: "Lite plan",
+    });
+  });
+
+  it("refuses a basket with the build when the build has no Stripe price", () => {
+    // `stripe:setup --apply` not yet run on this account. Charging the build
+    // as a bare amount would put it beyond a build-only promo code and the
+    // receiver's line matching, so the checkout waits for the price.
+    const basket = basketOf({ siteDue: BUILD_DUE, plans: OFFERED, planKey: "lite", addOns: [] })!;
+    expect(stripeLineItems(basket, { plan: { id: "price_lite" }, addOns: {}, build: null })).toEqual({
+      ok: false,
+      missing: "Website build",
     });
   });
 });

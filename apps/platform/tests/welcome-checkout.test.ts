@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { BUILD, GROWTH_FEATURES, PLANS } from "@mortensenweb/plans";
 import type { Database } from "@/db/client";
 import { auditLog, clients, paymentRequests, payments, servicePlans } from "@/db/schema";
+import { markBuildPaid } from "@/db/repositories/build-standing";
 import { newPublicId } from "@/lib/ids";
 import { createTestDb } from "./helpers/db";
 import { seedTenant, type SeededTenant } from "./helpers/tenant";
@@ -29,9 +30,14 @@ interface FakeSession {
   line_items: { data: Array<{ price: { id: string } | null }> };
 }
 
+const BUILD_PRICE = "price_build_website_v1";
+const BUILD_PRODUCT = "prod_website_build";
+
 const fake = {
   configured: true,
   liveSubscription: false,
+  /** False: `stripe:setup` has not made the Website build price on this account. */
+  buildPrice: true,
   sessions: new Map<string, FakeSession>(),
   created: [] as Array<{ params: Stripe.Checkout.SessionCreateParams; options?: Stripe.RequestOptions }>,
   counter: 0,
@@ -47,6 +53,14 @@ vi.mock("@/lib/payments/stripe", async () => {
     requireStripe: () =>
       ({
         customers: { create: async () => ({ id: `cus_${newPublicId()}` }) },
+        prices: {
+          list: async (params: { lookup_keys: string[] }) => ({
+            data:
+              fake.buildPrice && params.lookup_keys.includes("build_website_v1")
+                ? [{ id: BUILD_PRICE, unit_amount: BUILD.priceCents, currency: "usd", product: BUILD_PRODUCT, recurring: null }]
+                : [],
+          }),
+        },
         subscriptions: {
           list: async () => ({ data: fake.liveSubscription ? [{ id: "sub_live", status: "active" }] : [] }),
         },
@@ -111,6 +125,7 @@ afterAll(async () => {
 beforeEach(() => {
   fake.configured = true;
   fake.liveSubscription = false;
+  fake.buildPrice = true;
   fake.sessions.clear();
   fake.created.length = 0;
 });
@@ -127,6 +142,12 @@ async function recordPayment(tenant: SeededTenant, amountCents = 50_000) {
     method: "cash",
     receivedOn: "2026-10-01",
   });
+}
+
+/** The build paid: a ledger row, and the fact the payment paths record beside it. */
+async function payForSite(tenant: SeededTenant) {
+  await recordPayment(tenant);
+  await markBuildPaid(db, tenant.clientId, { source: "manual_payment" });
 }
 
 async function compPlanId(): Promise<string> {
@@ -166,11 +187,29 @@ describe("what a client owes for their site", () => {
     expect(offer?.stripeReady).toBe(true);
   });
 
-  it("is nothing once they have paid", async () => {
+  it("is nothing once the build is paid", async () => {
     const tenant = await freshClient();
-    await recordPayment(tenant);
+    await payForSite(tenant);
 
     expect(await getWelcomeOffer(db, tenant.ctx)).toMatchObject({ siteDue: { kind: "none", reason: "paid" } });
+  });
+
+  it("is still the build after money arrives for something else", async () => {
+    // Decision D1: $25 for a plan is not the $500 for the site.
+    const tenant = await freshClient();
+    await recordPayment(tenant, 2500);
+
+    expect((await getWelcomeOffer(db, tenant.ctx))?.siteDue).toEqual({ kind: "build", amountCents: BUILD.priceCents });
+  });
+
+  it("is nothing for a build the operator recorded as free", async () => {
+    const tenant = await freshClient();
+    await db
+      .update(clients)
+      .set({ freeBuildValueCents: BUILD.priceCents, freeBuildOn: "2026-10-01" })
+      .where(eq(clients.id, tenant.clientId));
+
+    expect((await getWelcomeOffer(db, tenant.ctx))?.siteDue).toEqual({ kind: "none", reason: "waived" });
   });
 
   it("is nothing, and no plan to choose, for a complimentary client", async () => {
@@ -204,7 +243,7 @@ describe("what a client owes for their site", () => {
 
   it("does not mistake a paying client's monthly invoice for their site", async () => {
     const tenant = await freshClient();
-    await recordPayment(tenant);
+    await payForSite(tenant);
     await raiseInvoice(tenant, { amountCents: 5000, note: "November care plan" });
 
     expect((await getWelcomeOffer(db, tenant.ctx))?.siteDue).toEqual({ kind: "none", reason: "paid" });
@@ -214,7 +253,7 @@ describe("what a client owes for their site", () => {
     const tenant = await freshClient();
     await raiseInvoice(tenant, { publicId: await buildInvoicePublicId(tenant.clientId), status: "cancelled" });
 
-    expect(await siteDueFor(db, { ...tenant, compPlanId: null, isInternal: false, changeRequestsUnlockedAt: null })).toEqual({
+    expect(await siteDueFor(db, { ...tenant, compPlanId: null, isInternal: false, buildPaidAt: null, freeBuildOn: null })).toEqual({
       kind: "none",
       reason: "waived",
     });
@@ -238,12 +277,14 @@ describe("beginWelcomeCheckout", () => {
     expect(params.line_items).toEqual([
       { price: "price_plan_lite", quantity: 1 },
       { price: "price_addon_reviews", quantity: 1 },
-      {
-        quantity: 1,
-        price_data: { currency: "usd", unit_amount: BUILD.priceCents, product_data: { name: "Website build" } },
-      },
+      { price: BUILD_PRICE, quantity: 1 },
     ]);
-    expect(params.subscription_data?.metadata).toMatchObject({ client_id: tenant.clientId, plan_key: "lite" });
+    // The receiver finds the build's line on the first invoice by its product.
+    expect(params.subscription_data?.metadata).toMatchObject({
+      client_id: tenant.clientId,
+      plan_key: "lite",
+      build_product: BUILD_PRODUCT,
+    });
     expect(params.metadata).toMatchObject({ source: "welcome", client_id: tenant.clientId });
     expect(params.success_url).toBe(URLS.successUrl);
   });
@@ -272,6 +313,9 @@ describe("beginWelcomeCheckout", () => {
     expect(again).toMatchObject({ ok: true, mode: "payment", reused: true });
     expect(fake.created).toHaveLength(1);
     expect(fake.created[0]!.params.mode).toBe("payment");
+    // The Website build product's own price, and a build code can be entered.
+    expect(fake.created[0]!.params.line_items).toEqual([{ price: BUILD_PRICE, quantity: 1 }]);
+    expect(fake.created[0]!.params.allow_promotion_codes).toBe(true);
 
     const invoices = await db.select().from(paymentRequests).where(eq(paymentRequests.clientId, tenant.clientId));
     expect(invoices).toHaveLength(1);
@@ -281,6 +325,7 @@ describe("beginWelcomeCheckout", () => {
       status: "open",
       note: "Website build",
       provider: "stripe",
+      purpose: "build",
     });
     expect(fake.created[0]!.params.metadata).toMatchObject({ payment_request_id: invoices[0]!.publicId });
 
@@ -310,6 +355,39 @@ describe("beginWelcomeCheckout", () => {
     expect(outcome).toMatchObject({ ok: true, mode: "payment" });
     expect(fake.created[0]!.params.metadata).toMatchObject({ payment_request_id: invoice.publicId });
     expect(fake.created[0]!.params.line_items?.[0]?.price_data?.unit_amount).toBe(42_000);
+  });
+
+  it("charges an operator's build invoice on the build product, at the invoice's own amount", async () => {
+    const tenant = await freshClient();
+    const invoice = await raiseInvoice(tenant, { purpose: "build" });
+
+    const outcome = await beginWelcomeCheckout(db, tenant.ctx, { planKey: null, addOns: [], ...URLS });
+
+    expect(outcome).toMatchObject({ ok: true, mode: "payment" });
+    expect(fake.created[0]!.params.metadata).toMatchObject({ payment_request_id: invoice.publicId });
+    expect(fake.created[0]!.params.line_items).toEqual([
+      { quantity: 1, price_data: { currency: "usd", unit_amount: 42_000, product: BUILD_PRODUCT } },
+    ]);
+  });
+
+  it("takes no promotion code on an invoice that is not the build", async () => {
+    const tenant = await freshClient();
+    await raiseInvoice(tenant);
+
+    await beginWelcomeCheckout(db, tenant.ctx, { planKey: null, addOns: [], ...URLS });
+
+    expect(fake.created[0]!.params.allow_promotion_codes).toBeUndefined();
+  });
+
+  it("refuses the build, before anything reaches Stripe, when the account has no build price", async () => {
+    fake.buildPrice = false;
+
+    const alone = await beginWelcomeCheckout(db, (await freshClient()).ctx, { planKey: null, addOns: [], ...URLS });
+    const withPlan = await beginWelcomeCheckout(db, (await freshClient()).ctx, { planKey: "care", addOns: [], ...URLS });
+
+    expect(alone).toMatchObject({ ok: false, reason: "no_price" });
+    expect(withPlan).toMatchObject({ ok: false, reason: "no_price" });
+    expect(fake.created).toHaveLength(0);
   });
 
   it("refuses add-ons without a plan, before anything reaches Stripe", async () => {
@@ -352,7 +430,7 @@ describe("beginWelcomeCheckout", () => {
 
   it("says there is nothing to pay when the site is paid and nothing is chosen", async () => {
     const tenant = await freshClient();
-    await recordPayment(tenant);
+    await payForSite(tenant);
 
     expect(await beginWelcomeCheckout(db, tenant.ctx, { planKey: null, addOns: [], ...URLS })).toMatchObject({
       ok: false,

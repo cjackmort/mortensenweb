@@ -13,6 +13,8 @@ import {
 import { newPublicId } from "@/lib/ids";
 import { generatePaymentReference } from "@/lib/payments/venmo";
 import { daysOverdue, paymentStanding, type PaymentStanding } from "@/lib/billing/dunning";
+import { isBuildInvoice, markBuildPaid } from "../build-standing";
+import { expireOpenCheckouts } from "./checkout-expiry";
 import { unlockClientFeatures } from "./entitlements";
 import { markAdCampaignPaid } from "./ads";
 import type { AdminContext } from "../context";
@@ -58,6 +60,8 @@ export interface NewPaymentRequestInput {
   coversPeriodStart?: string;
   coversPeriodEnd?: string;
   note?: string;
+  /** For the website build: settling it marks the build paid (`purpose = 'build'`). */
+  forBuild?: boolean;
 }
 
 /** Resolve the client row for an organization, or throw. */
@@ -114,6 +118,7 @@ export async function raisePaymentRequest(
       note: input.note?.trim() || null,
       status: "open",
       method: "venmo",
+      ...(input.forBuild ? { purpose: "build" as const } : {}),
     })
     .returning({
       publicId: paymentRequests.publicId,
@@ -126,7 +131,7 @@ export async function raisePaymentRequest(
     action: "payment_request.raised",
     entityType: "payment_request",
     entityId: inserted[0]!.publicId,
-    metadata: { amountCents: input.amountCents, dueOn: input.dueOn, reference },
+    metadata: { amountCents: input.amountCents, dueOn: input.dueOn, reference, forBuild: Boolean(input.forBuild) },
   });
 
   return inserted[0]!;
@@ -161,6 +166,10 @@ export interface ConfirmPaymentInput {
    * invoice: a client who sent $20 of $25 by Venmo. The ledger records the
    * money, not the ask; the invoice is settled either way, because "Mark
    * paid" is the operator saying this one is done. Defaults to the invoice.
+   *
+   * Zero only from a processor (`provider` set): a build a 100%-off code
+   * took to nothing is settled, and the ledger records the nothing. An
+   * operator typing zero is a mistake, and refused.
    */
   amountCents?: number;
 }
@@ -183,6 +192,7 @@ export async function confirmPaymentReceived(
       coversPeriodStart: paymentRequests.coversPeriodStart,
       coversPeriodEnd: paymentRequests.coversPeriodEnd,
       paymentId: paymentRequests.paymentId,
+      providerReference: paymentRequests.providerReference,
       organizationId: clients.organizationId,
     })
     .from(paymentRequests)
@@ -192,9 +202,20 @@ export async function confirmPaymentReceived(
 
   const request = rows[0];
   if (!request) return { ok: false, reason: "not_found" };
+  const isBuild = await isBuildInvoice({ ...request, publicId: requestPublicId });
 
   // Already settled: report it rather than recording a second payment.
   if (request.status === "paid") {
+    // A retry of a confirmation that died between the claim and marking the
+    // build: finished here, or the client has paid $500 and stays locked.
+    if (isBuild) {
+      const marked = await markBuildPaid(db, request.clientId, {
+        source: "invoice_paid",
+        actorUserId: ctx.userId,
+        reference: requestPublicId,
+      });
+      if (marked) await unlockClientFeatures(db, request.clientId, { actorUserId: ctx.userId, reason: "payment_confirmed" });
+    }
     const existing = await db
       .select({ publicId: payments.publicId })
       .from(payments)
@@ -211,9 +232,10 @@ export async function confirmPaymentReceived(
     return { ok: false, reason: "not_confirmable" };
   }
 
+  const lowest = input.provider ? 0 : 1;
   if (
     input.amountCents !== undefined &&
-    (!Number.isInteger(input.amountCents) || input.amountCents <= 0)
+    (!Number.isInteger(input.amountCents) || input.amountCents < lowest)
   ) {
     throw new Error("Amount must be a positive whole number of cents.");
   }
@@ -284,6 +306,33 @@ export async function confirmPaymentReceived(
     )
     .returning({ id: paymentRequests.id });
 
+  // An invoice for the build settles the build, whatever arrived against it —
+  // the operator's Mark paid says this one is done, and a 100%-off code
+  // settles it at zero. First write wins, so it happens once.
+  if (isBuild) {
+    await markBuildPaid(db, request.clientId, {
+      source: "invoice_paid",
+      actorUserId: ctx.userId,
+      reference: requestPublicId,
+      amountCents: receivedCents,
+    });
+  }
+
+  // Settled, so the checkout page Stripe still holds for it must not take
+  // money too — and, for the build, nor may any other page that charges for
+  // it. Only the call that claimed the request; the session that paid is
+  // already complete and is left alone.
+  if (claimed.length > 0) {
+    await expireOpenCheckouts(db, {
+      clientId: request.clientId,
+      organizationId: request.organizationId,
+      sessionIds: [request.providerReference],
+      includeBuild: isBuild,
+      reason: "invoice_paid",
+      actorUserId: ctx.userId,
+    });
+  }
+
   // Payment settles the account, so any dunning pause is lifted here too.
   await db
     .update(clients)
@@ -300,10 +349,11 @@ export async function confirmPaymentReceived(
       ),
     );
 
-  // Money arriving is what turns the features on. Idempotent and first-write-
-  // wins, so confirming a second month does not reset the unlock date — and
-  // safe to call on every confirmation rather than only the first, which
-  // removes the need for this code to know which one it is looking at.
+  // Money arriving is what turns the features on, once the build is paid
+  // (`unlockClientFeatures` refuses before). Idempotent and first-write-wins,
+  // so confirming a second month does not reset the unlock date — and safe to
+  // call on every confirmation rather than only the first, which removes the
+  // need for this code to know which one it is looking at.
   await unlockClientFeatures(db, request.clientId, {
     actorUserId: ctx.userId,
     reason: "payment_confirmed",

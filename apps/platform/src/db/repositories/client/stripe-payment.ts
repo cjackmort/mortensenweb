@@ -2,7 +2,9 @@ import { and, eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@/db/client";
 import { paymentRequests } from "@/db/schema";
+import { priceForBuild, productIdOf } from "@/lib/payments/build";
 import { requireStripe, stripeConfigured } from "@/lib/payments/stripe";
+import { isBuildInvoice } from "../build-standing";
 import { assertMutable, type TenantContext } from "../context";
 import { ensureCustomer, resolveClient } from "./stripe-checkout";
 
@@ -31,6 +33,14 @@ import { ensureCustomer, resolveClient } from "./stripe-checkout";
  *
  * Nothing here marks anything paid. That happens when the webhook sees a
  * session whose payment Stripe reports as `paid` — see `stripe-one-off.ts`.
+ *
+ * ## The build
+ *
+ * An invoice for the website build is charged on the "Website build" product
+ * (`lib/payments/build.ts`) rather than as a bare amount, and takes promotion
+ * codes: a build code is restricted to that product, and one that takes the
+ * whole $500 off still settles the invoice. Every other invoice is the figure
+ * an operator raised, and no code comes off it.
  */
 
 export type StripePaymentOutcome =
@@ -43,6 +53,7 @@ export type StripePaymentOutcome =
         | "not_found"
         | "not_payable"
         | "processing"
+        | "no_price"
         | "stripe_failed";
       message: string;
     };
@@ -63,7 +74,7 @@ type PayableRequest = {
   amountCents: number;
   currency: string;
   status: string;
-  purpose: "subscription" | "extra_change" | "other";
+  purpose: "subscription" | "extra_change" | "other" | "build";
   note: string | null;
   provider: string | null;
   providerReference: string | null;
@@ -96,6 +107,41 @@ async function existingSession(
   if (session.status === "complete") return "processing";
   if (session.status === "open" && session.url) return session;
   return null;
+}
+
+type OneOffLine = Stripe.Checkout.SessionCreateParams.LineItem;
+
+/**
+ * The checkout's one line. The build's own price when the invoice is for the
+ * published amount; the invoice's amount on the build product when an
+ * operator raised it for some other figure; and for anything else, the
+ * invoice's amount under its own name. Null when the invoice is the build and
+ * the account has no build price — `stripe:setup` has not been run.
+ */
+async function lineFor(request: PayableRequest, isBuild: boolean): Promise<OneOffLine | null> {
+  if (!isBuild) {
+    return {
+      quantity: 1,
+      price_data: {
+        currency: request.currency.toLowerCase(),
+        unit_amount: request.amountCents,
+        product_data: { name: lineItemName(request) },
+      },
+    };
+  }
+  const price = await priceForBuild();
+  if (!price) return null;
+  if (price.unit_amount === request.amountCents && price.currency === request.currency.toLowerCase()) {
+    return { quantity: 1, price: price.id };
+  }
+  return {
+    quantity: 1,
+    price_data: {
+      currency: request.currency.toLowerCase(),
+      unit_amount: request.amountCents,
+      product: productIdOf(price),
+    },
+  };
 }
 
 export async function beginStripePayment(
@@ -173,6 +219,20 @@ export async function beginStripePayment(
     }
     if (existing) return { ok: true, url: existing.url!, reused: true };
 
+    const isBuild = await isBuildInvoice({ ...request, clientId: client.clientId });
+    const line = await lineFor(request, isBuild);
+    if (!line) {
+      console.error("[stripe:payment] no website build price; run stripe:setup --apply", {
+        clientId: client.clientId,
+        requestPublicId: request.publicId,
+      });
+      return {
+        ok: false,
+        reason: "no_price",
+        message: "Paying for your website online isn't switched on yet. Please get in touch and we'll sort it out.",
+      };
+    }
+
     const customerId = await ensureCustomer(db, client);
     const metadata = {
       client_id: client.clientId,
@@ -186,16 +246,8 @@ export async function beginStripePayment(
       {
         mode: "payment",
         customer: customerId,
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: request.currency.toLowerCase(),
-              unit_amount: request.amountCents,
-              product_data: { name: lineItemName(request) },
-            },
-          },
-        ],
+        line_items: [line],
+        ...(isBuild ? { allow_promotion_codes: true } : {}),
         success_url: input.successUrl,
         cancel_url: input.cancelUrl,
         client_reference_id: client.publicId,

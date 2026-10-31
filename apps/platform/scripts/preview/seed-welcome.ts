@@ -1,5 +1,5 @@
 /**
- * Two clients standing at the welcome page, in the local PGlite database only.
+ * Clients standing at the welcome page, in the local PGlite database only.
  *
  *   npm run seed:welcome --workspace apps/platform
  *
@@ -8,6 +8,13 @@
  * - `invoice` — an operator has already raised a $500 invoice for the build, so
  *               the page shows that invoice and a plan can be chosen beside it.
  *               This is the only way a plan gets paid without the build.
+ * - `live`    — like `build`, for decision D1's own path: look at the built
+ *               preview, then "Put it live" for the build alone.
+ * - `code`    — like `live`, paid with a 100%-off build code.
+ *
+ * Each has its site's Netlify address recorded, as a scaffolded site does,
+ * so the welcome page shows the preview. Nothing is served there; the page
+ * links to it and draws the site's initial where the picture would be.
  *
  * Both have a temporary password and must change it on first sign-in, so the
  * run starts where a real client does. An admin is seeded too: a one-off card
@@ -126,6 +133,7 @@ async function createClient(
     organizationId,
     name: input.label,
     primaryDomain: `${input.slug}.example`,
+    netlifySiteName: `${input.slug}-e2e`,
     status: "preview",
     isDemo: true,
   });
@@ -139,7 +147,7 @@ async function createClient(
       dueOn: businessDate(),
       note: "Website design and build",
       status: "open",
-      purpose: "other",
+      purpose: "build",
     });
   }
   return owner.account;
@@ -156,11 +164,13 @@ async function main(): Promise<void> {
     admin: admin.account,
     build: await createClient(db, { label: "Welcome Build", slug: "welcome-build", withBuildInvoice: false }),
     invoice: await createClient(db, { label: "Welcome Invoice", slug: "welcome-invoice", withBuildInvoice: true }),
+    live: await createClient(db, { label: "Welcome Live", slug: "welcome-live", withBuildInvoice: false }),
+    code: await createClient(db, { label: "Welcome Code", slug: "welcome-code", withBuildInvoice: false }),
   };
 
   await mkdir(dirname(CREDENTIALS_FILE), { recursive: true });
   await writeFile(CREDENTIALS_FILE, JSON.stringify(accounts, null, 2), { mode: 0o600 });
-  console.log(`Seeded 2 welcome-stage clients and an admin. Sign-in details are in ${CREDENTIALS_FILE}`);
+  console.log(`Seeded 4 welcome-stage clients and an admin. Sign-in details are in ${CREDENTIALS_FILE}`);
 }
 
 main().catch((error: unknown) => {

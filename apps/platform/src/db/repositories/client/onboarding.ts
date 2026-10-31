@@ -41,7 +41,8 @@ interface ClientFlags {
   clientId: string;
   compPlanId: string | null;
   isInternal: boolean;
-  changeRequestsUnlockedAt: Date | null;
+  buildPaidAt: Date | null;
+  freeBuildOn: string | null;
   bookingEnabled: boolean;
   shopEnabled: boolean;
 }
@@ -52,7 +53,8 @@ async function clientFlags(db: Database, ctx: TenantContext): Promise<ClientFlag
       clientId: clients.id,
       compPlanId: clients.compPlanId,
       isInternal: clients.isInternal,
-      changeRequestsUnlockedAt: clients.changeRequestsUnlockedAt,
+      buildPaidAt: clients.buildPaidAt,
+      freeBuildOn: clients.freeBuildOn,
       bookingEnabled: clients.bookingEnabled,
       shopEnabled: clients.shopEnabled,
     })

@@ -31,6 +31,7 @@ import { keepSchedulerAwakeForJob } from "@/lib/scheduler/gate";
 import { attachmentUrl, mediaAssetUrl } from "@/lib/storage/signed-links";
 import { snapshotRequestAssets } from "@/db/repositories/client/request-assets";
 import { profileEntriesFor } from "./business-profile";
+import { changeTierOfOrganization } from "../change-tier";
 import type { AdminContext } from "../context";
 import { NotFoundError } from "../context";
 
@@ -382,6 +383,7 @@ async function runDispatch(
       title: changeRequests.title,
       description: changeRequests.description,
       category: changeRequests.category,
+      size: changeRequests.size,
       priority: changeRequests.priority,
       desiredTiming: changeRequests.desiredTiming,
       status: changeRequests.status,
@@ -533,6 +535,14 @@ async function runDispatch(
         description: request.description,
         category: request.category,
         priority: request.priority,
+        size: request.size,
+        // Read at dispatch, not at submission: a client who paid in between
+        // is owed the whole change. Only a small request is limited — a big
+        // one reaches here on a plan, or because an operator reclassified it
+        // and chose to send it.
+        smallOnly:
+          request.size === "small" &&
+          (await changeTierOfOrganization(db, request.organizationId))?.tier === "free",
         desiredTiming: request.desiredTiming,
         attachmentUrls,
         allowedPaths: input.allowedPaths,

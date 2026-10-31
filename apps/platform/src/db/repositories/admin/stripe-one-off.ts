@@ -24,7 +24,9 @@ import type { StripeOutcome } from "./stripe-webhooks";
  * - **Stripe says the session is paid**, re-read from the API rather than taken
  *   from the event. A completed session can still be waiting on a bank
  *   transfer; that arrives later as `async_payment_succeeded`, and either
- *   event settling first leaves the other with nothing to do.
+ *   event settling first leaves the other with nothing to do. A completed
+ *   session that needed no payment — a build a 100%-off code took to zero —
+ *   is settled too, at the zero it collected.
  * - **The invoice belongs to the client the checkout was for.** The session's
  *   metadata names both, and they are checked against each other. A mismatch
  *   goes to an operator; settling it would mark one client paid with another
@@ -123,7 +125,8 @@ export async function settleOneOffCheckout(
     );
   }
 
-  if (session.payment_status !== "paid") {
+  const discounted = session.payment_status === "no_payment_required" && session.status === "complete" && session.amount_total === 0;
+  if (session.payment_status !== "paid" && !discounted) {
     if (input.eventType === "checkout.session.async_payment_failed") {
       await db.insert(auditLog).values({
         organizationId: input.match.organizationId,
@@ -154,7 +157,13 @@ export async function settleOneOffCheckout(
     providerReference: paymentIntentId ?? session.id,
     receiptUrl,
     receivedOn: businessDate(new Date()),
-    note: `Stripe checkout ${session.id}`,
+    // What Stripe collected, which a promo code can make less than the
+    // invoice — the ledger records money, not the ask.
+    amountCents: session.amount_total ?? undefined,
+    note:
+      session.amount_total === 0
+        ? `Stripe checkout ${session.id} — settled without collecting cash (a code took it to zero).`
+        : `Stripe checkout ${session.id}`,
   });
 
   if (!confirmed.ok) {
@@ -181,7 +190,9 @@ export async function settleOneOffCheckout(
   });
 
   // Recorded, not rejected. A client who paid has paid, whatever the figure.
-  if (session.amount_total !== null && session.amount_total !== request.amountCents) {
+  // A promo code's discount is the one difference that is expected.
+  const discount = session.total_details?.amount_discount ?? 0;
+  if (session.amount_total !== null && session.amount_total + discount !== request.amountCents) {
     await db.insert(auditLog).values({
       actorUserId: actor.userId,
       organizationId: input.match.organizationId,
