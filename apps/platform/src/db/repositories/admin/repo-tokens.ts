@@ -145,7 +145,9 @@ export async function installAgentWorkflow(
  * Put the shared deploy workflow's caller into a scaffolded site's repository.
  *
  * Not offered for a repository connected in place — see
- * `lib/github/deploy-workflow.ts` for why that would deploy twice.
+ * `lib/github/deploy-workflow.ts` for why that would deploy twice. This
+ * installs unconditionally; the caller decides, and the conversion's
+ * `deploy_workflow` and `netlify_site_variable` steps do.
  */
 export async function installDeployWorkflow(
   db: Database,

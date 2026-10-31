@@ -12,10 +12,12 @@ import {
 } from "@/db/repositories/client/availability";
 import { listAppointments, type AppointmentView } from "@/db/repositories/client/availability-bookings";
 import { calendarStatus, type CalendarStatus } from "@/db/repositories/client/availability-calendar";
+import { bookingsByDate } from "@/lib/availability/calendar";
 import { formatDay, formatDuration, formatRange, formatSlotTime, timeZoneLabel } from "@/lib/availability/format";
 import { BUFFERS, HORIZONS, NOTICES, SLOT_LENGTHS, TIME_ZONES } from "@/lib/availability/rules";
+import { bookableWindow, type Slot } from "@/lib/availability/slots";
 import { dateInZone } from "@/lib/availability/time";
-import type { Slot } from "@/lib/availability/slots";
+import { AvailabilityCalendar } from "./availability-calendar";
 import { PendingBookings, UpcomingBookings, type BookingRow } from "./bookings";
 import { DisconnectCalendar } from "./calendar-controls";
 import { DaysOff } from "./days-off";
@@ -30,10 +32,12 @@ import "./availability.css";
  * Opened by `clients.booking_enabled` (or the agency's own account, to try
  * it). The tab in the nav is not the gate; this page checks for itself.
  *
- * Bookings come first when there are any to answer — that is the daily use.
- * Below them, what shapes the times (hours, rules, days off) on the left,
- * and what comes out (the website's next open times, and the calendar they
- * are checked against) on the right; stacked in that order on a phone.
+ * Requests to answer come first when there are any — that is the daily use.
+ * Then the month calendar, the main way to set times: press a day to open or
+ * close it. Below it, what shapes the times (weekly hours, rules, days off)
+ * on the left, and what comes out (the website's next open times, and the
+ * Google Calendar they are checked against) on the right; stacked in that
+ * order on a phone.
  */
 
 export const dynamic = "force-dynamic";
@@ -126,6 +130,36 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
   const [provider, outcomeKey] = (connect ?? "").split(":");
   const outcome = provider === "google_calendar" && outcomeKey ? OUTCOMES[outcomeKey] : undefined;
 
+  const calendarBookings = bookingsByDate([
+    ...lists.pending.map((b) => ({ ...b, status: "pending" as const })),
+    ...lists.upcoming.map((b) => ({ ...b, status: "confirmed" as const })),
+  ]);
+
+  // Where a client has asked to approve each request, this is the section
+  // they come to answer. With something waiting it leads the page; otherwise
+  // it follows the calendar as a short "nothing waiting".
+  const waitingPanel =
+    view.rules.requiresApproval || lists.pending.length > 0 ? (
+      <section
+        className={`panel${lists.pending.length > 0 ? " avail-waiting" : ""}`}
+        aria-labelledby="avail-pending"
+      >
+        <div className="panel-head">
+          <h2 id="avail-pending">Waiting for your answer</h2>
+          {lists.pending.length > 0 && <span className="pill pill-warning">{lists.pending.length} to answer</span>}
+        </div>
+        <div className="panel-body">
+          {lists.pending.length > 0 && (
+            <p className="avail-waiting-lede">
+              Someone picked these times on your website. <strong>Accept</strong> confirms the time and emails them.{" "}
+              <strong>Decline</strong> opens the time again and emails them too.
+            </p>
+          )}
+          <PendingBookings rows={lists.pending.map((b) => bookingRow(b, now))} readOnly={readOnly} />
+        </div>
+      </section>
+    ) : null;
+
   return (
     <main className="shell avail">
       <div className="masthead">
@@ -146,21 +180,34 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
       )}
       {!setUp && (
         <p className="notice notice-info">
-          Start with your weekly hours below. Until there are some, your website&rsquo;s booking page offers no times.
+          Start by setting when you&rsquo;re open: press a day on the calendar, or fill in your weekly hours below. Until
+          there are some, your website&rsquo;s booking page offers no times.
         </p>
       )}
 
-      {(view.rules.requiresApproval || lists.pending.length > 0) && (
-        <section className="panel" aria-labelledby="avail-pending">
-          <div className="panel-head">
-            <h2 id="avail-pending">Waiting for your answer</h2>
-            {lists.pending.length > 0 && <span className="pill pill-warning">{lists.pending.length} to answer</span>}
-          </div>
-          <div className="panel-body">
-            <PendingBookings rows={lists.pending.map((b) => bookingRow(b, now))} readOnly={readOnly} />
-          </div>
-        </section>
-      )}
+      {waitingPanel && lists.pending.length > 0 && waitingPanel}
+
+      <section className="panel" aria-labelledby="avail-calendar-title">
+        <div className="panel-head">
+          <h2 id="avail-calendar-title">Your calendar</h2>
+          <span className="panel-sub">{timeZoneLabel(tz, now)}</span>
+        </div>
+        <div className="panel-body">
+          <p className="avail-lede">
+            Press a day to set when you&rsquo;re open. {view.rules.requiresApproval ? "When someone asks for a time, you accept or decline it." : "Open times are booked straight away."}
+          </p>
+          <AvailabilityCalendar
+            weekly={view.weekly}
+            overrides={view.overrides.map((o) => ({ publicId: o.publicId, date: o.date, ranges: o.ranges }))}
+            bookings={calendarBookings}
+            today={view.today}
+            lastBookable={bookableWindow(view.rules, now).last}
+            readOnly={readOnly}
+          />
+        </div>
+      </section>
+
+      {waitingPanel && lists.pending.length === 0 && waitingPanel}
 
       {(setUp || lists.upcoming.length > 0) && (
         <section className="panel" aria-labelledby="avail-upcoming">
