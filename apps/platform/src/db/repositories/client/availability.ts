@@ -11,12 +11,16 @@ import {
 import { BOOK_PAGE_PATH } from "@/lib/availability/public";
 import { siteOrigins } from "@/lib/shop/public";
 import { newPublicId } from "@/lib/ids";
+import { formatRange } from "@/lib/availability/format";
 import {
+  APPROVAL_FOR_NEW_SETTINGS,
   DEFAULT_RULES,
   parseOverride,
   parseRules,
+  parseWeekdayHours,
   parseWeeklyHours,
   readStoredRanges,
+  WEEKDAY_NAMES,
   type AvailabilityRules,
 } from "@/lib/availability/rules";
 import {
@@ -64,11 +68,12 @@ export async function bookingAccess(db: Database, ctx: TenantContext): Promise<B
 }
 
 /**
- * True once the client has given any weekly hours. The Get started checklist
- * calls it: until then the website's booking page offers nothing.
+ * True once the client has given any weekly hours, or hours for a day still
+ * to come. The Get started checklist calls it: until then the website's
+ * booking page offers nothing.
  */
-export async function isAvailabilitySetUp(db: Database, ctx: TenantContext): Promise<boolean> {
-  const [row] = await db
+export async function isAvailabilitySetUp(db: Database, ctx: TenantContext, now: Date = new Date()): Promise<boolean> {
+  const [weekly] = await db
     .select({ id: availabilityWeeklyHours.id })
     .from(availabilityWeeklyHours)
     .where(
@@ -78,7 +83,21 @@ export async function isAvailabilitySetUp(db: Database, ctx: TenantContext): Pro
       ),
     )
     .limit(1);
-  return Boolean(row);
+  if (weekly) return true;
+  // A client who opened particular days on the calendar and set no week has offered times too.
+  const { rules } = await readRules(db, ctx.organizationId);
+  const [day] = await db
+    .select({ id: availabilityDateOverrides.id })
+    .from(availabilityDateOverrides)
+    .where(
+      and(
+        eq(availabilityDateOverrides.organizationId, ctx.organizationId),
+        gte(availabilityDateOverrides.date, dateInZone(now, rules.timeZone)),
+        sql`jsonb_array_length(${availabilityDateOverrides.ranges}) > 0`,
+      ),
+    )
+    .limit(1);
+  return Boolean(day);
 }
 
 /**
@@ -111,7 +130,7 @@ export interface OverrideView {
 
 export interface AvailabilityView {
   rules: AvailabilityRules;
-  /** False until the client first saves the booking rules: the page shows the defaults. */
+  /** False until the client first saves the booking rules: the page shows the starting values. */
   rulesSaved: boolean;
   weekly: FullWeek;
   /** Today onwards, soonest first. */
@@ -119,13 +138,16 @@ export interface AvailabilityView {
   today: IsoDate;
 }
 
-async function readRules(db: Database, organizationId: string): Promise<{ rules: AvailabilityRules; saved: boolean }> {
+async function readRules(
+  db: Database,
+  organizationId: string,
+): Promise<{ rules: AvailabilityRules; saved: boolean; exists: boolean }> {
   const [row] = await db
     .select()
     .from(availabilitySettings)
     .where(eq(availabilitySettings.organizationId, organizationId))
     .limit(1);
-  if (!row) return { rules: DEFAULT_RULES, saved: false };
+  if (!row) return { rules: DEFAULT_RULES, saved: false, exists: false };
   return {
     rules: {
       timeZone: row.timeZone,
@@ -137,6 +159,7 @@ async function readRules(db: Database, organizationId: string): Promise<{ rules:
     },
     // A row made only to hold the calendar cache has never been saved by the client.
     saved: row.updatedBy !== null,
+    exists: true,
   };
 }
 
@@ -166,12 +189,18 @@ async function readOverrides(db: Database, organizationId: string, from: IsoDate
 }
 
 export async function getAvailability(db: Database, ctx: TenantContext, now: Date = new Date()): Promise<AvailabilityView> {
-  const { rules, saved } = await readRules(db, ctx.organizationId);
-  const today = dateInZone(now, rules.timeZone);
+  const { rules: stored, saved, exists } = await readRules(db, ctx.organizationId);
+  const today = dateInZone(now, stored.timeZone);
   const [weekly, overrides] = await Promise.all([
     readWeekly(db, ctx.organizationId),
     readOverrides(db, ctx.organizationId, today),
   ]);
+  // A client who has set nothing yet starts with approval on, which is what
+  // their first save will store. One who has hours but no settings row was
+  // set up before settings were made with the hours, and still confirms
+  // straight away: the page tells them how their website behaves now.
+  const startingFresh = !exists && Object.values(weekly).every((ranges) => ranges.length === 0) && overrides.length === 0;
+  const rules = startingFresh ? { ...stored, requiresApproval: APPROVAL_FOR_NEW_SETTINGS } : stored;
   return { rules, rulesSaved: saved, weekly, overrides, today };
 }
 
@@ -202,6 +231,18 @@ export async function saveRules(
 }
 
 /**
+ * The client's settings row, made the first time they set any hours or days.
+ * New booking clients start by approving each request themselves; a row that
+ * is already there, whatever it says, is left alone.
+ */
+async function ensureSettingsRow(db: Database, organizationId: string, now: Date): Promise<void> {
+  await db
+    .insert(availabilitySettings)
+    .values({ organizationId, requiresApproval: APPROVAL_FOR_NEW_SETTINGS, createdAt: now, updatedAt: now })
+    .onConflictDoNothing({ target: availabilitySettings.organizationId });
+}
+
+/**
  * Replace the whole week in one statement: all seven days are written
  * together, so a failure leaves the old week, never half of each.
  */
@@ -214,6 +255,7 @@ export async function saveWeeklyHours(
   assertMutable(ctx);
   const parsed = parseWeeklyHours(raw);
   if (!parsed.ok) return parsed;
+  await ensureSettingsRow(db, ctx.organizationId, now);
   const rows = Object.entries(parsed.value).map(([weekday, ranges]) => ({
     organizationId: ctx.organizationId,
     weekday: Number(weekday),
@@ -234,6 +276,43 @@ export async function saveWeeklyHours(
   };
 }
 
+/**
+ * One weekday's hours, for every week from now on: the calendar's "repeat
+ * every Tuesday". Only that weekday is written, so two tabs editing different
+ * days cannot undo each other. The date it was set from, if given, loses its
+ * own hours and follows the new week; other dates the client changed
+ * individually keep theirs.
+ */
+export async function saveWeekdayHours(
+  db: Database,
+  ctx: TenantContext,
+  form: Parameters<typeof parseWeekdayHours>[0],
+  now: Date = new Date(),
+): Promise<AvailabilityResult> {
+  assertMutable(ctx);
+  const parsed = parseWeekdayHours(form);
+  if (!parsed.ok) return parsed;
+  const { weekday, ranges, date } = parsed.value;
+  await ensureSettingsRow(db, ctx.organizationId, now);
+  await db
+    .insert(availabilityWeeklyHours)
+    .values({ organizationId: ctx.organizationId, weekday, ranges, updatedAt: now })
+    .onConflictDoUpdate({
+      target: [availabilityWeeklyHours.organizationId, availabilityWeeklyHours.weekday],
+      set: { ranges, updatedAt: now },
+    });
+  if (date) {
+    await db
+      .delete(availabilityDateOverrides)
+      .where(and(eq(availabilityDateOverrides.organizationId, ctx.organizationId), eq(availabilityDateOverrides.date, date)));
+  }
+  const name = WEEKDAY_NAMES[weekday];
+  return {
+    ok: true,
+    message: `Saved. Every ${name} is now ${ranges.length === 0 ? "closed" : `open ${ranges.map(formatRange).join(", ")}`}. Days you changed one by one keep their own hours.`,
+  };
+}
+
 /** A date closed, or with its own hours. Saving a date again replaces what it had. */
 export async function saveDateOverride(
   db: Database,
@@ -245,6 +324,7 @@ export async function saveDateOverride(
   const { rules } = await readRules(db, ctx.organizationId);
   const parsed = parseOverride(form, dateInZone(now, rules.timeZone));
   if (!parsed.ok) return parsed;
+  await ensureSettingsRow(db, ctx.organizationId, now);
   await db
     .insert(availabilityDateOverrides)
     .values({
@@ -287,7 +367,7 @@ export interface LoadedSlots {
   /** Everything but the window, ready for `openSlots`. */
   input: SlotInput;
   calendar: BusyRead;
-  /** Any weekly hours at all. */
+  /** Any weekly hours at all, or hours on a day still to come. */
   open: boolean;
   window: { first: IsoDate; last: IsoDate };
 }
@@ -342,7 +422,7 @@ export async function loadSlotInput(
       now,
     },
     calendar,
-    open: Object.values(weekly).some((ranges) => ranges.length > 0),
+    open: Object.values(weekly).some((ranges) => ranges.length > 0) || overrides.some((o) => o.ranges.length > 0),
     window,
   };
 }

@@ -44,6 +44,9 @@ export type FullWeek = { [Day in 0 | 1 | 2 | 3 | 4 | 5 | 6]: TimeRange[] };
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 
+/** Plenty for split shifts; a ceiling on a form posted by hand. */
+export const MAX_RANGES_PER_DAY = 6;
+
 export function emptyWeek(): FullWeek {
   return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 }

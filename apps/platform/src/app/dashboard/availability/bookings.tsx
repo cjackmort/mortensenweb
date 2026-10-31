@@ -67,6 +67,7 @@ function DecisionButton({
   action,
   disabled,
   className,
+  label,
   children,
 }: {
   row: BookingRow;
@@ -74,13 +75,15 @@ function DecisionButton({
   action: Dispatch;
   disabled: boolean;
   className?: string;
+  /** What the button does and to whom, for a screen reader moving between rows of identical buttons. */
+  label?: string;
   children: React.ReactNode;
 }) {
   return (
     <form action={action}>
       <input type="hidden" name="booking" value={row.publicId} />
       <input type="hidden" name="decision" value={decision} />
-      <button type="submit" className={className} disabled={disabled}>
+      <button type="submit" className={className} disabled={disabled} aria-label={label}>
         {children}
       </button>
     </form>
@@ -102,7 +105,9 @@ export function PendingBookings({ rows, readOnly }: { rows: BookingRow[]; readOn
     <>
       <Result state={state} />
       {rows.length === 0 ? (
-        <p className="muted avail-empty-line">Nothing waiting. New requests appear here, and you&rsquo;re emailed about each one.</p>
+        <p className="muted avail-empty-line">
+          Nothing waiting. When someone asks for a time on your website it appears here, and you&rsquo;re emailed.
+        </p>
       ) : (
         <ul className="avail-bookings">
           {rows.map((row) => (
@@ -110,10 +115,23 @@ export function PendingBookings({ rows, readOnly }: { rows: BookingRow[]; readOn
               <When row={row} />
               <Contact row={row} />
               <div className="avail-booking-actions">
-                <DecisionButton row={row} decision="approve" action={action} disabled={readOnly || pending}>
-                  Approve
+                <DecisionButton
+                  row={row}
+                  decision="approve"
+                  action={action}
+                  disabled={readOnly || pending}
+                  label={`Accept ${row.name}, ${row.day}, ${row.time}`}
+                >
+                  Accept
                 </DecisionButton>
-                <DecisionButton row={row} decision="decline" action={action} disabled={readOnly || pending} className="secondary">
+                <DecisionButton
+                  row={row}
+                  decision="decline"
+                  action={action}
+                  disabled={readOnly || pending}
+                  className="secondary"
+                  label={`Decline ${row.name}, ${row.day}, ${row.time}`}
+                >
                   Decline
                 </DecisionButton>
                 <span className="avail-booking-meta">{row.meta}</span>
