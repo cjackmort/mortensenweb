@@ -3,7 +3,8 @@
  *
  * Every site built by the pipeline publishes a screenshot of its own home page
  * at `/__preview/home-tile.png` — 1280x720, rewritten on every deploy by
- * agent/verify/screenshot.mjs. The portal's client grid already reads it. This
+ * agent/verify/screenshot.mjs in cjackmort/mortensenweb-agent. The portal's
+ * client grid already reads it. This
  * does the same for the public work page, so a client's card shows what their
  * site looks like today instead of a PNG someone exported once and forgot.
  *

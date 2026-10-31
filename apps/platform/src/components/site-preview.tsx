@@ -13,8 +13,8 @@
  * `screenshot` — the default, and what almost every site should use. The
  * deploy takes a 1280x720 picture of the home page and publishes it with the
  * site at `/__preview/home-tile.png` (see agent/verify/screenshot.mjs and
- * .github/workflows/client-deploy.yml). The portal loads it as an ordinary
- * image.
+ * .github/workflows/client-deploy.yml in cjackmort/mortensenweb-agent). The
+ * portal loads it as an ordinary image.
  *
  * Why this is the default, having started the other way round: a cross-origin
  * iframe is refused by any site that sends `X-Frame-Options` or a CSP
@@ -30,7 +30,8 @@
  * misrepresents: an animated background, a canvas, anything that moves.
  * It only works where that site's own headers name the portal in
  * `frame-ancestors`, so it is opt-in per site and the agent that builds an
- * animated site is told to ship the header with it (agent/skills/animation).
+ * animated site is told to ship the header with it (agent/skills/animation in
+ * cjackmort/mortensenweb-agent).
  *
  * Containment, for the `live` path: the framed page is on the client's own
  * domain, so it is cross-origin to the portal by construction — it cannot
