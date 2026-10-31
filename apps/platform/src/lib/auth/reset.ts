@@ -2,7 +2,11 @@ import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { auditLog, passwordResetTokens, users } from "@/db/schema";
 import { hashPassword, newSecureToken, sha256Hex } from "./password";
-import { validateNewPassword, type PasswordRejection } from "./session";
+import {
+  isUserAccountClosed,
+  validateNewPassword,
+  type PasswordRejection,
+} from "./session";
 
 /**
  * Self-service password reset.
@@ -20,8 +24,9 @@ import { validateNewPassword, type PasswordRejection } from "./session";
  *    a session, that session dies here.
  *
  * The request side never reveals whether an account exists. `requestPasswordReset`
- * returns null for an unknown identifier, a disabled account, and a rate-limited
- * caller alike, and the page renders the same confirmation in all four cases.
+ * returns null for an unknown identifier, a disabled account, a closed one (a
+ * client who has been removed) and a rate-limited caller alike, and the page
+ * renders the same confirmation in every case.
  */
 
 /** Short, because the link lives in an inbox. */
@@ -91,6 +96,9 @@ export async function requestPasswordReset(
   // A disabled account is not a password problem, and mailing it would confirm
   // the address exists.
   if (user.status !== "active") return null;
+  // A removed client cannot sign in, so a reset link would only lead to a
+  // refusal - and, sent unprompted, would confirm the address was a client.
+  if (await isUserAccountClosed(db, user.id)) return null;
 
   const recentByAccount = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -150,7 +158,10 @@ export async function requestPasswordReset(
 
 export type ResetRedemption =
   | { ok: true; userId: string; email: string }
-  | { ok: false; reason: "invalid" | "expired" | "used" | PasswordRejection };
+  | {
+      ok: false;
+      reason: "invalid" | "expired" | "used" | "closed" | PasswordRejection;
+    };
 
 /**
  * Check a token without consuming it, so the reset form can refuse to render
@@ -159,11 +170,14 @@ export type ResetRedemption =
 export async function inspectResetToken(
   db: Database,
   token: string,
-): Promise<{ ok: true } | { ok: false; reason: "invalid" | "expired" | "used" }> {
+): Promise<
+  { ok: true } | { ok: false; reason: "invalid" | "expired" | "used" | "closed" }
+> {
   if (!token) return { ok: false, reason: "invalid" };
 
   const rows = await db
     .select({
+      userId: passwordResetTokens.userId,
       usedAt: passwordResetTokens.usedAt,
       expiresAt: passwordResetTokens.expiresAt,
     })
@@ -175,6 +189,9 @@ export async function inspectResetToken(
   if (!row) return { ok: false, reason: "invalid" };
   if (row.usedAt) return { ok: false, reason: "used" };
   if (row.expiresAt <= new Date()) return { ok: false, reason: "expired" };
+  // The link is a bearer credential for the account, so telling its holder the
+  // account is closed reveals nothing they could not already do.
+  if (await isUserAccountClosed(db, row.userId)) return { ok: false, reason: "closed" };
   return { ok: true };
 }
 
@@ -229,6 +246,9 @@ export async function redeemPasswordReset(
   // Disabled between issuing and redeeming: the link is dead, and saying why
   // would confirm the account exists.
   if (!user || user.status !== "active") return { ok: false, reason: "invalid" };
+  // Before the claim, so refusing leaves the link unspent: if the client is
+  // restored within the hour it still works.
+  if (await isUserAccountClosed(db, user.id)) return { ok: false, reason: "closed" };
 
   const now = new Date();
 

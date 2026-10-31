@@ -1,6 +1,7 @@
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
+  clients,
   loginAttempts,
   organizationMemberships,
   passwordResetTokens,
@@ -44,8 +45,52 @@ export interface AuthenticatedUser extends SessionLike {
 }
 
 /**
+ * Whether an account is closed: a client user whose client record has been
+ * removed from Clients (`clients.archived_at`).
+ *
+ * Decided by role, never by organization, so an admin is unaffected even if
+ * their membership happens to point at a removed client. Read from the client
+ * record rather than written onto each user, so Restore re-enables everyone
+ * exactly as they were — and a user who was disabled beforehand stays disabled.
+ */
+export function isAccountClosed(row: {
+  role: "admin" | "client";
+  clientArchivedAt: Date | null;
+}): boolean {
+  return row.role === "client" && row.clientArchivedAt !== null;
+}
+
+/**
+ * The same question for a user id, for the password-reset paths, which have a
+ * user id but not the joined row the hot paths carry.
+ */
+export async function isUserAccountClosed(
+  db: Database,
+  userId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ role: users.role, clientArchivedAt: clients.archivedAt })
+    .from(users)
+    .leftJoin(
+      organizationMemberships,
+      eq(organizationMemberships.userId, users.id),
+    )
+    .leftJoin(
+      clients,
+      eq(clients.organizationId, organizationMemberships.organizationId),
+    )
+    .where(eq(users.id, userId))
+    .limit(1);
+  return rows[0] ? isAccountClosed(rows[0]) : false;
+}
+
+/**
  * Re-validate a token's claims against the database.
  * Returns null whenever the session should no longer be honoured.
+ *
+ * That includes a closed account (see `isAccountClosed`): a removed client's
+ * existing sessions stop working on their next request, with no write to the
+ * user row and so nothing to undo on Restore.
  */
 export async function resolveSession(
   db: Database,
@@ -69,11 +114,16 @@ export async function resolveSession(
       sessionEpoch: users.sessionEpoch,
       mustChangePassword: users.mustChangePassword,
       organizationId: organizationMemberships.organizationId,
+      clientArchivedAt: clients.archivedAt,
     })
     .from(users)
     .leftJoin(
       organizationMemberships,
       eq(organizationMemberships.userId, users.id),
+    )
+    .leftJoin(
+      clients,
+      eq(clients.organizationId, organizationMemberships.organizationId),
     )
     .where(eq(users.id, claims.userId))
     .limit(1);
@@ -81,6 +131,7 @@ export async function resolveSession(
   const user = rows[0];
   if (!user) return null;
   if (user.status !== "active") return null;
+  if (isAccountClosed(user)) return null;
   // The revocation check.
   if (user.sessionEpoch !== claims.sessionEpoch) return null;
 
@@ -99,7 +150,10 @@ export async function resolveSession(
 
 export type LoginResult =
   | { ok: true; user: AuthenticatedUser }
-  | { ok: false; reason: "invalid" | "locked" | "rate_limited" | "expired" };
+  | {
+      ok: false;
+      reason: "invalid" | "locked" | "rate_limited" | "expired" | "closed";
+    };
 
 /**
  * Authenticate a sign-in identifier and password.
@@ -113,7 +167,9 @@ export type LoginResult =
  * message for `invalid` regardless of whether the account exists, so login
  * cannot be used to enumerate customers. `expired` is the one exception: it
  * only ever applies to an already-authenticated temporary credential, so
- * revealing it leaks nothing about which accounts exist.
+ * revealing it leaks nothing about which accounts exist. `closed` is the same
+ * kind of exception: it is only returned once the password has verified, so it
+ * is only ever told to someone who holds the account.
  */
 export async function authenticate(
   db: Database,
@@ -162,11 +218,16 @@ export async function authenticate(
     .select({
       user: users,
       organizationId: organizationMemberships.organizationId,
+      clientArchivedAt: clients.archivedAt,
     })
     .from(users)
     .leftJoin(
       organizationMemberships,
       eq(organizationMemberships.userId, users.id),
+    )
+    .leftJoin(
+      clients,
+      eq(clients.organizationId, organizationMemberships.organizationId),
     )
     .where(or(eq(users.email, identifier), eq(users.username, identifier)))
     .limit(1);
@@ -223,6 +284,14 @@ export async function authenticate(
   if (user.status !== "active") {
     await recordAttempt(false);
     return { ok: false, reason: "invalid" };
+  }
+
+  // A removed client. After the password, so "closed" is never a way to learn
+  // which addresses are clients; before the temporary-credential check, because
+  // a closed account has nothing to be told about an expired password.
+  if (isAccountClosed({ role: user.role, clientArchivedAt: rows[0]?.clientArchivedAt ?? null })) {
+    await recordAttempt(false);
+    return { ok: false, reason: "closed" };
   }
 
   // Temporary credential lifetime. Checked only after the password verified,

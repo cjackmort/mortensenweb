@@ -25,8 +25,9 @@ export function ArchivedClientsSection({ archived }: { archived: ArchivedClient[
         </summary>
 
         <p className="muted" style={{ marginTop: 0 }}>
-          Removed from Clients and the billing totals. Their payments, plan and
-          site are untouched.
+          Removed from Clients and the billing totals, and unable to sign in.
+          Their payments, plan and site are untouched. Restore gives them back
+          their sign-in.
         </p>
 
         <ul className="archived-client-list">
@@ -62,8 +63,8 @@ export function RemovedNotice({
 }) {
   return (
     <FocusedNotice>
-      <strong>{clientName}</strong> was removed from Clients. Their payments, site and
-      history are untouched.{" "}
+      <strong>{clientName}</strong> was removed from Clients and can no longer sign in.
+      Their payments, site and history are untouched.{" "}
       <RestoreForm clientPublicId={clientPublicId} clientName={clientName} inline />
     </FocusedNotice>
   );

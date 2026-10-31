@@ -148,7 +148,8 @@ export default async function ClientDetailPage({
 
       {isArchived && !client.isInternal && (
         <div className="notice" role="status">
-          This client was removed from Clients. Their payments, plan and site are untouched.{" "}
+          This client was removed from Clients and can&rsquo;t sign in. Their payments, plan and
+          site are untouched.{" "}
           <RestoreForm clientPublicId={client.publicId} clientName={organization.name} inline />
         </div>
       )}
@@ -214,8 +215,8 @@ export default async function ClientDetailPage({
             <section className="card">
               <h2>Remove client</h2>
               <p className="muted" style={{ marginTop: 0 }}>
-                Takes {organization.name} off the Clients list. Nothing is deleted, and their
-                site, repository and domain are not touched.
+                Takes {organization.name} off the Clients list and closes their sign-in. Nothing
+                is deleted, and their site, repository and domain are not touched.
               </p>
               <RemoveClientButton
                 clientPublicId={client.publicId}

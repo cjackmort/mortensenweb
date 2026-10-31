@@ -9,7 +9,7 @@ import { useActionState, type ReactNode } from "react";
  * Success at signing in is not a state — `signIn` redirects, and the redirect
  * leaves this page.
  */
-export type AuthFormState = "failed" | "done" | null;
+export type AuthFormState = "failed" | "closed" | "done" | null;
 
 export type AuthFormAction = (
   previous: AuthFormState,
@@ -34,6 +34,7 @@ export function AuthForm({
   action,
   header,
   failed,
+  closed,
   done,
   children,
 }: {
@@ -41,6 +42,12 @@ export function AuthForm({
   header: ReactNode;
   /** Shown between the header and the fields after a failed attempt. */
   failed?: ReactNode;
+  /**
+   * Shown instead of `failed` when the password was right but the account is
+   * closed (a removed client). Kept separate because it must say something
+   * `failed` deliberately never does.
+   */
+  closed?: ReactNode;
   /** Replaces the whole form once the action reports done. */
   done?: ReactNode;
   children: ReactNode;
@@ -53,6 +60,7 @@ export function AuthForm({
     <form action={formAction}>
       {header}
       {state === "failed" && failed ? <div role="alert">{failed}</div> : null}
+      {state === "closed" && closed ? <div role="alert">{closed}</div> : null}
       {children}
     </form>
   );

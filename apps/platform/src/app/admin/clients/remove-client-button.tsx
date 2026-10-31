@@ -79,9 +79,10 @@ export function RemoveClientButton({
 
       <p style={{ margin: "0 0 0.5rem" }}>
         <strong>Remove {clientName}?</strong> They will disappear from Clients and
-        from the billing totals. Their payments and invoices are kept, and
-        their site, repository and domain are not touched. You can restore them
-        from <em>Archived clients</em> at the bottom of the page.
+        from the billing totals, and they will no longer be able to sign in to
+        the portal. Their payments and invoices are kept, and their site,
+        repository and domain are not touched. You can restore them — sign-in
+        included — from <em>Archived clients</em> at the bottom of the page.
       </p>
 
       {state && (
