@@ -33,9 +33,17 @@ import type { createGithubFake } from "./helpers/github-fake";
 const WEBSITE_ID = "8b6f2a0e-3c4d-4e5f-9a1b-2c3d4e5f6a7b";
 const REPO = "cjackmort/concept-basin-view-abc123";
 
+type GitLink = Awaited<ReturnType<typeof import("@/lib/netlify/api").getSiteGitLink>>;
+
 const github: { fake: ReturnType<typeof createGithubFake> | null } = { fake: null };
 const sent: { to: string; subject: string; text: string }[] = [];
 const umami = { fail: false };
+/** What Netlify says about whether a site builds from a repository. */
+const netlify: { configured: boolean; link: (siteId: string) => Promise<GitLink>; asked: string[] } = {
+  configured: true,
+  link: async () => ({ status: "unlinked" }),
+  asked: [],
+};
 
 vi.mock("@/lib/github/app", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/github/app")>();
@@ -65,7 +73,11 @@ vi.mock("@/lib/netlify/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/netlify/api")>();
   return {
     ...actual,
-    isNetlifyConfigured: () => true,
+    isNetlifyConfigured: () => netlify.configured,
+    getSiteGitLink: async (siteId: string) => {
+      netlify.asked.push(siteId);
+      return netlify.link(siteId);
+    },
     connectFormsWebhook: async () => ({ hookId: "hook_1" }),
     listFormSubmissions: async () => [],
   };
@@ -91,6 +103,7 @@ vi.mock("@/lib/email/mailer", () => ({
 
 const { convertProspect, readConversion } = await import("@/db/repositories/admin/conversion");
 const { listPotentialClients } = await import("@/db/repositories/admin/potential-clients");
+const { NetlifyApiError } = await import("@/lib/netlify/api");
 const { DEPLOY_CALLER_WORKFLOW } = await import("@/lib/github/deploy-workflow");
 const { AGENT_CALLER_WORKFLOW } = await import("@/lib/github/agent-workflow");
 const { adminContextFrom } = await import("@/db/repositories/context");
@@ -232,6 +245,9 @@ beforeEach(async () => {
   github.fake?.reset();
   sent.length = 0;
   umami.fail = false;
+  netlify.configured = true;
+  netlify.link = async () => ({ status: "unlinked" });
+  netlify.asked.length = 0;
   for (const table of [
     auditLog,
     prospectConversions,
@@ -528,6 +544,151 @@ describe("the client's sign-in email", () => {
     const again = await convertProspect(ctx(), db, seeded.prospectPublicId, { via: "operator-api", invite: true });
     expect(again.ok && step(again.report, "client_invite").carried).toBe(true);
     expect(sent).toHaveLength(1);
+  });
+});
+
+/**
+ * A site that already existed, with a repository connected rather than
+ * scaffolded. Netlify usually builds those from GitHub on every push, so the
+ * shared deploy workflow would publish each change a second time — and the
+ * variable that only feeds that workflow would be set for nothing.
+ */
+describe("a site whose repository was connected in place", () => {
+  const GIT_LINK: GitLink = {
+    status: "linked",
+    repoUrl: `https://github.com/${REPO}`,
+    repoPath: REPO,
+    branch: "main",
+  };
+  const OLD_WORKFLOW = "name: old full copy\n";
+  const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+  async function converted(seeded: Awaited<ReturnType<typeof seedProspect>>) {
+    const outcome = await convertProspect(ctx(), db, seeded.prospectPublicId, { via: "operator-api" });
+    if (!outcome.ok) throw new Error("expected a report");
+    return outcome.report;
+  }
+
+  async function setStrategy(repoStrategy: "rename_transfer" | "fresh_repo") {
+    await db.update(prospectConversions).set({ repoStrategy });
+  }
+
+  it("skips the deploy workflow and the site variable when Netlify builds the repository from Git", async () => {
+    netlify.link = async () => GIT_LINK;
+    const seeded = await seedProspect();
+
+    const report = await converted(seeded);
+
+    for (const id of ["deploy_workflow", "netlify_site_variable"]) {
+      expect(step(report, id).status, id).toBe("skipped");
+      expect(step(report, id).detail, id).toContain("deploys through Netlify's Git integration");
+    }
+    // Nothing was written: the repository's own deploy.yml and variables are as they were.
+    expect(github.fake!.file(REPO, "main", ".github/workflows/deploy.yml")).toBe(OLD_WORKFLOW);
+    expect(github.fake!.state.variables.size).toBe(0);
+    const installs = await db.select().from(auditLog);
+    expect(installs.map((row) => row.action)).not.toContain("repository.deploy_workflow_installed");
+    expect(installs.map((row) => row.action)).not.toContain("repository.netlify_site_variable_set");
+
+    // The rest of the repository work still happens, and a skip is not a fault.
+    expect(step(report, "allowlist").status).toBe("ok");
+    expect(step(report, "agent_workflow").status).toBe("ok");
+    expect(github.fake!.file(REPO, "main", ".github/workflows/claude.yml")).toBe(AGENT_CALLER_WORKFLOW);
+    expect(report.complete).toBe(true);
+    // Asked by the Netlify site's id, which is what the portal recorded.
+    expect(netlify.asked).toContain("nf-site-1");
+  });
+
+  it("asks Netlify by its default subdomain when the portal recorded only the site's name", async () => {
+    netlify.link = async () => GIT_LINK;
+    const seeded = await seedProspect();
+    await db.update(sites).set({ netlifySiteId: null });
+
+    const report = await converted(seeded);
+
+    expect(netlify.asked).toContain("concept-basin-view-abc123.netlify.app");
+    expect(step(report, "deploy_workflow").status).toBe("skipped");
+    // Skipped, not the "no Netlify site" failure a scaffolded site would get.
+    expect(step(report, "netlify_site_variable").status).toBe("skipped");
+  });
+
+  it("installs both for a scaffolded repository that Netlify has not linked", async () => {
+    netlify.link = async () => ({ status: "unlinked" });
+    const seeded = await seedProspect();
+
+    const report = await converted(seeded);
+
+    expect(step(report, "deploy_workflow").status).toBe("ok");
+    expect(step(report, "netlify_site_variable").status).toBe("ok");
+    expect(github.fake!.file(REPO, "main", ".github/workflows/deploy.yml")).toBe(DEPLOY_CALLER_WORKFLOW);
+    expect(github.fake!.state.variables.get(`${REPO}:NETLIFY_SITE_ID`)).toBe("nf-site-1");
+  });
+
+  it("believes Netlify over where the site came from, in both directions", async () => {
+    // A concept repository that was later linked to Git in Netlify is in place now.
+    netlify.link = async () => GIT_LINK;
+    const seeded = await seedProspect();
+    const first = await converted(seeded);
+    expect((await db.select().from(prospectConversions))[0]!.repoStrategy).toBe("rename_transfer");
+    expect(step(first, "deploy_workflow").status).toBe("skipped");
+
+    // And a repository the portal did not scaffold, but which Netlify does not
+    // build, still needs the workflow or nothing would ever deploy it.
+    await setStrategy("fresh_repo");
+    netlify.link = async () => ({ status: "unlinked" });
+    const second = await converted(seeded);
+    expect(step(second, "deploy_workflow").status).toBe("ok");
+    expect(github.fake!.file(REPO, "main", ".github/workflows/deploy.yml")).toBe(DEPLOY_CALLER_WORKFLOW);
+    expect(step(second, "netlify_site_variable").status).toBe("ok");
+  });
+
+  describe("when Netlify cannot say", () => {
+    const outages: [string, () => void][] = [
+      [
+        "the request fails",
+        () => {
+          netlify.link = async () => {
+            throw new NetlifyApiError("Netlify request failed (HTTP 503).", 503);
+          };
+        },
+      ],
+      ["the site is not found", () => (netlify.link = async () => ({ status: "not_found" }))],
+      ["Netlify is not configured", () => (netlify.configured = false)],
+    ];
+
+    it.each(outages)("installs for a site that came from the prospect's concept when %s", async (_label, outage) => {
+      const log = quiet();
+      outage();
+      const seeded = await seedProspect();
+
+      const report = await converted(seeded);
+
+      log.mockRestore();
+      expect(step(report, "deploy_workflow").status).toBe("ok");
+      expect(step(report, "netlify_site_variable").status).toBe("ok");
+      expect(github.fake!.file(REPO, "main", ".github/workflows/deploy.yml")).toBe(DEPLOY_CALLER_WORKFLOW);
+    });
+
+    it.each(outages)("skips for a site that did not come from the concept when %s, and says why", async (_label, outage) => {
+      const log = quiet();
+      // A first run that skips, so there is no finished install for the second to carry.
+      netlify.link = async () => GIT_LINK;
+      const seeded = await seedProspect();
+      await converted(seeded);
+      await setStrategy("fresh_repo");
+      outage();
+
+      const report = await converted(seeded);
+
+      log.mockRestore();
+      for (const id of ["deploy_workflow", "netlify_site_variable"]) {
+        expect(step(report, id).status, id).toBe("skipped");
+        expect(step(report, id).detail, id).toContain("deploys through Netlify's Git integration");
+        expect(step(report, id).detail, id).toContain("Netlify could not be asked");
+      }
+      expect(github.fake!.file(REPO, "main", ".github/workflows/deploy.yml")).toBe(OLD_WORKFLOW);
+      expect(github.fake!.state.variables.size).toBe(0);
+    });
   });
 });
 
