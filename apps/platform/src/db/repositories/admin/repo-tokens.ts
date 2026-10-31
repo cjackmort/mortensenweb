@@ -3,7 +3,8 @@ import type { Database } from "@/db/client";
 import { auditLog, repositoryConnections, sites } from "@/db/schema";
 import { provisionRepoSecrets } from "@/lib/github/secrets";
 import { installAgentCaller, type AgentWorkflowResult } from "@/lib/github/agent-workflow";
-import type { Repo } from "@/lib/github/rest";
+import { installDeployCaller } from "@/lib/github/deploy-workflow";
+import { setRepoVariable, type Repo } from "@/lib/github/rest";
 
 /**
  * Installing the portal's tokens into a site's repository.
@@ -138,6 +139,74 @@ export async function installAgentWorkflow(
   });
 
   return { ok: true, repository: resolved.repository, result };
+}
+
+/**
+ * Put the shared deploy workflow's caller into a scaffolded site's repository.
+ *
+ * Not offered for a repository connected in place — see
+ * `lib/github/deploy-workflow.ts` for why that would deploy twice.
+ */
+export async function installDeployWorkflow(
+  db: Database,
+  actorUserId: string,
+  sitePublicId: string,
+): Promise<WorkflowInstallOutcome> {
+  const resolved = await resolveSiteRepo(db, sitePublicId);
+  if (!resolved.ok) return resolved;
+
+  const result = await installDeployCaller(resolved.target, resolved.defaultBranch);
+
+  await db.insert(auditLog).values({
+    actorUserId,
+    organizationId: resolved.organizationId,
+    action: "repository.deploy_workflow_installed",
+    entityType: "site",
+    entityId: sitePublicId,
+    metadata: { repository: resolved.repository, result },
+  });
+
+  return { ok: true, repository: resolved.repository, result };
+}
+
+export type SiteVariableOutcome =
+  | { ok: true; repository: string; netlifySiteId: string }
+  | { ok: false; reason: "site_not_found" | "no_repository" | "not_configured" | "no_netlify_site" };
+
+/**
+ * Write the site's Netlify id into its repository as `NETLIFY_SITE_ID`.
+ *
+ * The join between the two systems that `scaffoldSite` makes when it creates
+ * both; run again here so a repository whose variable was lost, or set before
+ * its Netlify site was recreated, deploys to the site the portal knows about.
+ */
+export async function installNetlifySiteVariable(
+  db: Database,
+  actorUserId: string,
+  sitePublicId: string,
+): Promise<SiteVariableOutcome> {
+  const resolved = await resolveSiteRepo(db, sitePublicId);
+  if (!resolved.ok) return resolved;
+
+  const [site] = await db
+    .select({ netlifySiteId: sites.netlifySiteId })
+    .from(sites)
+    .where(eq(sites.publicId, sitePublicId))
+    .limit(1);
+  if (!site?.netlifySiteId) return { ok: false, reason: "no_netlify_site" };
+
+  await setRepoVariable(resolved.target, "NETLIFY_SITE_ID", site.netlifySiteId);
+
+  await db.insert(auditLog).values({
+    actorUserId,
+    organizationId: resolved.organizationId,
+    action: "repository.netlify_site_variable_set",
+    entityType: "site",
+    entityId: sitePublicId,
+    metadata: { repository: resolved.repository, netlifySiteId: site.netlifySiteId },
+  });
+
+  return { ok: true, repository: resolved.repository, netlifySiteId: site.netlifySiteId };
 }
 
 export function describeWorkflowInstall(outcome: WorkflowInstallOutcome): {

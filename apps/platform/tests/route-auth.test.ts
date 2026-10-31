@@ -100,6 +100,18 @@ const SELF_AUTHENTICATING: Record<string, Exemption> = {
   "api/thumbnails/route.ts": { reason: "thumbnail job", checks: "CRON_SECRET" },
   "api/thumbnails/[publicId]/route.ts": { reason: "thumbnail job", checks: "CRON_SECRET" },
 
+  // The operator API, called by an agent holding the operator's token. The
+  // token's SHA-256 is compared in constant time before any query; see
+  // `lib/operator-api/http.ts`, whose own test covers the refusals.
+  "api/operator/prospects/route.ts": {
+    reason: "operator API: create a potential client (bearer token)",
+    checks: "handleOperatorRequest(",
+  },
+  "api/operator/prospects/[publicId]/convert/route.ts": {
+    reason: "operator API: convert a potential client (bearer token)",
+    checks: "handleOperatorRequest(",
+  },
+
   // Fetched by mortensenweb.com's build; every figure is already public.
   "api/plans/route.ts": { reason: "public price list" },
 

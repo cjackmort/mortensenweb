@@ -7,7 +7,8 @@
  *  1. `TenantContext` and `AdminContext` are *branded* types. TypeScript will
  *     not accept an object literal in their place, so a caller cannot invent a
  *     context with an arbitrary `organizationId`.
- *  2. The only constructors live here and both require a verified session.
+ *  2. The only constructors live here and each requires a verified session —
+ *     or, for the operator API, a verified token (`OperatorApiGrant`).
  *  3. Client-facing repositories take a `TenantContext` as their first
  *     argument and add `where org_id = ctx.organizationId` to every query.
  *  4. Admin repositories take an `AdminContext` and live in a separate
@@ -103,6 +104,33 @@ export function adminContextFrom(session: SessionLike): AdminContext {
     throw new AuthorizationError("Admin role required.");
   }
   return { userId: session.userId } as AdminContext;
+}
+
+declare const grantBrand: unique symbol;
+
+/**
+ * A request whose operator API token has been verified.
+ *
+ * Branded like the contexts, so it cannot be written as an object literal.
+ * `lib/operator-api/http.ts` is the only place that issues one, and only
+ * after the bearer token has matched `OPERATOR_API_TOKEN_SHA256`.
+ */
+export interface OperatorApiGrant {
+  readonly [grantBrand]: "operator-api";
+  /** The disabled "Operator API" system user every API action is recorded against. */
+  readonly actorUserId: string;
+}
+
+/**
+ * Build an admin context for the operator API.
+ *
+ * The token stands in for the session: there is no person signed in, so the
+ * actor is a system user that can never sign in (status `disabled`, no
+ * password), and every audit row the repositories write names it rather than
+ * whichever admin happens to own the token.
+ */
+export function adminContextFromOperatorGrant(grant: OperatorApiGrant): AdminContext {
+  return { userId: grant.actorUserId } as AdminContext;
 }
 
 /**

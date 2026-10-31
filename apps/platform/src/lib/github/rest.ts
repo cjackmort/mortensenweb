@@ -234,6 +234,70 @@ export async function deleteBranch(
   return { deleted: status === 204, status };
 }
 
+/** The commit a branch points at, or null when there is no such branch. */
+export async function getBranchHead(repo: Repo, branch: string): Promise<string | null> {
+  const { status, data } = await githubRequest<{ object: { sha: string } }>(
+    repo.installationId,
+    `${repoPath(repo)}/git/ref/heads/${encodeURIComponent(branch)}`,
+    { allowStatuses: [404] },
+  );
+  return status === 404 ? null : data.object.sha;
+}
+
+/**
+ * Point a branch at a commit, creating it if need be.
+ *
+ * Moving an existing branch is forced: the only branches this is used for are
+ * the portal's own, rebuilt from the default branch each time, so whatever an
+ * abandoned earlier attempt left on one is meant to be replaced.
+ */
+export async function setBranch(repo: Repo, branch: string, sha: string): Promise<void> {
+  const { status } = await githubRequest(repo.installationId, `${repoPath(repo)}/git/refs`, {
+    method: "POST",
+    body: { ref: `refs/heads/${branch}`, sha },
+    // 422 is "Reference already exists".
+    allowStatuses: [422],
+  });
+
+  if (status === 422) {
+    await githubRequest(
+      repo.installationId,
+      `${repoPath(repo)}/git/refs/heads/${encodeURIComponent(branch)}`,
+      { method: "PATCH", body: { sha, force: true } },
+    );
+  }
+}
+
+export interface OpenedPullRequest {
+  number: number;
+  html_url: string;
+}
+
+/** The open pull request from one of this repository's branches, if any. */
+export async function findOpenPullRequest(
+  repo: Repo,
+  headBranch: string,
+): Promise<OpenedPullRequest | null> {
+  const head = encodeURIComponent(`${repo.owner}:${headBranch}`);
+  const { data } = await githubRequest<OpenedPullRequest[]>(
+    repo.installationId,
+    `${repoPath(repo)}/pulls?state=open&head=${head}`,
+  );
+  return Array.isArray(data) && data[0] ? { number: data[0].number, html_url: data[0].html_url } : null;
+}
+
+export async function openPullRequest(
+  repo: Repo,
+  input: { title: string; body: string; head: string; base: string },
+): Promise<OpenedPullRequest> {
+  const { data } = await githubRequest<OpenedPullRequest>(
+    repo.installationId,
+    `${repoPath(repo)}/pulls`,
+    { method: "POST", body: input },
+  );
+  return { number: data.number, html_url: data.html_url };
+}
+
 // ---------------------------------------------------------------------------
 // Files
 // ---------------------------------------------------------------------------
