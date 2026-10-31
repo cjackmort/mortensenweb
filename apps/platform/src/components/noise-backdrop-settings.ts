@@ -21,8 +21,21 @@ const SHARED = {
   fps: "30",
 } as const;
 
-/** `--accent-fill` in light; the site's `--accent` (blue on dark) in dark. */
-const ON_LIGHT = { color: "#1552d6", intensity: "0.12" } as const;
+/**
+ * The most of `intensity` the smoke ever reaches: its densest point over a
+ * long run of frames, measured in the browser at these settings. The ground
+ * under any pixel is tinted by at most `intensity` times this.
+ */
+export const PEAK_COVER = 0.73;
+
+/**
+ * `--accent-fill` in light; the site's `--accent` (blue on dark) in dark.
+ *
+ * Light's strength is as high as contrast allows: 0.19 tints the ground by
+ * at most 14%, and --muted text on that ground stays at 4.5:1. 0.2 already
+ * dips under.
+ */
+const ON_LIGHT = { color: "#1552d6", intensity: "0.19" } as const;
 const ON_DARK = { color: "#7ea6ff", intensity: "0.1" } as const;
 
 export function backdropAttributes(tone: BackdropTone, prefersDark: boolean): Record<string, string> {

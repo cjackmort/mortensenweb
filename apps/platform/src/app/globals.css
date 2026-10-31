@@ -178,15 +178,24 @@ body {
   text-size-adjust: 100%;
 }
 
+/* The ground is three layers. html paints the colour and the glow, the
+   moving backdrop (.noise-backdrop) sits on them, and the body, transparent
+   itself, draws the grid over both. The glow sits under the backdrop rather
+   than over it: on top it bleached the backdrop out of the upper half of
+   every page. */
+html {
+  background-image: var(--ground-glow);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
 /* The grid sits on the ground and stays put while the panes scroll over it,
-   which is most of what makes them read as lifted rather than printed.
-   The body itself is transparent: html paints the ground colour, the moving
-   backdrop (.noise-backdrop) sits on that, and the grid is drawn over both. */
+   which is most of what makes them read as lifted rather than printed. */
 body {
   background-color: transparent;
-  background-image: var(--ground-glow), var(--ground-grid);
-  background-repeat: no-repeat, repeat;
-  background-attachment: fixed, fixed;
+  background-image: var(--ground-grid);
+  background-repeat: repeat;
+  background-attachment: fixed;
 }
 
 h1,
@@ -258,7 +267,9 @@ code {
  * The faint blue field behind every signed-in page and the sign-in screens
  * (components/noise-backdrop.tsx). Fixed, one layer below the page: over the
  * ground colour, under the grid and every pane. Panes keep their opaque
- * faces; text set straight on the ground sees at most a 12% tint of blue.
+ * faces. Text set straight on the ground sees at most a 14% tint of blue,
+ * which keeps --muted at 4.5:1 there; tests/noise-backdrop.test.ts holds
+ * the line.
  */
 .noise-backdrop {
   position: fixed;
@@ -301,7 +312,9 @@ code {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  /* Thin enough that the backdrop shows through, blurred, so the header is
+     not a solid band across the top; --muted tabs stay above 4.5:1 on it. */
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--border);
