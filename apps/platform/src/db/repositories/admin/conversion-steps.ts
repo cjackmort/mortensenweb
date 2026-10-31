@@ -13,6 +13,7 @@ import { provisionWebsite } from "@/lib/analytics/umami";
 import { portalOrigin } from "@/lib/auth/reset";
 import { sendEmail } from "@/lib/email/mailer";
 import { buildWelcomeEmail } from "@/lib/email/welcome";
+import { getSiteGitLink, isNetlifyConfigured, NetlifyApiError, NetlifyConfigError } from "@/lib/netlify/api";
 import { describesBusiness, isTemplateContent, siteDomain, type SiteJson } from "@/lib/site-json/read";
 import { fillProfileGaps, profileFromSiteJson } from "@/lib/site-json/profile";
 import { ActivationError, activateClient } from "./activation";
@@ -266,7 +267,76 @@ async function stepAgentWorkflow({ db, ctx, site }: ReadyWithRepo): Promise<Step
   return said.ok ? ok(said.message) : failed(said.message);
 }
 
-async function stepDeployWorkflow({ db, ctx, site }: ReadyWithRepo): Promise<StepOutcome> {
+/**
+ * How a site's repository gets published, which decides whether the deploy
+ * workflow belongs in it.
+ *
+ * A repository `scaffoldSite` made deploys itself from the shared workflow, and
+ * Netlify has no repository for its site. One that was connected in place is
+ * usually the other way round: Netlify builds it from GitHub on every push, and
+ * the workflow would publish each change a second time, the two racing.
+ *
+ * Netlify is asked, because it is the one that knows. When it cannot say — not
+ * configured, an outage, no such site — the answer falls back to where the site
+ * came from: only a concept's repository was scaffolded, and that conversion is
+ * recorded as `rename_transfer`. Failing that way skips the workflow rather than
+ * installing it: a missing workflow shows in the report and is fixed by a
+ * re-run, where a doubled one goes on publishing every change twice unseen.
+ */
+type DeployPath = { kind: "scaffolded" } | { kind: "git_integration"; reason: string };
+
+type NetlifyAnswer = { answer: "linked" } | { answer: "unlinked" } | { answer: "unknown"; why: string };
+
+async function askNetlifyAboutGit(site: ReadyWithRepo["site"]): Promise<NetlifyAnswer> {
+  if (!isNetlifyConfigured()) return { answer: "unknown", why: "Netlify is not configured here" };
+  const lookup = site.netlifySiteId ?? (site.netlifySiteName ? `${site.netlifySiteName}.netlify.app` : null);
+  if (!lookup) return { answer: "unknown", why: "the site has no Netlify site recorded" };
+
+  try {
+    const link = await getSiteGitLink(lookup);
+    if (link.status === "not_found") return { answer: "unknown", why: "Netlify has no such site" };
+    return link.status === "linked" ? { answer: "linked" } : { answer: "unlinked" };
+  } catch (error) {
+    console.error("[conversion] could not ask Netlify whether the site builds from Git", { site: site.sitePublicId, error });
+    const known = error instanceof NetlifyApiError || error instanceof NetlifyConfigError;
+    return { answer: "unknown", why: known ? error.message : "an unexpected error" };
+  }
+}
+
+async function deployPath({ db, prospect, site }: ReadyWithRepo): Promise<DeployPath> {
+  const asked = await askNetlifyAboutGit(site);
+  const repository = site.repo.repository;
+  if (asked.answer === "linked") {
+    return {
+      kind: "git_integration",
+      reason: `Netlify builds ${repository} from GitHub, so the site deploys through Netlify's Git integration.`,
+    };
+  }
+  if (asked.answer === "unlinked") return { kind: "scaffolded" };
+
+  const [conversion] = await db
+    .select({ repoStrategy: prospectConversions.repoStrategy })
+    .from(prospectConversions)
+    .where(eq(prospectConversions.prospectId, prospect.id))
+    .limit(1);
+  if (conversion?.repoStrategy === "rename_transfer") return { kind: "scaffolded" };
+
+  return {
+    kind: "git_integration",
+    reason:
+      `Netlify could not be asked (${asked.why}) and ${repository} did not come from the prospect's concept, ` +
+      "so it is taken as connected in place: the site deploys through Netlify's Git integration. " +
+      "Re-run once Netlify answers to check.",
+  };
+}
+
+async function stepDeployWorkflow(state: ReadyWithRepo): Promise<StepOutcome> {
+  const { db, ctx, site } = state;
+  const path = await deployPath(state);
+  if (path.kind === "git_integration") {
+    return skipped(`${path.reason} The shared deploy workflow would publish every change twice, so it was not installed.`);
+  }
+
   const outcome = await installDeployWorkflow(db, ctx.userId, site.sitePublicId);
   if (!outcome.ok) return failed(`Could not install the deploy workflow (${outcome.reason}).`);
   const said = {
@@ -277,7 +347,13 @@ async function stepDeployWorkflow({ db, ctx, site }: ReadyWithRepo): Promise<Ste
   return ok(said[outcome.result]);
 }
 
-async function stepNetlifyVariable({ db, ctx, site }: ReadyWithRepo): Promise<StepOutcome> {
+async function stepNetlifyVariable(state: ReadyWithRepo): Promise<StepOutcome> {
+  const { db, ctx, site } = state;
+  const path = await deployPath(state);
+  if (path.kind === "git_integration") {
+    return skipped(`${path.reason} NETLIFY_SITE_ID only feeds the shared deploy workflow, so it was not set.`);
+  }
+
   const outcome = await installNetlifySiteVariable(db, ctx.userId, site.sitePublicId);
   if (outcome.ok) return ok(`NETLIFY_SITE_ID is ${outcome.netlifySiteId} in ${outcome.repository}.`);
   return failed(
