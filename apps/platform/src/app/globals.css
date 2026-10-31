@@ -179,8 +179,11 @@ body {
 }
 
 /* The grid sits on the ground and stays put while the panes scroll over it,
-   which is most of what makes them read as lifted rather than printed. */
+   which is most of what makes them read as lifted rather than printed.
+   The body itself is transparent: html paints the ground colour, the moving
+   backdrop (.noise-backdrop) sits on that, and the grid is drawn over both. */
 body {
+  background-color: transparent;
   background-image: var(--ground-glow), var(--ground-grid);
   background-repeat: no-repeat, repeat;
   background-attachment: fixed, fixed;
@@ -247,6 +250,26 @@ code {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* ------------------------------------------------------------ backdrop */
+
+/*
+ * The faint blue field behind every signed-in page and the sign-in screens
+ * (components/noise-backdrop.tsx). Fixed, one layer below the page: over the
+ * ground colour, under the grid and every pane. Panes keep their opaque
+ * faces; text set straight on the ground sees at most a 12% tint of blue.
+ */
+.noise-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.noise-backdrop > noise-backdrop {
+  position: absolute;
+  inset: 0;
 }
 
 /* ----------------------------------------------------------- app shell */
@@ -1542,6 +1565,9 @@ label.checkbox input[type="checkbox"] {
   padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
   /* Fixed dark in either theme, so its controls' native parts are dark too. */
   color-scheme: dark;
+  /* Its own stacking context, so the backdrop inside it draws over this dark
+     ground rather than under it, and still under the card. */
+  isolation: isolate;
   background-color: #0e1116;
   background-image:
     radial-gradient(55% 45% at 50% 38%, rgba(237, 239, 234, 0.1), transparent 70%),
