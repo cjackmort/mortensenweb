@@ -11,6 +11,7 @@ import { getDb } from "@/db/client";
 import { ipFromHeaders } from "@/lib/auth/client-ip";
 import { resolveClientView } from "@/lib/auth/client-view";
 import { authenticate, resolveSession } from "@/lib/auth/session";
+import { AccountClosedError } from "@/lib/auth/account-closed";
 
 /**
  * Auth.js configuration.
@@ -101,8 +102,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           ipAddress,
         });
 
-        // Every failure returns null. The caller renders one message for all
-        // of them, so login cannot be used to enumerate accounts.
+        // A closed account is the one failure told apart, and only after the
+        // password verified - see `account-closed`.
+        if (!result.ok && result.reason === "closed") throw new AccountClosedError();
+
+        // Every other failure returns null. The caller renders one message for
+        // all of them, so login cannot be used to enumerate accounts.
         if (!result.ok) return null;
 
         return {

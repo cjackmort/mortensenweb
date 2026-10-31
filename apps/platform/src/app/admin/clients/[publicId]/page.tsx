@@ -7,6 +7,7 @@ import {
   type AdminContext,
 } from "@/db/repositories/context";
 import {
+  clientsWithLiveStripeBilling,
   getClientComp,
   getClientDetail,
   listOrganizationUsers,
@@ -32,6 +33,9 @@ import { listPromoOptions } from "@/lib/payments/promos";
 import { getClientPromo } from "@/db/repositories/admin/promos";
 import { isOpen } from "@/lib/requests/status";
 import { ActivateForm, ReissueForm } from "./credential-forms";
+import { RemoveClientButton } from "../remove-client-button";
+import { RestoreForm } from "../archived-clients-section";
+import { STRIPE_BILLING_BLOCK } from "../remove-copy";
 import { ProfilePanel } from "./profile-forms";
 import { BillingSection } from "./billing-section";
 import { getClientGrowth } from "@/db/repositories/admin/growth";
@@ -95,6 +99,8 @@ export default async function ClientDetailPage({
   }
 
   const { client, organization, requests } = detail;
+  const isArchived = client.archivedAt !== null;
+  const stillBilled = await clientsWithLiveStripeBilling(db, [client.publicId]);
   const [portalUsers, siteRows, invoices, briefs, profile, billingPlan, reviews, reports, checklists] = await Promise.all([
     listOrganizationUsers(ctx, db, organization.id),
     listSitesWithAnalytics(ctx, db, organization.id),
@@ -138,6 +144,14 @@ export default async function ClientDetailPage({
         <p className="notice">
           <span className="badge">Demo</span> This is seeded demo data, not a real client.
         </p>
+      )}
+
+      {isArchived && !client.isInternal && (
+        <div className="notice" role="status">
+          This client was removed from Clients and can&rsquo;t sign in. Their payments, plan and
+          site are untouched.{" "}
+          <RestoreForm clientPublicId={client.publicId} clientName={organization.name} inline />
+        </div>
       )}
 
       {section ? (
@@ -196,6 +210,21 @@ export default async function ClientDetailPage({
           <PortalSectionsPanel clientPublicId={client.publicId} bookingEnabled={client.bookingEnabled} shopEnabled={client.shopEnabled} hasSite={siteRows.length > 0} />
 
           <SectionGrid clientPublicId={client.publicId} summaries={summaries} />
+
+          {!isArchived && !client.isInternal && (
+            <section className="card">
+              <h2>Remove client</h2>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Takes {organization.name} off the Clients list and closes their sign-in. Nothing
+                is deleted, and their site, repository and domain are not touched.
+              </p>
+              <RemoveClientButton
+                clientPublicId={client.publicId}
+                clientName={organization.name}
+                blockedReason={stillBilled.has(client.publicId) ? STRIPE_BILLING_BLOCK : null}
+              />
+            </section>
+          )}
         </>
       )}
     </main>

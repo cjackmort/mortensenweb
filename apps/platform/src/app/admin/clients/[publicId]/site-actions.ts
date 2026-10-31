@@ -7,11 +7,14 @@ import { adminContextFrom, NotFoundError } from "@/db/repositories/context";
 import { getClientDetail } from "@/db/repositories/admin/clients";
 import {
   addSite,
+  getOrganizationSiteAddress,
   requireOrganizationSite,
   setAnalyticsConnection,
   setSitePreviewMode,
 } from "@/db/repositories/admin/sites";
 import { connectSiteForms } from "@/db/repositories/admin/leads";
+import { siteHomeUrl } from "@/components/site-preview";
+import { liveThumbnailGate } from "@/lib/frame-check";
 
 /**
  * Site and analytics actions.
@@ -29,7 +32,11 @@ async function requireAdmin() {
   return adminContextFrom(user);
 }
 
-export type SiteActionResult = { ok: true } | { ok: false; message: string };
+/**
+ * `fix` is a single line the operator can copy — the response header a site
+ * needs to send — kept apart from `message` so the form can set it in code.
+ */
+export type SiteActionResult = { ok: true } | { ok: false; message: string; fix?: string };
 
 export async function addSiteAction(
   _previous: SiteActionResult | null,
@@ -93,13 +100,23 @@ export async function setPreviewModeAction(
 
   // Same scoping as the analytics action: a site id from another client
   // cannot be retargeted from this page.
+  let address;
   try {
-    await requireOrganizationSite(ctx, db, detail.organization.id, sitePublicId);
+    address = await getOrganizationSiteAddress(ctx, db, detail.organization.id, sitePublicId);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { ok: false, message: "That site is not on this client." };
     }
     throw error;
+  }
+
+  // A live tile frames the real site, and a site that forbids framing shows a
+  // bare browser error in the tile with no hint why. Reading its headers now
+  // turns that into a message while the operator is still on this form.
+  // Switching back to the screenshot never needs the site to answer.
+  if (mode === "live") {
+    const gate = await liveThumbnailGate(siteHomeUrl(address));
+    if (!gate.ok) return { ok: false, message: gate.message, fix: gate.fix };
   }
 
   const result = await setSitePreviewMode(ctx, db, sitePublicId, mode);

@@ -2,6 +2,7 @@ import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { AuthForm, type AuthFormState } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
+import { ACCOUNT_CLOSED_MESSAGE, isAccountClosedError } from "@/lib/auth/account-closed";
 
 /**
  * Prerendered, and the build fails if anything here makes it dynamic.
@@ -37,7 +38,7 @@ async function attempt(
     await signIn("credentials", { identifier, password, redirectTo: "/" });
   } catch (error) {
     // next-auth signals a successful redirect by throwing; let it through.
-    if (error instanceof AuthError) return "failed";
+    if (error instanceof AuthError) return isAccountClosedError(error) ? "closed" : "failed";
     throw error;
   }
   return null;
@@ -61,6 +62,7 @@ export default function LoginPage() {
             </p>
           </>
         }
+        closed={<p className="error">{ACCOUNT_CLOSED_MESSAGE}</p>}
         failed={
           <p className="error">
             We could not sign you in. Check your details and try again.

@@ -2,6 +2,7 @@ import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { AuthForm, type AuthFormState } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
+import { ACCOUNT_CLOSED_MESSAGE, isAccountClosedError } from "@/lib/auth/account-closed";
 
 /**
  * Prerendered and served from the CDN, like /login — see that page for why,
@@ -31,7 +32,7 @@ async function attempt(
   try {
     await signIn("credentials", { identifier, password, redirectTo: "/" });
   } catch (error) {
-    if (error instanceof AuthError) return "failed";
+    if (error instanceof AuthError) return isAccountClosedError(error) ? "closed" : "failed";
     throw error;
   }
   return null;
@@ -56,6 +57,7 @@ export default function GetStartedPage() {
             </p>
           </>
         }
+        closed={<p className="error">{ACCOUNT_CLOSED_MESSAGE}</p>}
         failed={
           <p className="error">
             That didn&rsquo;t work. Check the username and temporary password

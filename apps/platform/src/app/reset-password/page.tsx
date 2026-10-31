@@ -10,6 +10,7 @@ import {
   type ResetRedemption,
 } from "@/lib/auth/reset";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth/session";
+import { ACCOUNT_CLOSED_MESSAGE } from "@/lib/auth/account-closed";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ const MESSAGES: Record<FormError, string> = {
   invalid: "That link is not valid. Request a new one below.",
   expired: "That link has expired. Request a new one below.",
   used: "That link has already been used. Request a new one below.",
+  closed: ACCOUNT_CLOSED_MESSAGE,
   mismatch: "Those two passwords don't match. Please retype them.",
   too_short: `Please use at least ${MIN_PASSWORD_LENGTH} characters. Length matters far more than symbols — a short phrase you'll remember works well.`,
   too_long: "That password is too long. Please use fewer than 200 characters.",
@@ -29,7 +31,7 @@ const MESSAGES: Record<FormError, string> = {
 };
 
 /** Reasons the link itself is dead, as opposed to the password being rejected. */
-const DEAD_LINK: ReadonlySet<string> = new Set(["invalid", "expired", "used"]);
+const DEAD_LINK: ReadonlySet<string> = new Set(["invalid", "expired", "used", "closed"]);
 
 /**
  * Choose a new password from an emailed link.
@@ -60,6 +62,9 @@ export default async function ResetPasswordPage({
   // A dead link gets its own screen with the one useful action on it.
   if (!state.ok || (errorKey && DEAD_LINK.has(errorKey))) {
     const reason = state.ok ? (errorKey as string) : state.reason;
+    // A closed account has no use for a new link: asking for one is answered
+    // with the same quiet confirmation as always and nothing is sent.
+    const isClosed = reason === "closed";
     return (
       <AuthShell>
         <div>
@@ -67,14 +72,16 @@ export default async function ResetPasswordPage({
             M
           </div>
           <h1 style={{ fontSize: "1.35rem", marginBottom: "0.25rem" }}>
-            This link no longer works
+            {isClosed ? "This account is closed" : "This link no longer works"}
           </h1>
           <p className="muted" style={{ marginTop: 0 }}>
             {MESSAGES[reason as FormError] ?? MESSAGES.invalid}
           </p>
-          <p style={{ marginTop: "1.5rem", marginBottom: "0.75rem" }}>
-            <Link href="/forgot-password">Request a new reset link</Link>
-          </p>
+          {!isClosed && (
+            <p style={{ marginTop: "1.5rem", marginBottom: "0.75rem" }}>
+              <Link href="/forgot-password">Request a new reset link</Link>
+            </p>
+          )}
           <p style={{ margin: 0, fontSize: "0.9rem" }}>
             <Link href="/login">Back to sign in</Link>
           </p>
